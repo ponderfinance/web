@@ -1,0 +1,131 @@
+stateDiagram-v2
+    state "Diamond Proxy (Main Contract)" as DP {
+        [*] --> DiamondCut
+        [*] --> DiamondLoupe
+        
+        state "Core Facets" as CF {
+            state PetFacet {
+                [*] --> InitializePet
+                InitializePet --> UpdatePetState
+                UpdatePetState --> CalculateHappiness
+                CalculateHappiness --> DeterminePetEmotions
+            }
+            
+            state SavingsFacet {
+                [*] --> ProcessDeposit
+                ProcessDeposit --> TrackContribution
+                TrackContribution --> CalculateProgress
+                ProcessDeposit --> InitiateYieldStrategy
+                ProcessDeposit --> UpdatePetState
+            }
+            
+            state StateFacet {
+                [*] --> ValidateState
+                ValidateState --> UpdateGlobalState
+                UpdateGlobalState --> EmitStateEvents
+                ValidateState --> EnforceTimeouts
+            }
+            
+            state YieldFacet {
+                [*] --> SelectStrategy
+                SelectStrategy --> AllocateToProtocols
+                AllocateToProtocols --> TrackYields
+                TrackYields --> RebalancePositions
+            }
+        }
+        
+        state "Diamond Storage Layout" as DS {
+            state "Pet Storage (Slot 0)" as PS {
+                PetType
+                PetState
+                LastFed
+                Happiness
+                EmotionalState
+            }
+            
+            state "Savings Storage (Slot 1)" as SS {
+                TotalETHDeposited
+                UserContributions
+                ProgressToGoal
+                LastDepositTime
+            }
+            
+            state "State Storage (Slot 2)" as StS {
+                GlobalState
+                TimeoutPeriods
+                EmergencyState
+                LastStateUpdate
+            }
+            
+            state "Yield Storage (Slot 3)" as YS {
+                ActiveStrategies
+                YieldRates
+                ProtocolAllocations
+                RebalanceThresholds
+            }
+        }
+        
+        DiamondCut --> CF: Manages Facets
+        DiamondLoupe --> CF: Provides Function Info
+        CF --> DS: Structured Storage Access
+    }
+    
+    state "External Protocol Integration" as EPI {
+        state "Safe Protocol" as SP {
+            ModuleManager
+            GuardManager
+            SafeTransaction
+        }
+        
+        state "Yield Protocols" as YP {
+            Kiln: Staking
+            Lido: Liquid Staking
+            COW: Token Swaps
+            AAVE: Lending
+        }
+    }
+    
+    DP --> EPI: Integrates Via Interfaces
+    
+    note right of DiamondCut
+        Functions:
+        - diamondCut(FacetCut[] calldata _diamondCut)
+        - Manages facet upgrades
+        - Handles function selector registration
+        - Emits DiamondCut events
+    end note
+    
+    note right of DiamondLoupe
+        Functions:
+        - facets() returns all facet addresses
+        - facetFunctionSelectors(address _facet)
+        - facetAddresses() returns unique addresses
+        - facetAddress(bytes4 _functionSelector)
+    end note
+    
+    note right of DS
+        Storage Organization:
+        - Slot 0: Pet-specific data
+        - Slot 1: User savings data
+        - Slot 2: Protocol state data
+        - Slot 3: Yield strategy data
+        Uses structured storage pattern
+        Prevents storage collisions
+    end note
+    
+    note left of CF
+        Each facet:
+        - Has dedicated functionality
+        - Maintains single responsibility
+        - Can be upgraded independently
+        - Inherits diamond storage
+    end note
+    
+    note right of EPI
+        Integration Rules:
+        - Safe holds assets
+        - Kiln handles staking
+        - COW for token swaps
+        - Lido for liquid staking
+        All via modular interfaces
+    end note
