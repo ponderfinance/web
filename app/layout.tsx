@@ -4,7 +4,8 @@ import Providers from '@/app/providers'
 import localFont from 'next/font/local'
 import { Header } from '@/app/components/Header'
 import { FeedPet } from '@/app/components/FeedPet'
-import {EnableWithdraw} from "@/app/components/EnableWithdrawl";
+import { EnableWithdraw } from '@/app/components/EnableWithdrawl'
+import { Silkscreen } from 'next/font/google'
 
 const arialNarrow = localFont({
   src: [
@@ -30,6 +31,15 @@ const arialNarrow = localFont({
     },
   ],
   display: 'swap',
+  variable: '--font-arial-narrow',
+})
+
+// Silkscreen font configuration
+const silkscreen = Silkscreen({
+  weight: ['400', '700'],
+  subsets: ['latin'],
+  display: 'swap',
+  variable: '--font-silkscreen', // Add this line to use as CSS variable
 })
 
 export const metadata: Metadata = {
@@ -58,14 +68,12 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={arialNarrow.className}>
-        <Providers>
-          <Header />
-          <FeedPet />
-          <EnableWithdraw />
-          {children}
-        </Providers>
-      </body>
+    <body className={`${arialNarrow.variable} ${silkscreen.variable} ${arialNarrow.className}`}>
+    <Providers>
+      <Header/>
+      {children}
+    </Providers>
+    </body>
     </html>
   )
 }
