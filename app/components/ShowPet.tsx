@@ -89,7 +89,11 @@ export const ShowPet = () => {
 
   return (
     <div>
-      {pet?.lastFed === BigInt(0) ? <div>Adopt a pet!</div> : <div>Heres your pet</div>}
+      {pet?.lastFed === BigInt(0) || !pet ? (
+        <div>Adopt a pet!</div>
+      ) : (
+        <div>Heres your pet</div>
+      )}
     </div>
   )
 }

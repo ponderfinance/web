@@ -5,6 +5,8 @@ import { FeedPet } from '@/app/components/FeedPet'
 import { EnableWithdraw } from '@/app/components/EnableWithdrawl'
 import { ShowPet } from '@/app/components/ShowPet'
 import Image from 'next/image'
+import PetSelector from '@/app/components/PetSelector'
+import { Snacks } from '@/app/components/Snacks'
 
 export default function Home() {
   return (
@@ -26,13 +28,15 @@ export default function Home() {
           Snack your way to savings
         </div>
         <div className="text-md uppercase text-center max-w-xl">
-          Snack Snack is a savings game, where you and your friends care for a digital
-          pet and work together to achieve the goal of launching a validator on Ethereum!
+          Snack Snack is a savings game, where you and your friends care for a digital pet
+          and work together to achieve the goal of launching a validator on Ethereum!
         </div>
       </div>
+      <div className="my-8 h-[1px] w-full bg-black" />
+      <PetSelector />
+      <Snacks />
 
       {/*<CreatePet />*/}
-      <ShowPet />
       {/*<FeedPet />*/}
       {/*<EnableWithdraw />*/}
     </div>
