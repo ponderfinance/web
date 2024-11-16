@@ -2,6 +2,9 @@ import type { Metadata } from 'next'
 import './globals.css'
 import Providers from '@/app/providers'
 import localFont from 'next/font/local'
+import { Header } from '@/app/components/Header'
+import { FeedPet } from '@/app/components/FeedPet'
+import {EnableWithdraw} from "@/app/components/EnableWithdrawl";
 
 const arialNarrow = localFont({
   src: [
@@ -30,20 +33,20 @@ const arialNarrow = localFont({
 })
 
 export const metadata: Metadata = {
-  title: 'Zora Starter App',
-  description: 'Get started with Zora',
+  title: 'Snack Snack',
+  description: 'Snack your way to savings',
   openGraph: {
     images: {
       url: '/og-image.png',
       width: 1200,
       height: 630,
-      alt: 'Zora Starter App',
+      alt: 'Snack Snack',
     },
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Zora Starter App',
-    description: 'Get started with Zora',
+    title: 'Snack Snack',
+    description: 'Snack your way to savings',
     images: ['/og-image.png'],
   },
 }
@@ -57,6 +60,9 @@ export default function RootLayout({
     <html lang="en">
       <body className={arialNarrow.className}>
         <Providers>
+          <Header />
+          <FeedPet />
+          <EnableWithdraw />
           {children}
         </Providers>
       </body>
