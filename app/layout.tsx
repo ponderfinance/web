@@ -6,6 +6,7 @@ import { Header } from '@/app/components/Header'
 import { FeedPet } from '@/app/components/FeedPet'
 import { EnableWithdraw } from '@/app/components/EnableWithdrawl'
 import { Silkscreen } from 'next/font/google'
+import { Footer } from '@/app/components/Footer'
 
 const arialNarrow = localFont({
   src: [
@@ -68,12 +69,15 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-    <body className={`${arialNarrow.variable} ${silkscreen.variable} ${arialNarrow.className}`}>
-    <Providers>
-      <Header/>
-      {children}
-    </Providers>
-    </body>
+      <body
+        className={`${arialNarrow.variable} ${silkscreen.variable} ${arialNarrow.className}`}
+      >
+        <Providers>
+          <Header />
+          {children}
+          <Footer />
+        </Providers>
+      </body>
     </html>
   )
 }

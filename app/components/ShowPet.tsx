@@ -71,7 +71,7 @@ export const ShowPet = () => {
       const result: PetInfo = (await readContract(wagmiConfig, {
         ...config,
         abi: petFacetABI,
-        address: '0x1DbB14EC649652F69a2B14B7314e9fA05813Cb5B',
+        address: '0x29d5bA177B6790517732352E6b5c78642BCa969b',
         functionName: 'getPet',
         args: [address], // Use the connected wallet address
       })) as unknown as PetInfo

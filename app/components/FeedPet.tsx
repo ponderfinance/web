@@ -42,7 +42,7 @@ export const FeedPet = () => {
       const result = await writeContract(wagmiConfig, {
         ...config,
         abi: petFacetABI,
-        address: '0x1DbB14EC649652F69a2B14B7314e9fA05813Cb5B', // Diamond contract address
+        address: '0x29d5bA177B6790517732352E6b5c78642BCa969b', // Diamond contract address
         functionName: 'feed',
         args: [foodType],
         value: paymentInWei, // Pass payment amount

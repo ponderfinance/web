@@ -51,6 +51,13 @@ const petFacetABI = [
     stateMutability: 'nonpayable',
     type: 'function',
   },
+  {
+    inputs: [{ internalType: 'address', name: 'coOwner', type: 'address' }],
+    name: 'addCoOwner',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function',
+  },
 ]
 
 const DEFAULT_DAILY_TARGET = '0.000333'
@@ -93,10 +100,18 @@ const PetSelector = () => {
   const [selectedPet, setSelectedPet] = useState<(typeof pets)[0] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [transactionHash, setTransactionHash] = useState<`0x${string}` | null>(null)
+  const [newCoOwner, setNewCoOwner] = useState('')
+  const [isAddingCoOwner, setIsAddingCoOwner] = useState(false)
+  const [coOwnerTxHash, setCoOwnerTxHash] = useState<`0x${string}` | null>(null)
 
   const { isLoading: isWaitingForTx, isSuccess: txSuccess } =
     useWaitForTransactionReceipt({
       hash: transactionHash!,
+    })
+
+  const { isLoading: isAddingCoOwnerTx, isSuccess: coOwnerTxSuccess } =
+    useWaitForTransactionReceipt({
+      hash: coOwnerTxHash!,
     })
 
   const handleFetchPet = async () => {
@@ -106,7 +121,7 @@ const PetSelector = () => {
 
       const result = (await readContract(wagmiConfig, {
         abi: petFacetABI,
-        address: '0x1DbB14EC649652F69a2B14B7314e9fA05813Cb5B',
+        address: '0x29d5bA177B6790517732352E6b5c78642BCa969b',
         functionName: 'getPet',
         args: [address],
       })) as unknown as PetInfo
@@ -118,11 +133,38 @@ const PetSelector = () => {
     }
   }
 
+  const handleAddCoOwner = async () => {
+    if (!newCoOwner) return
+
+    try {
+      setError(null)
+      const result = await writeContract(wagmiConfig, {
+        address: '0x29d5bA177B6790517732352E6b5c78642BCa969b',
+        abi: petFacetABI,
+        functionName: 'addCoOwner',
+        args: [newCoOwner as `0x${string}`],
+      })
+
+      setCoOwnerTxHash(result)
+    } catch (err: any) {
+      console.error('Error adding co-owner:', err)
+      setError(err.message)
+    }
+  }
+
   useEffect(() => {
     if (txSuccess) {
       handleFetchPet()
     }
   }, [txSuccess])
+
+  useEffect(() => {
+    if (coOwnerTxSuccess) {
+      setNewCoOwner('')
+      setIsAddingCoOwner(false)
+      handleFetchPet()
+    }
+  }, [coOwnerTxSuccess])
 
   const handleAdoptPet = async () => {
     if (!selectedPet) return
@@ -133,7 +175,7 @@ const PetSelector = () => {
 
       const result = await writeContract(wagmiConfig, {
         abi: petFacetABI,
-        address: '0x1DbB14EC649652F69a2B14B7314e9fA05813Cb5B',
+        address: '0x29d5bA177B6790517732352E6b5c78642BCa969b',
         functionName: 'initializePet',
         args: [selectedPet.type, dailyTargetInWei],
       })
@@ -149,9 +191,12 @@ const PetSelector = () => {
     handleFetchPet()
   }, [address])
 
+  {
+    console.log('pet', pet)
+  }
   if (pet && pet.lastFed !== BigInt(0)) {
     // Calculate percentage towards 32 ETH
-    const totalEth = Number(pet.totalSavings) / 1e18 // Convert from Wei to ETH
+    const totalEth = Number(pet.totalSavings) / 1e18
     const targetEth = 32
     const percentageToTarget = (totalEth / targetEth) * 100
 
@@ -205,15 +250,78 @@ const PetSelector = () => {
               {pet.owners.map((owner, index) => (
                 <a
                   key={index}
-                  href={`https://sepolia.etherscan.io/address/${owner}`}
+                  href={`https://base-sepolia.blockscout.com/address/${owner}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-blue-500 hover:underline break-all"
+                  className="text-gray-900 hover:underline break-all"
                 >
                   {owner}
                 </a>
               ))}
             </div>
+
+            {/* Add Co-owner Section */}
+            <div className="mt-4">
+              {!isAddingCoOwner ? (
+                <button
+                  onClick={() => setIsAddingCoOwner(true)}
+                  className="text-black border-2 border-black px-4 py-1 rounded-full hover:bg-gray-50 transition-all"
+                  style={{ fontFamily: 'var(--font-silkscreen)' }}
+                >
+                  ADD CO-OWNER
+                </button>
+              ) : (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-center gap-2">
+                    <input
+                      type="text"
+                      value={newCoOwner}
+                      onChange={(e) => setNewCoOwner(e.target.value)}
+                      placeholder="Enter address"
+                      className="px-3 py-1 border-2 border-gray-200 rounded-full focus:outline-none focus:border-black"
+                      disabled={isAddingCoOwnerTx}
+                    />
+                    <button
+                      onClick={handleAddCoOwner}
+                      disabled={isAddingCoOwnerTx || !newCoOwner}
+                      className={`bg-black text-white px-4 py-1 rounded-full transition-all ${
+                        isAddingCoOwnerTx
+                          ? 'opacity-50 cursor-not-allowed'
+                          : 'hover:scale-105'
+                      }`}
+                      style={{ fontFamily: 'var(--font-silkscreen)' }}
+                    >
+                      {isAddingCoOwnerTx ? 'ADDING...' : 'ADD'}
+                    </button>
+                    <button
+                      onClick={() => {
+                        setIsAddingCoOwner(false)
+                        setNewCoOwner('')
+                      }}
+                      className="text-gray-500 hover:text-black"
+                      disabled={isAddingCoOwnerTx}
+                    >
+                      ✕
+                    </button>
+                  </div>
+                  {error && <p className="text-red-500 text-sm">{error}</p>}
+                </div>
+              )}
+            </div>
+
+            {coOwnerTxHash && (
+              <p className="mt-2 text-sm">
+                {coOwnerTxSuccess ? 'Co-owner added successfully!' : 'Adding co-owner...'}{' '}
+                <a
+                  href={`https://base-sepolia.blockscout.com/tx/${coOwnerTxHash}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-blue-500 underline"
+                >
+                  View on Blockscout
+                </a>
+              </p>
+            )}
           </div>
         </div>
       </div>
@@ -221,24 +329,24 @@ const PetSelector = () => {
   }
 
   return (
-    <div className="max-w-6xl mx-auto p-4">
-      <div className="space-y-8">
-        <div className="text-center space-y-4">
+    <div className="max-w-6xl mx-auto">
+      <div className="">
+        <div className="text-center">
           <h2
-            className="text-2xl md:text-3xl"
+            className="text-2xl mb-12 md:text-3xl"
             style={{ fontFamily: 'var(--font-silkscreen)' }}
           >
-            CHOOSE A PET
+            ADOPT A PET. SNACK TO SAVE. DECENTRALIZE ETHEREUM.
           </h2>
-          <div className="space-y-1">
-            <p className="text-md font-medium">
-              SNACKS SAVINGS POOL: EVERY ETH DEPOSIT COUNTS TOWARD LAUNCHING A VALIDATOR
-            </p>
-            <p className="text-md font-medium">
-              DECENTRALIZATION: HELP ETHEREUM BY MAKING THE NETWORK MORE ROBUST AND
-              DISTRIBUTED
-            </p>
-          </div>
+          {/*<div className="space-y-1">*/}
+          {/*  <p className="text-md font-medium">*/}
+          {/*    SNACKS SAVINGS POOL: EVERY ETH DEPOSIT COUNTS TOWARD LAUNCHING A VALIDATOR*/}
+          {/*  </p>*/}
+          {/*  <p className="text-md font-medium">*/}
+          {/*    DECENTRALIZATION: HELP ETHEREUM BY MAKING THE NETWORK MORE ROBUST AND*/}
+          {/*    DISTRIBUTED*/}
+          {/*  </p>*/}
+          {/*</div>*/}
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
@@ -271,12 +379,12 @@ const PetSelector = () => {
         </div>
 
         <div className="text-center space-y-4">
-          <p className="text-sm font-medium">
-            CHOOSE WISELY- YOU WILL NOT BE ABLE TO CHANGE YOUR PET ONCE YOU START
-            SNACKING*.
-          </p>
+          {/*<p className="text-sm font-medium">*/}
+          {/*  CHOOSE WISELY- YOU WILL NOT BE ABLE TO CHANGE YOUR PET ONCE YOU START*/}
+          {/*  SNACKING*.*/}
+          {/*</p>*/}
           <p
-            className="text-xl font-medium"
+            className="py-6 text-2xl font-medium"
             style={{ fontFamily: 'var(--font-silkscreen)' }}
           >
             {hoveredPet.name}: {hoveredPet.description}
@@ -301,12 +409,12 @@ const PetSelector = () => {
             <p className="mt-4">
               {txSuccess ? 'Adoption successful!' : 'Transaction sent!'}{' '}
               <a
-                href={`https://sepolia.etherscan.io/tx/${transactionHash}`}
+                href={`https://base-sepolia.blockscout.com/tx/${transactionHash}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-blue-500 underline"
               >
-                View on Etherscan
+                View on Blockscout
               </a>
             </p>
           )}

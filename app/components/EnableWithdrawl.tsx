@@ -28,7 +28,7 @@ export const EnableWithdraw = () => {
         abi: safeAbi,
         address: safeAddress as `0x${string}`,
         functionName: 'enableModule',
-        args: ['0x1DbB14EC649652F69a2B14B7314e9fA05813Cb5B'], // Diamond address
+        args: ['0x29d5bA177B6790517732352E6b5c78642BCa969b'], // Diamond address
       })
 
       setTransactionHash(result) // Store the transaction hash if successful

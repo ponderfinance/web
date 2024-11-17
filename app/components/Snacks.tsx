@@ -105,7 +105,7 @@ export const Snacks = () => {
         const result = (await readContract(wagmiConfig, {
           ...config,
           abi: petFacetABI,
-          address: '0x1DbB14EC649652F69a2B14B7314e9fA05813Cb5B',
+          address: '0x29d5bA177B6790517732352E6b5c78642BCa969b',
           functionName: 'getPet',
           args: [address],
         })) as PetInfo
@@ -131,7 +131,7 @@ export const Snacks = () => {
       const result = await writeContract(wagmiConfig, {
         ...config,
         abi: petFacetABI,
-        address: '0x1DbB14EC649652F69a2B14B7314e9fA05813Cb5B',
+        address: '0x29d5bA177B6790517732352E6b5c78642BCa969b',
         functionName: 'feed',
         args: [foodType],
         value: paymentInWei,
@@ -144,12 +144,12 @@ export const Snacks = () => {
     }
   }
 
-  if (!hasPet) {
-    return <p>You need a pet to view snacks.</p>
-  }
+  // if (!hasPet) {
+  //   return null
+  // }
 
   return (
-    <div className="max-w-6xl mx-auto p-4">
+    <div className="max-w-6xl mx-auto p-4 mt-12">
       <h1
         className="text-3xl text-center mb-8"
         style={{ fontFamily: 'var(--font-silkscreen)' }}
@@ -162,32 +162,37 @@ export const Snacks = () => {
             <button
               onClick={() => setSelectedFood(item.type)}
               className={`w-48 h-48 rounded-full flex items-center justify-center transition-all
-                ${
-                  selectedFood === item.type
-                    ? 'border-2 border-black'
-                    : 'border-2 border-gray-100 hover:border-black'
-                }
-                bg-white p-4`}
+        ${selectedFood === item.type ? 'border-2 border-black' : 'border-2 border-gray-100'}
+        ${!hasPet ? 'opacity-50 cursor-not-allowed' : 'hover:border-black'}
+        bg-white p-4`}
+              disabled={!hasPet}
+              title={!hasPet ? 'Adopt a Pet First!' : item.name}
             >
               <div className="flex items-center justify-center w-full h-full">
                 <img
                   src={item.image}
-                  alt={item.name}
-                  className="max-w-[80%] max-h-[80%] object-contain"
+                  alt={!hasPet ? 'Adopt a Pet First!' : item.name}
+                  className={`max-w-[80%] max-h-[80%] object-contain transition-all
+            ${!hasPet ? 'grayscale' : ''}`}
                 />
               </div>
             </button>
             <div className="mt-2 text-center">
-              <p className="text-lg" style={{ fontFamily: 'var(--font-silkscreen)' }}>
+              <p
+                className={`text-lg ${!hasPet ? 'opacity-50' : ''}`}
+                style={{ fontFamily: 'var(--font-silkscreen)' }}
+              >
                 {item.name}
               </p>
-              <p className="text-sm text-gray-600 mb-2">{item.price} ETH</p>
+              <p className={`text-sm text-gray-600 mb-2 ${!hasPet ? 'opacity-50' : ''}`}>
+                {item.price} ETH
+              </p>
               {selectedFood === item.type && (
                 <button
                   onClick={() => handleFeed(item.type, item.price)}
-                  disabled={isWaitingForTx}
+                  disabled={isWaitingForTx || !hasPet}
                   className={`bg-black text-white px-6 py-2 rounded-full transition-all transform hover:scale-105 ${
-                    isWaitingForTx ? 'opacity-50 cursor-not-allowed' : ''
+                    isWaitingForTx || !hasPet ? 'opacity-50 cursor-not-allowed' : ''
                   }`}
                   style={{ fontFamily: 'var(--font-silkscreen)' }}
                 >
