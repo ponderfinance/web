@@ -1,10 +1,10 @@
-import { baseSepolia, base } from 'viem/chains'
 import { createConfig, http } from 'wagmi'
+import {bitkubChain, bitkubTestnetChain} from "@/app/constants/chains";
 
 export const wagmiConfig = createConfig({
-  chains: [baseSepolia, base],
+  chains: [bitkubChain, bitkubTestnetChain],
   transports: {
-    [baseSepolia.id]: http(),
-    [base.id]: http(),
-},
+    [bitkubChain.id]: http(),
+    [bitkubTestnetChain.id]: http(),
+  },
 })

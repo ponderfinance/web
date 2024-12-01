@@ -4,7 +4,7 @@ export const Footer = () => {
       <div className="mx-auto flex max-w-screen-2xl items-center justify-between">
         <div className="flex gap-4 text-sm text-gray-500">
           <a
-            href="https://github.com/taayyohh/snack-protocol"
+            href="https://github.com/taayyohh/ponder"
             target="_blank"
             rel="noreferrer"
             className="hover:text-gray-900 uppercase"

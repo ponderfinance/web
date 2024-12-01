@@ -1,9 +1,9 @@
 import type { PrivyClientConfig } from '@privy-io/react-auth'
-import { baseSepolia, base } from 'viem/chains'
+import {bitkubChain, bitkubTestnetChain} from "@/app/constants/chains";
 
 export const privyConfig: PrivyClientConfig = {
-  defaultChain: baseSepolia,
-  supportedChains: [baseSepolia, base],
+  defaultChain: bitkubChain,
+  supportedChains: [bitkubChain, bitkubTestnetChain],
   loginMethods: ['wallet'],
   appearance: {
     theme: 'light',
