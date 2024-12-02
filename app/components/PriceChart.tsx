@@ -80,7 +80,10 @@ export default function PriceChart({ pairAddress, className }: PriceChartProps) 
           }),
         ])
 
-        setPairInfo({ token0Symbol: token0Symbol as string, token1Symbol: token1Symbol as string })
+        setPairInfo({
+          token0Symbol: token0Symbol as string,
+          token1Symbol: token1Symbol as string,
+        })
       } catch (err) {
         console.error('Error fetching pair info:', err)
       }
@@ -240,12 +243,14 @@ export default function PriceChart({ pairAddress, className }: PriceChartProps) 
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis
                   dataKey="timestamp"
-                  tickFormatter={(value: any) => new Date(value * 1000).toLocaleTimeString()}
+                  tickFormatter={(value: any) =>
+                    new Date(value * 1000).toLocaleTimeString()
+                  }
                 />
                 <YAxis domain={['auto', 'auto']} />
                 <Tooltip
                   labelFormatter={(value: any) => new Date(value * 1000).toLocaleString()}
-                  formatter={(value: number) => [value.toFixed(6), 'Price']}
+                  // formatter={(value: number) => [value.toFixed(6), 'Price']}
                 />
                 <Line
                   type="monotone"
@@ -265,12 +270,14 @@ export default function PriceChart({ pairAddress, className }: PriceChartProps) 
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis
                   dataKey="timestamp"
-                  tickFormatter={(value: any) => new Date(value * 1000).toLocaleTimeString()}
+                  tickFormatter={(value: any) =>
+                    new Date(value * 1000).toLocaleTimeString()
+                  }
                 />
                 <YAxis />
                 <Tooltip
                   labelFormatter={(value: any) => new Date(value * 1000).toLocaleString()}
-                  formatter={(value: number) => [value.toFixed(2), 'Volume']}
+                  // formatter={(value: number) => [value.toFixed(2), 'Volume']}
                 />
                 <Bar dataKey="volume" fill="#6b7280" />
               </BarChart>
