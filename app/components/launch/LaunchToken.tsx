@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Text, Card, Button, View } from 'reshaped'
-import { usePonderSDK } from '@/app/providers/ponder'
+import { usePonderSDK } from '@ponderfinance/sdk'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 
@@ -13,7 +13,7 @@ const launchSchema = z.object({
 type FormValues = z.infer<typeof launchSchema>
 
 export default function LaunchCreationForm() {
-  const { sdk, isReady } = usePonderSDK()
+  const sdk = usePonderSDK()
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string>('')
   const [launchId, setLaunchId] = useState<string>('')
@@ -54,7 +54,7 @@ export default function LaunchCreationForm() {
     }
   }
 
-  if (!isReady) {
+  if (!sdk) {
     return (
       <Card>
         <View align="center" justify="center">

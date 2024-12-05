@@ -1,315 +1,508 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { Text, Card, Button, View } from 'reshaped'
-import { usePonderSDK } from '@/app/providers/ponder'
-import { useForm } from 'react-hook-form'
-import { Address, formatUnits, parseUnits } from 'viem'
-import { z } from 'zod'
-import { erc20Abi } from 'viem'
-import { bitkubTestnetChain } from '@/app/constants/chains'
+import { type Address, formatUnits, parseUnits } from 'viem'
 import { useAccount } from 'wagmi'
+import {
+  useGasEstimate,
+  useSwap,
+  useSwapApproval,
+  useSwapCallback,
+  useSwapRoute,
+  useTokenBalance,
+  useTokenInfo,
+  useTokenAllowance,
+  useTransaction,
+  usePonderSDK,
+} from '@ponderfinance/sdk'
 
-const swapSchema = z.object({
-  tokenIn: z.string().startsWith('0x').length(42),
-  tokenOut: z.string().startsWith('0x').length(42),
-  amountIn: z.string().min(1),
-})
-
-type FormValues = z.infer<typeof swapSchema>
-
-interface TokenInfo {
-  decimals: number
-  symbol: string
-  balance: bigint
-  allowance: bigint
+interface SwapInterfaceProps {
+  defaultTokenIn?: Address
+  defaultTokenOut?: Address
+  className?: string
 }
 
-export default function SwapInterface() {
-  const { sdk, isReady } = usePonderSDK()
-  const account = useAccount()
-  const [isLoading, setIsLoading] = useState(false)
-  const [isApproving, setIsApproving] = useState(false)
-  const [error, setError] = useState<string>('')
-  const [tokenInInfo, setTokenInInfo] = useState<TokenInfo>()
-  const [tokenOutInfo, setTokenOutInfo] = useState<TokenInfo>()
-  const [expectedOutput, setExpectedOutput] = useState<string>('')
+const verifyPoolLiquidity = async (
+  route: any,
+  sdk: any
+): Promise<{ isValid: boolean; reason?: string }> => {
+  try {
+    if (!route.hops?.[0]?.pair) {
+      return { isValid: false, reason: 'Invalid route' }
+    }
 
-  const {
-    handleSubmit,
-    register,
-    watch,
-    reset,
-    formState: { errors },
-  } = useForm<FormValues>()
+    const pair = sdk.getPair(route.hops[0].pair)
+    const [token0, reserves] = await Promise.all([pair.token0(), pair.getReserves()])
 
-  const tokenInAddress = watch('tokenIn')
-  const tokenOutAddress = watch('tokenOut')
-  const amountIn = watch('amountIn')
+    const isToken0In = route.path[0].toLowerCase() === token0.toLowerCase()
+    const reserveIn = isToken0In ? reserves.reserve0 : reserves.reserve1
+    const reserveOut = isToken0In ? reserves.reserve1 : reserves.reserve0
 
-  // Fetch token information
-  useEffect(() => {
-    const fetchTokenInfo = async () => {
-      if (!sdk || !account.address) return
+    console.log('Pool state:', {
+      reserveIn: reserveIn.toString(),
+      reserveOut: reserveOut.toString(),
+      amountIn: route.amountIn.toString(),
+      pair: route.hops[0].pair,
+    })
 
-      try {
-        if (tokenInAddress?.length === 42) {
-          const [decimals, symbol, balance, allowance] = await Promise.all([
-            sdk.publicClient.readContract({
-              address: tokenInAddress as Address,
-              abi: erc20Abi,
-              functionName: 'decimals',
-            }),
-            sdk.publicClient.readContract({
-              address: tokenInAddress as Address,
-              abi: erc20Abi,
-              functionName: 'symbol',
-            }),
-            sdk.publicClient.readContract({
-              address: tokenInAddress as Address,
-              abi: erc20Abi,
-              functionName: 'balanceOf',
-              args: [account.address],
-            }),
-            sdk.publicClient.readContract({
-              address: tokenInAddress as Address,
-              abi: erc20Abi,
-              functionName: 'allowance',
-              args: [account.address, sdk.router.address],
-            }),
-          ])
-
-          setTokenInInfo({
-            decimals,
-            symbol,
-            balance,
-            allowance,
-          })
-        }
-
-        if (tokenOutAddress?.length === 42) {
-          const [decimals, symbol, balance] = await Promise.all([
-            sdk.publicClient.readContract({
-              address: tokenOutAddress as Address,
-              abi: erc20Abi,
-              functionName: 'decimals',
-            }),
-            sdk.publicClient.readContract({
-              address: tokenOutAddress as Address,
-              abi: erc20Abi,
-              functionName: 'symbol',
-            }),
-            sdk.publicClient.readContract({
-              address: tokenOutAddress as Address,
-              abi: erc20Abi,
-              functionName: 'balanceOf',
-              args: [account.address],
-            }),
-          ])
-
-          setTokenOutInfo({
-            decimals,
-            symbol,
-            balance,
-            allowance: BigInt(0), // Not needed for output token
-          })
-        }
-      } catch (err) {
-        console.error('Error fetching token info:', err)
+    // Check if input amount is too large compared to pool reserves
+    if (BigInt(route.amountIn) > BigInt(reserveIn) / BigInt(2)) {
+      return {
+        isValid: false,
+        reason: 'Amount too large for pool liquidity',
       }
     }
 
-    fetchTokenInfo()
-  }, [sdk, account.address, tokenInAddress, tokenOutAddress, isApproving])
-
-  // Calculate expected output amount
-  useEffect(() => {
-    const calculateOutput = async () => {
-      if (!sdk || !tokenInAddress || !tokenOutAddress || !amountIn || !tokenInInfo) return
-
-      try {
-        const path = [tokenInAddress as Address, tokenOutAddress as Address]
-        const amounts = await sdk.router.getAmountsOut(
-          parseUnits(amountIn, tokenInInfo.decimals),
-          path
-        )
-
-        if (tokenOutInfo) {
-          setExpectedOutput(formatUnits(amounts[1], tokenOutInfo.decimals))
-        }
-      } catch (err) {
-        console.error('Error calculating output:', err)
-        setExpectedOutput('')
+    // Verify minimum reserves
+    if (BigInt(reserveIn) === BigInt(0) || BigInt(reserveOut) === BigInt(0)) {
+      return {
+        isValid: false,
+        reason: 'Pool has insufficient liquidity',
       }
     }
 
-    calculateOutput()
-  }, [sdk, tokenInAddress, tokenOutAddress, amountIn, tokenInInfo, tokenOutInfo])
+    return { isValid: true }
+  } catch (err) {
+    console.error('Pool verification failed:', err)
+    return { isValid: false, reason: 'Failed to verify pool state' }
+  }
+}
 
-  const handleApprove = async (token: Address, spender: Address, amount: bigint) => {
-    if (!sdk || ! sdk.walletClient || !account.address) return
+export default function SwapInterface({
+  defaultTokenIn,
+  defaultTokenOut,
+  className,
+}: SwapInterfaceProps) {
+  const sdk = usePonderSDK()
+  const { address: account } = useAccount()
+
+  // Form state
+  const [tokenIn, setTokenIn] = useState<Address | undefined>(defaultTokenIn)
+  const [tokenOut, setTokenOut] = useState<Address | undefined>(defaultTokenOut)
+  const [amountIn, setAmountIn] = useState<string>('')
+  const [slippage, setSlippage] = useState(0.5) // 0.5% default
+
+  // Token information
+  const { data: tokenInInfo } = useTokenInfo(tokenIn || ('' as Address))
+  const { data: tokenOutInfo } = useTokenInfo(tokenOut || ('' as Address))
+  const { data: tokenInBalance } = useTokenBalance(tokenIn || ('' as Address), account)
+  const { data: tokenOutBalance } = useTokenBalance(tokenOut || ('' as Address), account)
+  const { data: tokenInAllowance, refetch: refetchAllowance } = useTokenAllowance(
+    tokenIn || ('' as Address),
+    sdk?.router.address,
+    account,
+    !!tokenIn && !!account && !!sdk?.router.address
+  )
+
+  // Get optimal route and amounts
+  const { data: route, isLoading: isRouteLoading } = useSwapRoute(
+    {
+      tokenIn: tokenIn as Address,
+      tokenOut: tokenOut as Address,
+      amountIn: tokenInInfo
+        ? parseUnits(amountIn || '0', tokenInInfo.decimals)
+        : BigInt(0),
+      maxHops: 3,
+    },
+    Boolean(tokenIn && tokenOut && amountIn && tokenInInfo)
+  )
+
+  // Handle amount input with proper decimal validation
+  const handleAmountInput = (value: string) => {
+    if (!/^\d*\.?\d*$/.test(value)) return
+
+    const parts = value.split('.')
+    if (parts[1] && parts[1].length > (tokenInInfo?.decimals || 18)) return
+
+    setAmountIn(value)
+  }
+
+  // Calculate expected output amount based on route
+  const expectedOutputAmount = useMemo(() => {
+    if (!route || !tokenOutInfo) return ''
+    try {
+      const amountOutBigInt = BigInt(route.amountOut)
+      return formatUnits(amountOutBigInt, tokenOutInfo.decimals)
+    } catch (err) {
+      console.error('Error calculating expected output:', err)
+      return ''
+    }
+  }, [route, tokenOutInfo])
+
+  // Price impact warning
+  const showPriceImpactWarning = useMemo(() => {
+    if (!route) return false
+    return route.priceImpact > 2
+  }, [route])
+
+  // Display route information
+  const routeDisplay = useMemo(() => {
+    if (!route || !route.hops.length) return null
+
+    return route.hops.map((hop, index) => ({
+      from: {
+        address: hop.tokenIn,
+        symbol: index === 0 ? tokenInInfo?.symbol : `Token${index}`,
+      },
+      to: {
+        address: hop.tokenOut,
+        symbol:
+          index === route.hops.length - 1 ? tokenOutInfo?.symbol : `Token${index + 1}`,
+      },
+      pair: hop.pair,
+      amountIn: formatUnits(BigInt(hop.amountIn), tokenInInfo?.decimals || 18),
+      amountOut: formatUnits(BigInt(hop.amountOut), tokenOutInfo?.decimals || 18),
+      fee: formatUnits(BigInt(hop.fee), tokenInInfo?.decimals || 18),
+    }))
+  }, [route, tokenInInfo, tokenOutInfo])
+
+  // Gas estimation
+  const { calldata: swapCalldata } = useSwapCallback({
+    route,
+    recipient: account,
+    slippageBps: Math.round(slippage * 100),
+    deadline: BigInt(Math.floor(Date.now() / 1000) + 1200),
+  }) || { calldata: null }
+
+  const { data: gasEstimate } = useGasEstimate(
+    swapCalldata ?? undefined,
+    Boolean(swapCalldata)
+  )
+
+  // Token approval
+  const { mutateAsync: approve, isPending: isApproving } = useSwapApproval()
+
+  // Swap execution
+  const { mutateAsync: swap, isPending: isSwapping } = useSwap()
+  const [txHash, setTxHash] = useState<string>()
+  const { data: txStatus } = useTransaction(txHash as `0x${string}`)
+
+  const handleApproval = async () => {
+    if (!route || !account || !sdk?.router.address) return
 
     try {
-      const hash = await sdk.walletClient.writeContract({
-        address: token,
-        abi: erc20Abi,
-        functionName: 'approve',
-        args: [spender, amount],
-        chain: bitkubTestnetChain,
-        account: account.address,
+      const amountInBigInt = BigInt(route.amountIn)
+      console.log('Starting approval process...', {
+        tokenIn: route.path[0],
+        amountInBigInt: amountInBigInt.toString(),
+        currentAllowance: tokenInAllowance?.amount?.toString(),
       })
-      await sdk.publicClient.waitForTransactionReceipt({ hash })
-    } catch (err: any) {
-      throw new Error(`Approval failed: ${err.message}`)
+
+      const MAX_UINT256 = BigInt(
+        '115792089237316195423570985008687907853269984665640564039457584007913129639935'
+      )
+      await approve({
+        tokenIn: route.path[0],
+        amountIn: MAX_UINT256,
+      })
+
+      await new Promise((resolve) => setTimeout(resolve, 2000))
+      await refetchAllowance?.()
+
+      const newAllowance = tokenInAllowance?.amount
+      console.log('Approval complete:', {
+        newAllowance: newAllowance?.toString(),
+        requiredAmount: amountInBigInt.toString(),
+      })
+
+      if (!newAllowance || newAllowance < amountInBigInt) {
+        throw new Error('Approval failed - allowance not set correctly')
+      }
+    } catch (err) {
+      console.error('Approval failed:', err)
+      throw err
     }
   }
 
-  const onSubmit = async (data: FormValues) => {
-    if (!sdk || !tokenInInfo || !tokenOutInfo) return
-    if (!account.address) {
-      setError('Wallet not connected')
-      return
+  const handleSwap = async () => {
+    if (!route || !account) return
+
+    // Verify pool state first
+    const poolCheck = await verifyPoolLiquidity(route, sdk)
+    if (!poolCheck.isValid) {
+      throw new Error(`Swap validation failed: ${poolCheck.reason}`)
     }
 
     try {
-      const validatedData = swapSchema.parse(data)
-      setIsLoading(true)
-      setError('')
-
-      const amountInWei = parseUnits(validatedData.amountIn, tokenInInfo.decimals)
-
-      // Check balance
-      if (amountInWei > tokenInInfo.balance) {
-        throw new Error(`Insufficient ${tokenInInfo.symbol} balance`)
+      if (isApprovalRequired) {
+        await handleApproval()
       }
 
-      // Handle approval if needed
-      if (amountInWei > tokenInInfo.allowance) {
-        setIsApproving(true)
-        await handleApprove(
-          validatedData.tokenIn as Address,
-          sdk.router.address,
-          amountInWei
-        )
-        setIsApproving(false)
+      const amountInBigInt = BigInt(route.amountIn)
+      const currentAllowance = BigInt(tokenInAllowance?.amount || 0)
+
+      if (currentAllowance < amountInBigInt) {
+        throw new Error('Insufficient allowance for swap')
       }
 
-      const path = [validatedData.tokenIn as Address, validatedData.tokenOut as Address]
-      const deadline = BigInt(Math.floor(Date.now() / 1000) + 1200) // 20 minutes
+      const amountOutBigInt = BigInt(route.amountOut)
+      const slippageBps = BigInt(Math.round(slippage * 100))
+      const minAmountOut =
+        minimumReceived?.amount ||
+        amountOutBigInt - (amountOutBigInt * slippageBps) / BigInt(10000)
 
-      const minOutput = expectedOutput
-        ? (parseUnits(expectedOutput, tokenOutInfo.decimals) * BigInt(95)) / BigInt(100) // 5% slippage
-        : BigInt(0)
-
-      const hash = await sdk.router.swapExactTokensForTokens({
-        amountIn: amountInWei,
-        amountOutMin: minOutput,
-        path,
-        to: account.address,
-        deadline,
+      console.log('Executing swap with params:', {
+        amountIn: amountInBigInt.toString(),
+        amountOutMin: minAmountOut.toString(),
+        path: route.path,
+        to: account,
+        deadline: (Math.floor(Date.now() / 1000) + 1200).toString(),
+        allowance: currentAllowance.toString(),
       })
 
-      await sdk.publicClient.waitForTransactionReceipt({ hash })
-      reset()
-      setExpectedOutput('')
+      const swapResult = await swap({
+        amountIn: amountInBigInt,
+        amountOutMin: minAmountOut,
+        path: route.path,
+        to: account,
+        deadline: BigInt(Math.floor(Date.now() / 1000) + 1200),
+      })
+
+      setTxHash(swapResult.hash)
     } catch (err: any) {
-      console.error('Swap error:', err)
-      if (err instanceof z.ZodError) {
-        setError('Invalid input format')
-      } else {
-        setError(err.message || 'Failed to swap')
-      }
-    } finally {
-      setIsLoading(false)
+      console.error('Swap failed:', {
+        error: err,
+        message: err.message,
+        details: err.details,
+        code: err.code,
+      })
+      throw err
     }
   }
 
-  if (!isReady) {
-    return (
-      <Card>
-        <View align="center" justify="center">
-          <Text>Loading...</Text>
-        </View>
-      </Card>
+  const handleSwitchTokens = () => {
+    setTokenIn(tokenOut)
+    setTokenOut(tokenIn)
+    setAmountIn('')
+  }
+
+  // Reset on successful transaction
+  useEffect(() => {
+    if (txStatus?.state === 'confirmed') {
+      setAmountIn('')
+      setTxHash(undefined)
+    }
+  }, [txStatus])
+
+  // Validation
+  const isApprovalRequired = useMemo(() => {
+    if (!route || !tokenInAllowance?.amount) return true
+
+    const amountInBigInt = BigInt(route.amountIn)
+    const allowanceBigInt = BigInt(tokenInAllowance.amount)
+
+    console.log('Approval check:', {
+      allowance: allowanceBigInt.toString(),
+      required: amountInBigInt.toString(),
+      isRequired: amountInBigInt > allowanceBigInt,
+    })
+
+    return amountInBigInt > allowanceBigInt
+  }, [route, tokenInAllowance])
+
+  const isValidTrade = useMemo(() => {
+    if (!route || !tokenInBalance || !account || !tokenInInfo) return false
+
+    const amountInBigInt = BigInt(route.amountIn)
+    const balanceBigInt = BigInt(tokenInBalance)
+
+    console.log('Trade validation:', {
+      amountIn: formatUnits(amountInBigInt, tokenInInfo.decimals),
+      balance: formatUnits(balanceBigInt, tokenInInfo.decimals),
+      priceImpact: route.priceImpact,
+      rawAmountIn: amountInBigInt.toString(),
+      rawBalance: balanceBigInt.toString(),
+    })
+
+    console.log(
+      'IS VALID',
+      amountInBigInt <= balanceBigInt,
+      route.priceImpact <= 15,
+      BigInt(route.amountOut) > BigInt(0),
+      amountInBigInt > BigInt(0)
     )
-  }
+
+    return (
+      amountInBigInt <= balanceBigInt &&
+      // route.priceImpact <= 15 &&
+      BigInt(route.amountOut) > BigInt(0) &&
+      amountInBigInt > BigInt(0)
+    )
+  }, [route, tokenInBalance, account, tokenInInfo])
+
+  // Calculate minimum received amount accounting for slippage
+  const minimumReceived = useMemo(() => {
+    if (!route || !tokenOutInfo) return null
+
+    try {
+      const slippageBps = BigInt(Math.round(slippage * 100))
+      const amountOutBigInt = BigInt(route.amountOut)
+      const bpsBasedSlippage = (amountOutBigInt * slippageBps) / BigInt(10000)
+      const minAmount = amountOutBigInt - bpsBasedSlippage
+
+      return {
+        amount: minAmount,
+        formatted: formatUnits(minAmount, tokenOutInfo.decimals),
+      }
+    } catch (err) {
+      console.error('Error calculating minimum received:', err)
+      return null
+    }
+  }, [route, tokenOutInfo, slippage])
 
   return (
-    <Card>
-      <form onSubmit={handleSubmit(onSubmit)}>
-        <View gap={16}>
-          <View gap={8}>
-            <Text variant="title-3">Swap</Text>
+    <Card className={className}>
+      <View padding={16} gap={16}>
+        <View direction="row" justify="space-between" align="center">
+          <Text variant="title-3">Swap</Text>
+        </View>
 
-            {error && <Text>{error}</Text>}
-
-            <View gap={4}>
-              <Text>Token In</Text>
-              <input
-                type="text"
-                placeholder="0x..."
-                {...register('tokenIn')}
-                className="w-full p-2 border rounded"
-              />
-              {tokenInInfo && (
-                <Text>
-                  {tokenInInfo.symbol} - Balance:{' '}
-                  {formatUnits(tokenInInfo.balance, tokenInInfo.decimals)}
-                </Text>
-              )}
-              {errors.tokenIn && <Text>Invalid token address</Text>}
-            </View>
-
-            <View gap={4}>
-              <Text>Amount In</Text>
-              <input
-                type="text"
-                placeholder="0.0"
-                {...register('amountIn')}
-                className="w-full p-2 border rounded"
-              />
-              {errors.amountIn && <Text>Invalid amount</Text>}
-            </View>
-
-            <View gap={4}>
-              <Text>Token Out</Text>
-              <input
-                type="text"
-                placeholder="0x..."
-                {...register('tokenOut')}
-                className="w-full p-2 border rounded"
-              />
-              {tokenOutInfo && (
-                <Text>
-                  {tokenOutInfo.symbol} - Balance:{' '}
-                  {formatUnits(tokenOutInfo.balance, tokenOutInfo.decimals)}
-                </Text>
-              )}
-              {errors.tokenOut && <Text>Invalid token address</Text>}
-            </View>
-
-            {expectedOutput && (
-              <View gap={2}>
-                <Text>Expected Output</Text>
-                <Text>
-                  {expectedOutput} {tokenOutInfo?.symbol}
-                </Text>
-                <Text>
-                  Minimum received (5% slippage):{' '}
-                  {(Number(expectedOutput) * 0.95).toFixed(6)} {tokenOutInfo?.symbol}
-                </Text>
-              </View>
+        {/* Token Input */}
+        <View gap={8}>
+          <View direction="row" justify="space-between">
+            <Text>From</Text>
+            {tokenInBalance && tokenInInfo && (
+              <Text>
+                Balance: {formatUnits(BigInt(tokenInBalance), tokenInInfo.decimals)}{' '}
+                {tokenInInfo.symbol}
+              </Text>
             )}
           </View>
 
-          <Button
-            type="submit"
-            disabled={isLoading || isApproving}
-            loading={isLoading || isApproving}
-            fullWidth
-          >
-            {isApproving ? 'Approving...' : isLoading ? 'Swapping...' : 'Swap'}
+          <View direction="row" gap={8}>
+            <input
+              value={amountIn}
+              onChange={(e) => handleAmountInput(e.target.value)}
+              placeholder="0.0"
+              className="flex-1"
+            />
+            <Button
+              onClick={() => {
+                /* Open token selector */
+              }}
+              variant="outline"
+            >
+              {tokenInInfo?.symbol || 'Select Token'}
+            </Button>
+          </View>
+        </View>
+
+        <View align="center">
+          <Button variant="ghost" onClick={handleSwitchTokens}>
+            ↓
           </Button>
         </View>
-      </form>
+
+        {/* Token Output */}
+        <View gap={8}>
+          <View direction="row" justify="space-between">
+            <Text>To</Text>
+            {tokenOutBalance && tokenOutInfo && (
+              <Text>
+                Balance: {formatUnits(BigInt(tokenOutBalance), tokenOutInfo.decimals)}{' '}
+                {tokenOutInfo.symbol}
+              </Text>
+            )}
+          </View>
+
+          <View direction="row" gap={8}>
+            <input
+              value={expectedOutputAmount}
+              readOnly
+              placeholder="0.0"
+              className="flex-1 bg-gray-50"
+            />
+            <Button
+              onClick={() => {
+                /* Open token selector */
+              }}
+              variant="outline"
+            >
+              {tokenOutInfo?.symbol || 'Select Token'}
+            </Button>
+          </View>
+        </View>
+
+        {/* Route Information */}
+        {routeDisplay && routeDisplay.length > 0 && (
+          <View gap={4} className="bg-gray-50 p-4 rounded">
+            <Text weight="medium">Route</Text>
+            {routeDisplay.map((hop, index) => (
+              <View key={index} gap={2}>
+                <Text>
+                  {hop.from.symbol} → {hop.to.symbol}
+                </Text>
+                <Text color="neutral">
+                  {hop.amountIn} → {hop.amountOut} (Fee: {hop.fee})
+                </Text>
+              </View>
+            ))}
+          </View>
+        )}
+
+        {/* Trade Details */}
+        {route && (
+          <View gap={4} className="bg-gray-50 p-4 rounded">
+            <View direction="row" justify="space-between">
+              <Text>Price Impact</Text>
+              <Text color={route.priceImpact > 2 ? 'critical' : 'warning'}>
+                {route.priceImpact.toFixed(2)}%
+              </Text>
+            </View>
+
+            <View direction="row" justify="space-between">
+              <Text>Minimum Received</Text>
+              <Text>
+                {minimumReceived?.formatted} {tokenOutInfo?.symbol}
+              </Text>
+            </View>
+
+            {gasEstimate && (
+              <View direction="row" justify="space-between">
+                <Text>Network Fee</Text>
+                <Text>{gasEstimate.estimateInKUB} KUB</Text>
+              </View>
+            )}
+          </View>
+        )}
+
+        {/* Action Button */}
+        {!account ? (
+          <Button fullWidth>Connect Wallet</Button>
+        ) : !route ? (
+          <Button fullWidth disabled>
+            Enter Amount
+          </Button>
+        ) : !isValidTrade ? (
+          <Button fullWidth disabled>
+            Insufficient Balance
+          </Button>
+        ) : isSwapping || (!!txHash && txStatus?.state === 'pending') ? (
+          <Button fullWidth loading disabled>
+            {isSwapping ? 'Swapping...' : 'Processing...'}
+          </Button>
+        ) : isApprovalRequired ? (
+          <Button
+            fullWidth
+            loading={isApproving}
+            disabled={isApproving}
+            onClick={handleApproval}
+          >
+            Approve {tokenInInfo?.symbol}
+          </Button>
+        ) : (
+          <Button fullWidth disabled={!isValidTrade || !route} onClick={handleSwap}>
+            Swap
+          </Button>
+        )}
+
+        {/* Price Impact Warning */}
+        {showPriceImpactWarning && (
+          <Text color="warning" align="center">
+            Warning: High price impact. You will lose {route?.priceImpact.toFixed(2)}% of
+            your trade value.
+          </Text>
+        )}
+      </View>
     </Card>
   )
 }

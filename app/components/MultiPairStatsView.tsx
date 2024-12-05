@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Text, Card, View, Button } from 'reshaped'
-import { usePonderSDK } from '@/app/providers/ponder'
+import { usePonderSDK } from '@ponderfinance/sdk'
 import { Address, formatUnits, formatEther } from 'viem'
 import { erc20Abi } from 'viem'
 
@@ -29,7 +29,7 @@ interface PairStats {
 }
 
 export default function MultiPairStatsView() {
-  const { sdk, isReady } = usePonderSDK()
+  const sdk = usePonderSDK()
   const [pairs, setPairs] = useState<PairStats[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string>('')
@@ -177,7 +177,7 @@ export default function MultiPairStatsView() {
     }
   }
 
-  if (!isReady || isLoading) {
+  if ( isLoading) {
     return (
       <Card>
         <View align="center" justify="center" padding={8}>

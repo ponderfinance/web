@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { Address } from 'viem'
 import { Text, Card, Button, View } from 'reshaped'
-import { usePonderSDK } from '@/app/providers/ponder'
+import { usePonderSDK } from '@ponderfinance/sdk'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 
@@ -15,7 +15,7 @@ const createPairSchema = z.object({
 type FormValues = z.infer<typeof createPairSchema>
 
 export default function CreatePair() {
-  const { sdk, isReady } = usePonderSDK()
+  const sdk = usePonderSDK()
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string>('')
 
@@ -53,7 +53,7 @@ export default function CreatePair() {
     }
   }
 
-  if (!isReady) {
+  if (!sdk) {
     return (
       <Card>
         <View align="center" justify="center">

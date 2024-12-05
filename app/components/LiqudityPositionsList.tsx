@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Text, Card, View, Button } from 'reshaped'
-import { usePonderSDK } from '@/app/providers/ponder'
+import { usePonderSDK } from '@ponderfinance/sdk'
 import { useAccount } from 'wagmi'
 import { Address, formatUnits, formatEther } from 'viem'
 import { erc20Abi } from 'viem'
@@ -28,7 +28,7 @@ interface Position {
 }
 
 export default function LiquidityPositionsList() {
-  const { sdk, isReady } = usePonderSDK()
+  const sdk = usePonderSDK()
   const account = useAccount()
   const [positions, setPositions] = useState<Position[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -142,7 +142,7 @@ export default function LiquidityPositionsList() {
     }
 
     fetchPositions()
-    const interval = setInterval(fetchPositions, 10000)
+    const interval = setInterval(fetchPositions, 1000000000)
     return () => clearInterval(interval)
   }, [sdk, account.address])
 

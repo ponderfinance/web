@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Text, Card, View } from 'reshaped'
-import { usePonderSDK } from '@/app/providers/ponder'
+import { usePonderSDK } from '@ponderfinance/sdk'
 import { useAccount } from 'wagmi'
 import { Address, formatUnits } from 'viem'
 import { erc20Abi } from 'viem'
@@ -28,7 +28,7 @@ interface PairStats {
 }
 
 export default function PairStatsCard({ pairAddress, className }: PairStatsCardProps) {
-  const { sdk, isReady } = usePonderSDK()
+  const sdk = usePonderSDK()
   const account = useAccount()
   const [stats, setStats] = useState<PairStats>()
   const [error, setError] = useState<string>('')
@@ -125,7 +125,7 @@ export default function PairStatsCard({ pairAddress, className }: PairStatsCardP
     return () => clearInterval(interval)
   }, [sdk, pairAddress, account.address])
 
-  if (!isReady || isLoading) {
+  if ( isLoading) {
     return (
       <Card className={className}>
         <View align="center" justify="center" padding={8}>

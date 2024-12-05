@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Text, Card, View, Button } from 'reshaped'
-import { usePonderSDK } from '@/app/providers/ponder'
+import { usePonderSDK } from '@ponderfinance/sdk'
 import { useAccount } from 'wagmi'
 import { Address, formatUnits, formatEther } from 'viem'
 import { erc20Abi } from 'viem'
@@ -32,7 +32,7 @@ interface FarmListProps {
 }
 
 export default function FarmList({ onManageFarm }: FarmListProps) {
-  const { sdk, isReady } = usePonderSDK()
+  const sdk = usePonderSDK()
   const account = useAccount()
   const [farms, setFarms] = useState<FarmPool[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -149,7 +149,7 @@ export default function FarmList({ onManageFarm }: FarmListProps) {
     }
   }
 
-  if (!isReady || isLoading) {
+  if ( isLoading) {
     return (
       <Card>
         <View align="center" justify="center" padding={8}>

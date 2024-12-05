@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Text, Card, Button, View } from 'reshaped'
-import { usePonderSDK } from '@/app/providers/ponder'
+import { usePonderSDK } from '@ponderfinance/sdk'
 import { useForm } from 'react-hook-form'
 import { Address, formatUnits, parseUnits } from 'viem'
 import { z } from 'zod'
@@ -33,7 +33,7 @@ interface PairInfo {
 }
 
 export default function AddLiquidityForm() {
-  const { sdk, isReady } = usePonderSDK()
+  const sdk = usePonderSDK()
   const account = useAccount()
   const [isLoading, setIsLoading] = useState(false)
   const [isApprovingA, setIsApprovingA] = useState(false)
@@ -362,9 +362,6 @@ export default function AddLiquidityForm() {
       })
 
       try {
-
-
-
         console.log('Simulating addLiquidity transaction...')
 
         const simulationResult = await sdk.publicClient.simulateContract({
@@ -428,7 +425,7 @@ export default function AddLiquidityForm() {
     }
   }
 
-  if (!isReady) {
+  if (!sdk) {
     return (
       <Card>
         <View align="center" justify="center">

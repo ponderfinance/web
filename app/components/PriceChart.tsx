@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { Text, Card, View, Button } from 'reshaped'
-import { usePonderSDK } from '@/app/providers/ponder'
+import { usePonderSDK } from '@ponderfinance/sdk'
 import { Address } from 'viem'
 import {
   LineChart,
@@ -32,7 +32,7 @@ interface ChartData {
 type TimeRange = '1H' | '4H' | '1D' | '1W' | '1M'
 
 export default function PriceChart({ pairAddress, className }: PriceChartProps) {
-  const { sdk, isReady } = usePonderSDK()
+  const sdk = usePonderSDK()
   const [data, setData] = useState<ChartData[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string>('')
@@ -151,7 +151,7 @@ export default function PriceChart({ pairAddress, className }: PriceChartProps) 
     return () => clearInterval(interval)
   }, [sdk, pairAddress, timeConfig])
 
-  if (!isReady || isLoading) {
+  if ( isLoading) {
     return (
       <Card className={className}>
         <View align="center" justify="center" padding={8}>

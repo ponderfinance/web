@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Text, Card, Button, View } from 'reshaped'
-import { usePonderSDK } from '@/app/providers/ponder'
+import { usePonderSDK } from '@ponderfinance/sdk'
 import { formatEther, parseEther } from 'viem'
 
 interface LaunchContributionCardProps {
@@ -10,7 +10,7 @@ interface LaunchContributionCardProps {
 export default function LaunchContributionCard({
   launchId,
 }: LaunchContributionCardProps) {
-  const { sdk, isReady } = usePonderSDK()
+  const sdk = usePonderSDK()
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string>('')
   const [amount, setAmount] = useState<string>('')
@@ -58,7 +58,7 @@ export default function LaunchContributionCard({
     }
   }
 
-  if (!isReady || !launchInfo) {
+  if ( !launchInfo) {
     return (
       <Card>
         <View align="center" justify="center">

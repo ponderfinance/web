@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Text, Card, Button, View } from 'reshaped'
-import { usePonderSDK } from '@/app/providers/ponder'
+import { usePonderSDK } from '@ponderfinance/sdk'
 import { useAccount } from 'wagmi'
 import { formatEther, parseUnits } from 'viem'
 import { erc20Abi } from 'viem'
@@ -12,7 +12,7 @@ interface BoostInterfaceProps {
 }
 
 export default function BoostInterface({ pid, boostMultiplier }: BoostInterfaceProps) {
-  const { sdk, isReady } = usePonderSDK()
+  const sdk = usePonderSDK()
   const account = useAccount()
   const [ponderBalance, setPonderBalance] = useState<bigint>(BigInt(0))
   const [boostedAmount, setBoostedAmount] = useState<bigint>(BigInt(0))
@@ -135,7 +135,7 @@ export default function BoostInterface({ pid, boostMultiplier }: BoostInterfaceP
     }
   }
 
-  if (!isReady || isLoading) {
+  if ( isLoading) {
     return (
       <Card>
         <View align="center" justify="center" padding={8}>
