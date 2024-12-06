@@ -18,7 +18,6 @@ import {
 interface SwapInterfaceProps {
   defaultTokenIn?: Address
   defaultTokenOut?: Address
-  className?: string
 }
 
 const verifyPoolLiquidity = async (
@@ -70,7 +69,6 @@ const verifyPoolLiquidity = async (
 export default function SwapInterface({
   defaultTokenIn,
   defaultTokenOut,
-  className,
 }: SwapInterfaceProps) {
   const sdk = usePonderSDK()
   const { address: account } = useAccount()
@@ -350,159 +348,167 @@ export default function SwapInterface({
   }, [route, tokenOutInfo, slippage])
 
   return (
-    <Card className={className}>
-      <View padding={16} gap={16}>
-        <View direction="row" justify="space-between" align="center">
-          <Text variant="title-3">Swap</Text>
-        </View>
-
-        {/* Token Input */}
-        <View gap={8}>
-          <View direction="row" justify="space-between">
-            <Text>From</Text>
-            {tokenInBalance && tokenInInfo && (
-              <Text>
-                Balance: {formatUnits(BigInt(tokenInBalance), tokenInInfo.decimals)}{' '}
-                {tokenInInfo.symbol}
-              </Text>
-            )}
-          </View>
-
-          <View direction="row" gap={8}>
-            <input
-              value={amountIn}
-              onChange={(e) => handleAmountInput(e.target.value)}
-              placeholder="0.0"
-              className="flex-1"
-            />
-            <Button
-              onClick={() => {
-                /* Open token selector */
-              }}
-              variant="outline"
-            >
-              {tokenInInfo?.symbol || 'Select Token'}
-            </Button>
-          </View>
-        </View>
-
-        <View align="center">
-          <Button variant="ghost" onClick={handleSwitchTokens}>
-            ↓
-          </Button>
-        </View>
-
-        {/* Token Output */}
-        <View gap={8}>
-          <View direction="row" justify="space-between">
-            <Text>To</Text>
-            {tokenOutBalance && tokenOutInfo && (
-              <Text>
-                Balance: {formatUnits(BigInt(tokenOutBalance), tokenOutInfo.decimals)}{' '}
-                {tokenOutInfo.symbol}
-              </Text>
-            )}
-          </View>
-
-          <View direction="row" gap={8}>
-            <input
-              value={expectedOutputAmount}
-              readOnly
-              placeholder="0.0"
-              className="flex-1 bg-gray-50"
-            />
-            <Button
-              onClick={() => {
-                /* Open token selector */
-              }}
-              variant="outline"
-            >
-              {tokenOutInfo?.symbol || 'Select Token'}
-            </Button>
-          </View>
-        </View>
-
-        {/* Route Information */}
-        {routeDisplay && routeDisplay.length > 0 && (
-          <View gap={4} className="bg-gray-50 p-4 rounded">
-            <Text weight="medium">Route</Text>
-            {routeDisplay.map((hop, index) => (
-              <View key={index} gap={2}>
-                <Text>
-                  {hop.from.symbol} → {hop.to.symbol}
-                </Text>
-                <Text color="neutral">
-                  {hop.amountIn} → {hop.amountOut} (Fee: {hop.fee})
-                </Text>
-              </View>
-            ))}
-          </View>
-        )}
-
-        {/* Trade Details */}
-        {route && (
-          <View gap={4} className="bg-gray-50 p-4 rounded">
-            <View direction="row" justify="space-between">
-              <Text>Price Impact</Text>
-              <Text color={route.priceImpact > 2 ? 'critical' : 'warning'}>
-                {route.priceImpact.toFixed(2)}%
-              </Text>
-            </View>
-
-            <View direction="row" justify="space-between">
-              <Text>Minimum Received</Text>
-              <Text>
-                {minimumReceived?.formatted} {tokenOutInfo?.symbol}
-              </Text>
-            </View>
-
-            {gasEstimate && (
+    <View align="center" width="100%">
+      <View width={{ s: '100%', m: 120 }}>
+        <View backgroundColor="elevation-base" borderRadius="large">
+          <View padding={8} maxHeight={'400px'} overflow={'auto'}>
+            {/* Token Input */}
+            <View gap={8}>
               <View direction="row" justify="space-between">
-                <Text>Network Fee</Text>
-                <Text>{gasEstimate.estimateInKUB} KUB</Text>
+                <Text>Sell</Text>
+                {tokenInBalance && tokenInInfo && (
+                  <Text>
+                    Balance: {formatUnits(BigInt(tokenInBalance), tokenInInfo.decimals)}{' '}
+                    {tokenInInfo.symbol}
+                  </Text>
+                )}
+              </View>
+
+              <View direction="row" gap={8}>
+                <input
+                  value={amountIn}
+                  onChange={(e) => handleAmountInput(e.target.value)}
+                  placeholder="0.0"
+                  className="flex-1"
+                />
+                <Button
+                  onClick={() => {
+                    /* Open token selector */
+                  }}
+                  variant="outline"
+                >
+                  {tokenInInfo?.symbol || 'Select Token'}
+                </Button>
+              </View>
+            </View>
+
+            <View align="center">
+              <Button variant="ghost" onClick={handleSwitchTokens}>
+                ↓
+              </Button>
+            </View>
+
+            {/* Token Output */}
+            <View gap={8}>
+              <View direction="row" justify="space-between">
+                <Text>Buy</Text>
+                {tokenOutBalance && tokenOutInfo && (
+                  <Text>
+                    Balance: {formatUnits(BigInt(tokenOutBalance), tokenOutInfo.decimals)}{' '}
+                    {tokenOutInfo.symbol}
+                  </Text>
+                )}
+              </View>
+
+              <View direction="row" gap={8}>
+                <input
+                  value={expectedOutputAmount}
+                  readOnly
+                  placeholder="0.0"
+                  className="flex-1 bg-gray-50"
+                />
+                <Button
+                  onClick={() => {
+                    /* Open token selector */
+                  }}
+                  variant="outline"
+                >
+                  {tokenOutInfo?.symbol || 'Select Token'}
+                </Button>
+              </View>
+            </View>
+
+            {/* Route Information */}
+            {routeDisplay && routeDisplay.length > 0 && (
+              <View gap={4} className="bg-gray-50 p-4 rounded">
+                <Text weight="medium">Route</Text>
+                {routeDisplay.map((hop, index) => (
+                  <View key={index} gap={2}>
+                    <Text>
+                      {hop.from.symbol} → {hop.to.symbol}
+                    </Text>
+                    <Text color="neutral">
+                      {hop.amountIn} → {hop.amountOut} (Fee: {hop.fee})
+                    </Text>
+                  </View>
+                ))}
               </View>
             )}
+
+            {/* Trade Details */}
+            {route && (
+              <View gap={4} className="bg-gray-50 p-4 rounded">
+                <View direction="row" justify="space-between">
+                  <Text>Price Impact</Text>
+                  <Text color={route.priceImpact > 2 ? 'critical' : 'warning'}>
+                    {route.priceImpact.toFixed(2)}%
+                  </Text>
+                </View>
+
+                <View direction="row" justify="space-between">
+                  <Text>Minimum Received</Text>
+                  <Text>
+                    {minimumReceived?.formatted} {tokenOutInfo?.symbol}
+                  </Text>
+                </View>
+
+                {gasEstimate && (
+                  <View direction="row" justify="space-between">
+                    <Text>Network Fee</Text>
+                    <Text>{gasEstimate.estimateInKUB} KUB</Text>
+                  </View>
+                )}
+              </View>
+            )}
+
+            {/* Action Button */}
+            {!account ? (
+              <Button fullWidth size="large">
+                Connect Wallet
+              </Button>
+            ) : !route ? (
+              <Button fullWidth size="large" disabled>
+                Enter an amount
+              </Button>
+            ) : !isValidTrade ? (
+              <Button fullWidth size="large" disabled>
+                Insufficient Balance
+              </Button>
+            ) : isSwapping || (!!txHash && txStatus?.state === 'pending') ? (
+              <Button fullWidth size="large" loading disabled>
+                {isSwapping ? 'Swapping...' : 'Processing...'}
+              </Button>
+            ) : isApprovalRequired ? (
+              <Button
+                fullWidth
+                size="large"
+                loading={isApproving}
+                disabled={isApproving}
+                onClick={handleApproval}
+              >
+                Approve {tokenInInfo?.symbol}
+              </Button>
+            ) : (
+              <Button
+                fullWidth
+                disabled={!isValidTrade || !route}
+                size="large"
+                onClick={handleSwap}
+              >
+                Swap
+              </Button>
+            )}
+
+            {/* Price Impact Warning */}
+            {showPriceImpactWarning && (
+              <Text color="warning" align="center">
+                Warning: High price impact. You will lose {route?.priceImpact.toFixed(2)}%
+                of your trade value.
+              </Text>
+            )}
           </View>
-        )}
-
-        {/* Action Button */}
-        {!account ? (
-          <Button fullWidth>Connect Wallet</Button>
-        ) : !route ? (
-          <Button fullWidth disabled>
-            Enter Amount
-          </Button>
-        ) : !isValidTrade ? (
-          <Button fullWidth disabled>
-            Insufficient Balance
-          </Button>
-        ) : isSwapping || (!!txHash && txStatus?.state === 'pending') ? (
-          <Button fullWidth loading disabled>
-            {isSwapping ? 'Swapping...' : 'Processing...'}
-          </Button>
-        ) : isApprovalRequired ? (
-          <Button
-            fullWidth
-            loading={isApproving}
-            disabled={isApproving}
-            onClick={handleApproval}
-          >
-            Approve {tokenInInfo?.symbol}
-          </Button>
-        ) : (
-          <Button fullWidth disabled={!isValidTrade || !route} onClick={handleSwap}>
-            Swap
-          </Button>
-        )}
-
-        {/* Price Impact Warning */}
-        {showPriceImpactWarning && (
-          <Text color="warning" align="center">
-            Warning: High price impact. You will lose {route?.priceImpact.toFixed(2)}% of
-            your trade value.
-          </Text>
-        )}
+        </View>
       </View>
-    </Card>
+    </View>
   )
 }

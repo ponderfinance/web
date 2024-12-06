@@ -1,4 +1,5 @@
 import type { Config } from 'tailwindcss'
+import { getTheme } from 'reshaped/config/tailwind'
 
 const config: Config = {
   content: [
@@ -7,15 +8,8 @@ const config: Config = {
     './app/**/*.{js,ts,jsx,tsx,mdx}',
   ],
   theme: {
-    extend: {
-      colors: {
-        background: 'var(--background)',
-        foreground: 'var(--foreground)',
-        fontFamily: {
-          silkscreen: 'var(--font-silkscreen)',
-        },
-      },
-    },
+    ...getTheme(),
+    extend: {},
   },
   plugins: [],
 }

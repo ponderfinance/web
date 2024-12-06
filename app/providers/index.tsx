@@ -9,6 +9,7 @@ import { PonderProvider, PonderSDK } from '@ponderfinance/sdk'
 import { createWalletClient, custom, type PublicClient } from 'viem'
 import { bitkubTestnetChain } from '@/app/constants/chains'
 import { useAccount } from 'wagmi'
+import { Reshaped } from 'reshaped'
 
 function WalletProvider({
   children,
@@ -82,7 +83,9 @@ export default function Providers({ children }: { children: React.ReactNode }) {
         config={privyConfig}
       >
         <WagmiProvider config={wagmiConfig}>
-          <WalletProvider queryClient={queryClient}>{children}</WalletProvider>
+          <WalletProvider queryClient={queryClient}>
+            <Reshaped theme="reshaped">{children}</Reshaped>
+          </WalletProvider>
         </WagmiProvider>
       </PrivyProvider>
     </QueryClientProvider>

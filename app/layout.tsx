@@ -1,10 +1,12 @@
 import type { Metadata } from 'next'
-import './globals.css'
 import Providers from '@/app/providers'
 import localFont from 'next/font/local'
 import { Header } from '@/app/components/Header'
 import { Barlow_Condensed } from 'next/font/google'
-import { Footer } from '@/app/components/Footer'
+
+import 'reshaped/themes/reshaped/theme.css'
+import '@/app/themes/ponder/theme.css'
+import './globals.css'
 
 const arialNarrow = localFont({
   src: [
@@ -66,14 +68,13 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" data-rs-theme="ponder" data-rs-color-mode="dark">
       <body
         className={`${arialNarrow.variable} ${silkscreen.variable} ${arialNarrow.className}`}
       >
         <Providers>
           <Header />
           {children}
-          <Footer />
         </Providers>
       </body>
     </html>

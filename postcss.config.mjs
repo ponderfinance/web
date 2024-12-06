@@ -1,8 +1,20 @@
-/** @type {import('postcss-load-config').Config} */
-const config = {
-  plugins: {
-    tailwindcss: {},
-  },
-}
+import { resolve } from 'path';
+import { dirname } from 'path';
+import { fileURLToPath } from 'url';
+import { getConfig } from 'reshaped/config/postcss';
 
-export default config
+// Simulate __dirname in ES module scope
+const __dirname = dirname(fileURLToPath(import.meta.url));
+
+const config = getConfig({
+  themeMediaCSSPath: resolve(__dirname, 'app/themes/ponder/media.css'),
+});
+
+export default {
+  ...config,
+  plugins: {
+    ...config.plugins,
+    tailwindcss: {},
+    autoprefixer: {},
+  },
+};

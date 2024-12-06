@@ -1,20 +1,19 @@
-import path from 'path';
+import path from 'path'
 
 const nextConfig = {
-    webpack: (config) => {
-        // Add verbose output for debugging module resolution
-        console.log('Webpack aliases:', config.resolve.alias);
+  webpack: (config) => {
+    // Resolve `@ponderfinance/dex` manually if needed
+    config.resolve.alias['@ponderfinance/dex'] = path.resolve(
+      'node_modules/@ponderfinance/dex'
+    )
 
-        // Resolve `@ponderfinance/dex` manually if needed
-        config.resolve.alias['@ponderfinance/dex'] = path.resolve(
-            'node_modules/@ponderfinance/dex'
-        );
+    return config
+  },
+  transpilePackages: ['reshaped'],
+  experimental: {
+    optimizePackageImports: ['reshaped'],
+    esmExternals: 'loose', // Support for ESM dependencies
+  },
+}
 
-        return config;
-    },
-    experimental: {
-        esmExternals: 'loose', // Support for ESM dependencies
-    },
-};
-
-export default nextConfig;
+export default nextConfig

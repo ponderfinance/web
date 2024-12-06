@@ -25,7 +25,7 @@ function ManageFarmModal({
   onClose,
 }: ManageFarmModalProps) {
   return (
-    <View gap={16} padding={16} className="bg-white rounded-lg max-w-lg w-full">
+    <View gap={16} padding={16} className="rounded-lg max-w-lg w-full">
       <View direction="row" align="center">
         <Text variant="title-3">Manage Farm Position</Text>
         <Button variant="ghost" onClick={onClose}>
@@ -71,7 +71,7 @@ export default function FarmingPage() {
     <View gap={24} className="max-w-4xl mx-auto p-4">
       <View gap={8}>
         <Text variant="title-1">Yield Farming</Text>
-        <Text className="text-gray-600">
+        <Text>
           Stake your LP tokens to earn PONDER rewards. Boost your earnings by staking
           PONDER tokens.
         </Text>
