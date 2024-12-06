@@ -499,6 +499,7 @@ export default function SwapInterface({
               </Button>
             )}
 
+
             {/* Price Impact Warning */}
             {showPriceImpactWarning && (
               <Text color="warning" align="center">
