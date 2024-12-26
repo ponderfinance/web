@@ -4,9 +4,9 @@ import { privyConfig, wagmiConfig } from '@/config'
 import { PrivyProvider } from '@privy-io/react-auth'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useMemo, useState } from 'react'
-import { WagmiProvider, usePublicClient, useWalletClient } from 'wagmi'
+import { WagmiProvider, usePublicClient, useWalletClient, http } from 'wagmi'
 import { PonderProvider, PonderSDK } from '@ponderfinance/sdk'
-import { createWalletClient, custom, type PublicClient } from 'viem'
+import { createPublicClient, createWalletClient, custom, type PublicClient } from 'viem'
 import { bitkubTestnetChain } from '@/app/constants/chains'
 import { useAccount } from 'wagmi'
 import { Reshaped } from 'reshaped'
@@ -23,30 +23,33 @@ function WalletProvider({
   const { address } = useAccount()
 
   const sdk = useMemo(() => {
-    if (!publicClient || !address || !walletClient) return null
+    if (!publicClient) return undefined
 
-    // Create a custom transport using the window.ethereum provider
-    const transport = custom(window.ethereum)
+    const fallbackPublicClient = createPublicClient({
+      chain: bitkubTestnetChain,
+      transport: http(bitkubTestnetChain.rpcUrls.default.http[0]),
+    })
+
+    const transport =
+      typeof window !== 'undefined'
+        ? custom(window.ethereum)
+        : http(bitkubTestnetChain.rpcUrls.default.http[0])
 
     const viemWalletClient = createWalletClient({
       chain: bitkubTestnetChain,
       transport,
-      account: address as `0x${string}`,
+      account: (address as `0x${string}`) || undefined,
     })
 
     return new PonderSDK({
       chainId: bitkubTestnetChain.id,
-      publicClient: publicClient as PublicClient,
+      publicClient: (publicClient || fallbackPublicClient) as PublicClient,
       walletClient: viemWalletClient,
     })
-  }, [publicClient, address, walletClient])
-
-  if (!sdk) {
-    return <div>Loading...</div>
-  }
+  }, [publicClient, address])
 
   return (
-    <PonderProvider sdk={sdk} queryClient={queryClient}>
+    <PonderProvider sdk={sdk!} queryClient={queryClient}>
       {children}
     </PonderProvider>
   )

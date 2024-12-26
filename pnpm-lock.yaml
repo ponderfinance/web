@@ -12,8 +12,8 @@ dependencies:
     specifier: ^0.1.29
     version: 0.1.29
   '@ponderfinance/sdk':
-    specifier: ^0.1.49
-    version: 0.1.49(@types/react@18.3.16)(react-dom@18.2.0)(react@18.2.0)(typescript@5.7.2)
+    specifier: ^0.1.50
+    version: 0.1.50(@types/react@18.3.16)(react-dom@18.2.0)(react@18.2.0)(typescript@5.7.2)
   '@privy-io/react-auth':
     specifier: 1.70.0
     version: 1.70.0(@babel/core@7.26.0)(@types/react@18.3.16)(react-dom@18.2.0)(react-is@19.0.0)(react@18.2.0)(typescript@5.7.2)
@@ -1467,8 +1467,8 @@ packages:
     resolution: {integrity: sha512-PGBVBW+3s7yKFxxXqkh/U128Nhnm9IOXxg2gUrmnbwFwsh7CKU+s8iT9VxbuJPNlTOdtdvMKyMm5u9LmIeZ8cw==}
     dev: false
 
-  /@ponderfinance/sdk@0.1.49(@types/react@18.3.16)(react-dom@18.2.0)(react@18.2.0)(typescript@5.7.2):
-    resolution: {integrity: sha512-yLPOdcZX4uk9ZbQb3xF6RLyR3LJlbOcpEIRkaCoq4lNoTDZBSnqQqioSOCzBstRAGRC54bauZSVM/uQL4fupYQ==}
+  /@ponderfinance/sdk@0.1.50(@types/react@18.3.16)(react-dom@18.2.0)(react@18.2.0)(typescript@5.7.2):
+    resolution: {integrity: sha512-YK2APoxOwefY0kFYCthVERDUpyfTaTD1lO3j6Jo9qpVG/bTO4Gib4keYmFKMNefdOOvOxrVI62krLHowVqAftQ==}
     peerDependencies:
       react: '>=18'
       react-dom: '>=18'

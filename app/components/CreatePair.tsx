@@ -53,15 +53,6 @@ export default function CreatePair() {
     }
   }
 
-  if (!sdk) {
-    return (
-      <Card>
-        <View align="center" justify="center">
-          <Text>Loading...</Text>
-        </View>
-      </Card>
-    )
-  }
 
   return (
     <Card>

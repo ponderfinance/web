@@ -1,264 +1,367 @@
-import { useState, useEffect } from 'react'
-import { Text, Card, View, Button } from 'reshaped'
-import { usePonderSDK } from '@ponderfinance/sdk'
+import { useState, useEffect, useCallback } from 'react'
+import { View, Text, Button } from 'reshaped'
 import { useAccount } from 'wagmi'
-import { Address, formatUnits, formatEther } from 'viem'
+import { formatEther, formatUnits, parseEther, type Address } from 'viem'
 import { erc20Abi } from 'viem'
+import {
+  usePonderSDK,
+  useFarmMetrics,
+  usePoolInfo,
+  useStakeInfo,
+  usePendingRewards,
+  useHarvest,
+} from '@ponderfinance/sdk'
+import StakeModal from './StakeModal'
 
-interface FarmPool {
-  pid: number
+interface TokenInfo {
+  address: Address
+  symbol: string
+  decimals: number
+}
+
+interface PoolPosition {
   lpToken: Address
-  token0Symbol: string
-  token1Symbol: string
-  allocPoint: bigint
-  totalStaked: bigint
-  depositFee: number
-  boostMultiplier: number
-  userStaked: bigint
-  userPonderStaked: bigint
-  pendingRewards: bigint
-  apr: string
+  token0: TokenInfo
+  token1: TokenInfo
+  userLPBalance: bigint
+  totalSupply: bigint
+  reserve0: bigint
+  reserve1: bigint
+  poolShare: string
+  token0Amount: string
+  token1Amount: string
 }
 
-interface FarmListProps {
-  onManageFarm?: (farm: {
-    pid: number
-    lpToken: Address
-    token0Symbol: string
-    token1Symbol: string
-    depositFee: number
-    boostMultiplier: number
-  }) => void
+interface MetricsCardProps {
+  title: string
+  value: string
+  subtitle?: string
 }
 
-export default function FarmList({ onManageFarm }: FarmListProps) {
+const MetricsCard = ({ title, value, subtitle }: MetricsCardProps) => (
+  <View grow borderRadius="medium" padding={4} backgroundColor="neutral-faded">
+    <Text variant="caption-1">{title}</Text>
+    <Text variant="body-1">{value}</Text>
+    {subtitle && <Text variant="caption-2">{subtitle}</Text>}
+  </View>
+)
+
+interface FarmMetricsProps {
+  metrics: {
+    totalValueLocked: bigint
+    rewardsPerDay: bigint
+    averageApr: number
+    activePools: number
+  }
+}
+
+const FarmMetrics = ({ metrics }: FarmMetricsProps) => (
+  <View direction="row" wrap gap={4}>
+    <MetricsCard
+      title="Total Value Locked"
+      value={`$${formatEther(metrics.totalValueLocked)}`}
+    />
+    <MetricsCard
+      title="Daily Rewards"
+      value={formatEther(metrics.rewardsPerDay)}
+      subtitle="PONDER"
+    />
+    <MetricsCard title="Average APR" value={`${metrics.averageApr}%`} />
+    <MetricsCard title="Active Farms" value={metrics.activePools.toString()} />
+  </View>
+)
+
+interface PoolCardProps {
+  pid: number
+  address: Address | undefined
+  position: PoolPosition | null
+  onManage: (pid: number) => void
+}
+
+const PoolCard = ({ pid, address, position, onManage }: PoolCardProps) => {
+  const { data: pool, isLoading, error } = usePoolInfo(pid)
+  const { data: stakeInfo } = useStakeInfo(pid, address)
+  const { data: pendingRewards } = usePendingRewards(pid, address)
+  const { mutate: harvest, isPending: isHarvesting } = useHarvest()
+
+  const handleHarvest = useCallback(async () => {
+    try {
+      await harvest({ poolId: pid })
+    } catch (err) {
+      console.error('Failed to harvest:', err)
+    }
+  }, [harvest, pid])
+
+  if (isLoading) {
+    return (
+      <View padding={4} borderRadius="medium">
+        <Text>Loading pool {pid}...</Text>
+      </View>
+    )
+  }
+
+  if (error || !pool) {
+    return (
+      <View padding={4} borderRadius="medium">
+        <Text color="neutral-faded">
+          {error ? `Error: ${error.message}` : `No data for pool ${pid}`}
+        </Text>
+      </View>
+    )
+  }
+
+  const hasStakedBalance = stakeInfo?.amount && stakeInfo.amount > BigInt(0)
+  const hasPendingRewards = pendingRewards?.total && pendingRewards.total > BigInt(0)
+
+  return (
+    <View padding={4} borderRadius="medium" backgroundColor="neutral-faded">
+      <View gap={4}>
+        <View direction="row" justify="space-between" align="start">
+          <View gap={1}>
+            {position ? (
+              <>
+                <Text variant="title-4">
+                  {position.token0.symbol}/{position.token1.symbol} LP
+                </Text>
+                <Text variant="caption-1">Your Share: {position.poolShare}%</Text>
+                <Text variant="caption-1">
+                  {position.token0Amount} {position.token0.symbol} +{' '}
+                  {position.token1Amount} {position.token1.symbol}
+                </Text>
+              </>
+            ) : (
+              <Text variant="title-4">Pool #{pid}</Text>
+            )}
+            <Text variant="caption-1">TVL: ${formatEther(pool.totalStakedUSD)}</Text>
+          </View>
+
+          <View align="end">
+            <Text variant="title-4">{pool.apr}% APR</Text>
+            <Text variant="caption-1">{formatEther(pool.rewardsPerDay)} PONDER/day</Text>
+          </View>
+        </View>
+
+        {address && (
+          <View gap={4}>
+            <View gap={2}>
+              <View direction="row" justify="space-between">
+                <Text>Available LP:</Text>
+                <Text>{position ? formatEther(position.userLPBalance) : '0'} LP</Text>
+              </View>
+
+              {stakeInfo && (
+                <View direction="row" justify="space-between">
+                  <Text>Staked LP:</Text>
+                  <Text>{formatEther(stakeInfo.amount)} LP</Text>
+                </View>
+              )}
+
+              {pendingRewards && (
+                <View direction="row" justify="space-between">
+                  <Text>Pending Rewards:</Text>
+                  <Text>{formatEther(pendingRewards.total)} PONDER</Text>
+                </View>
+              )}
+            </View>
+
+            <View direction="row" gap={2}>
+              <Button variant="outline" onClick={() => onManage(pid)} fullWidth>
+                {hasStakedBalance ? 'Manage Stake' : 'Stake LP'}
+              </Button>
+
+              {hasPendingRewards && (
+                <Button
+                  onClick={handleHarvest}
+                  disabled={isHarvesting}
+                  loading={isHarvesting}
+                  fullWidth
+                >
+                  Harvest
+                </Button>
+              )}
+            </View>
+          </View>
+        )}
+      </View>
+    </View>
+  )
+}
+
+export default function FarmList() {
   const sdk = usePonderSDK()
-  const account = useAccount()
-  const [farms, setFarms] = useState<FarmPool[]>([])
-  const [isLoading, setIsLoading] = useState(true)
-  const [error, setError] = useState<string>('')
+  const { address } = useAccount()
   const [selectedPool, setSelectedPool] = useState<number | null>(null)
-  const [isHarvesting, setIsHarvesting] = useState(false)
+  const [poolLength, setPoolLength] = useState<number>(0)
+  const [positions, setPositions] = useState<Record<string, PoolPosition>>({})
+  const [isLoading, setIsLoading] = useState(true)
+  const { data: metrics } = useFarmMetrics()
 
+  // Fetch pool length
   useEffect(() => {
-    const fetchFarms = async () => {
-      if (!sdk) return
+    const fetchPoolLength = async () => {
+      try {
+        const length = await sdk.masterChef.poolLength()
+        setPoolLength(Number(length))
+      } catch (err) {
+        console.error('Failed to fetch pool length:', err)
+        setPoolLength(0)
+      }
+    }
+
+    fetchPoolLength()
+  }, [sdk])
+
+  // Fetch liquidity positions for each pool
+  useEffect(() => {
+    const fetchPositions = async () => {
+      if (!sdk || !address || !poolLength) return
 
       try {
         setIsLoading(true)
-        const poolLength = await sdk.masterChef.poolLength()
-        const totalAllocPoint = await sdk.masterChef.totalAllocPoint()
-        const ponderPerSecond = await sdk.masterChef.ponderPerSecond()
+        const positionsMap: Record<string, PoolPosition> = {}
 
-        const farmData: FarmPool[] = []
+        const fetchPoolPosition = async (pid: number) => {
+          const pool = await sdk.masterChef.poolInfo(BigInt(pid))
+          const lpToken = pool.lpToken
+          const pair = sdk.getPair(lpToken)
 
-        for (let pid = 0; pid < Number(poolLength); pid++) {
-          // Get pool info
-          const poolInfo = await sdk.masterChef.poolInfo(BigInt(pid))
-
-          // Get LP token info
-          const pair = sdk.getPair(poolInfo.lpToken)
-          const [token0, token1] = await Promise.all([pair.token0(), pair.token1()])
-
-          // Get token symbols
-          const [token0Symbol, token1Symbol] = await Promise.all([
+          const [
+            lpBalance,
+            token0,
+            token1,
+            reserves,
+            totalSupply,
+            token0Symbol,
+            token1Symbol,
+            token0Decimals,
+            token1Decimals,
+          ] = await Promise.all([
+            pair.balanceOf(address),
+            pair.token0(),
+            pair.token1(),
+            pair.getReserves(),
+            pair.totalSupply(),
             sdk.publicClient.readContract({
-              address: token0,
+              address: await pair.token0(),
               abi: erc20Abi,
               functionName: 'symbol',
             }),
             sdk.publicClient.readContract({
-              address: token1,
+              address: await pair.token1(),
               abi: erc20Abi,
               functionName: 'symbol',
+            }),
+            sdk.publicClient.readContract({
+              address: await pair.token0(),
+              abi: erc20Abi,
+              functionName: 'decimals',
+            }),
+            sdk.publicClient.readContract({
+              address: await pair.token1(),
+              abi: erc20Abi,
+              functionName: 'decimals',
             }),
           ])
 
-          // Calculate APR (simplified - would need price data for accurate calculation)
-          const dailyRewards =
-            Number(ponderPerSecond * BigInt(86400) * poolInfo.allocPoint) /
-            Number(totalAllocPoint)
-          const yearlyRewards = dailyRewards * 365
-          // Note: This is a simplified APR calculation. In production, you'd want to:
-          // 1. Get PONDER token price
-          // 2. Get LP token price/TVL
-          // 3. Calculate true APR based on prices
-          const apr = ((yearlyRewards / Number(poolInfo.totalStaked)) * 100).toFixed(2)
+          const poolShare =
+            totalSupply > BigInt(0)
+              ? ((Number(lpBalance) / Number(totalSupply)) * 100).toFixed(2)
+              : '0'
 
-          // Get user info if connected
-          let userStaked = BigInt(0)
-          let userPonderStaked = BigInt(0)
-          let pendingRewards = BigInt(0)
+          const token0Amount = formatUnits(
+            totalSupply > BigInt(0) ? (lpBalance * reserves.reserve0) / totalSupply : BigInt(0),
+            token0Decimals
+          )
 
-          if (account.address) {
-            const userInfo = await sdk.masterChef.userInfo(BigInt(pid), account.address)
-            userStaked = userInfo.amount
-            userPonderStaked = userInfo.ponderStaked
-            pendingRewards = await sdk.masterChef.pendingPonder(
-              BigInt(pid),
-              account.address
-            )
+          const token1Amount = formatUnits(
+            totalSupply > BigInt(0) ? (lpBalance * reserves.reserve1) / totalSupply : BigInt(0),
+            token1Decimals
+          )
+
+          return {
+            lpToken,
+            token0: {
+              address: token0,
+              symbol: token0Symbol,
+              decimals: token0Decimals,
+            },
+            token1: {
+              address: token1,
+              symbol: token1Symbol,
+              decimals: token1Decimals,
+            },
+            userLPBalance: lpBalance,
+            totalSupply,
+            reserve0: reserves.reserve0,
+            reserve1: reserves.reserve1,
+            poolShare,
+            token0Amount,
+            token1Amount,
           }
-
-          farmData.push({
-            pid,
-            lpToken: poolInfo.lpToken,
-            token0Symbol,
-            token1Symbol,
-            allocPoint: poolInfo.allocPoint,
-            totalStaked: poolInfo.totalStaked,
-            depositFee: poolInfo.depositFeeBP / 100, // Convert basis points to percentage
-            boostMultiplier: poolInfo.boostMultiplier / 10000, // Convert to multiplier (e.g., 20000 -> 2x)
-            userStaked,
-            userPonderStaked,
-            pendingRewards,
-            apr,
-          })
         }
 
-        setFarms(farmData)
-      } catch (err: any) {
-        console.error('Error fetching farms:', err)
-        setError(err.message || 'Failed to fetch farm data')
+        // Fetch all pools in parallel
+        const poolPromises = Array.from({ length: poolLength }, (_, i) =>
+          fetchPoolPosition(i)
+        )
+
+        const poolPositions = await Promise.all(poolPromises)
+
+        poolPositions.forEach((position, index) => {
+          positionsMap[index] = position
+        })
+
+        setPositions(positionsMap)
+      } catch (err) {
+        console.error('Error fetching positions:', err)
       } finally {
         setIsLoading(false)
       }
     }
 
-    fetchFarms()
-    const interval = setInterval(fetchFarms, 10000) // Refresh every 10s
-    return () => clearInterval(interval)
-  }, [sdk, account.address])
+    fetchPositions()
+  }, [sdk, address, poolLength])
 
-  const handleHarvest = async (pid: number) => {
-    if (!sdk || !account.address) return
-
-    try {
-      setIsHarvesting(true)
-      setSelectedPool(pid)
-
-      // Deposit 0 to harvest rewards
-      const tx = await sdk.masterChef.deposit(BigInt(pid), BigInt(0))
-      await sdk.publicClient.waitForTransactionReceipt({ hash: tx })
-    } catch (err: any) {
-      console.error('Harvest error:', err)
-      setError(err.message || 'Failed to harvest rewards')
-    } finally {
-      setIsHarvesting(false)
-      setSelectedPool(null)
-    }
-  }
-
-  if ( isLoading) {
+  if (!address) {
     return (
-      <Card>
-        <View align="center" justify="center" padding={8}>
-          <Text>Loading farms...</Text>
-        </View>
-      </Card>
+      <View align="center" justify="center" padding={8}>
+        <Text>Connect wallet to view farms</Text>
+      </View>
     )
   }
 
-  if (error) {
+  if (isLoading || !poolLength) {
     return (
-      <Card>
-        <View align="center" justify="center" padding={8}>
-          <Text>{error}</Text>
-        </View>
-      </Card>
+      <View align="center" justify="center" padding={8}>
+        <Text>Loading farms...</Text>
+      </View>
     )
   }
 
   return (
-    <View gap={16}>
-      <Text variant="title-3">Active Farms</Text>
-      {farms.length === 0 ? (
-        <Card>
-          <View align="center" justify="center" padding={8}>
-            <Text>No active farms</Text>
-          </View>
-        </Card>
-      ) : (
-        farms.map((farm) => (
-          <Card key={farm.pid}>
-            <View padding={16} gap={12}>
-              <View gap={4}>
-                <Text variant="title-4">
-                  {farm.token0Symbol}/{farm.token1Symbol} LP Farm
-                </Text>
-                <Text>Pool ID: {farm.pid}</Text>
-              </View>
+    <View gap={4}>
+      {metrics && <FarmMetrics metrics={metrics} />}
 
-              <View gap={8}>
-                <View direction="row">
-                  <Text>APR:</Text>
-                  <Text>{farm.apr}%</Text>
-                </View>
+      <View gap={4}>
+        {Array.from({ length: poolLength }, (_, pid) => (
+          <PoolCard
+            key={pid}
+            pid={pid}
+            address={address}
+            position={positions[pid] || null}
+            onManage={setSelectedPool}
+          />
+        ))}
+      </View>
 
-                <View direction="row">
-                  <Text>Total Staked:</Text>
-                  <Text>{formatEther(farm.totalStaked)} LP</Text>
-                </View>
-
-                <View direction="row">
-                  <Text>Deposit Fee:</Text>
-                  <Text>{farm.depositFee}%</Text>
-                </View>
-
-                <View direction="row">
-                  <Text>Boost Multiplier:</Text>
-                  <Text>Up to {farm.boostMultiplier}x</Text>
-                </View>
-
-                {account.address ? (
-                  <View gap={8}>
-                    <View direction="row">
-                      <Text>Your Stake:</Text>
-                      <View gap={2} align="end">
-                        <Text>{formatEther(farm.userStaked)} LP</Text>
-                        {farm.userPonderStaked > 0 && (
-                          <Text>+ {formatEther(farm.userPonderStaked)} PONDER Boost</Text>
-                        )}
-                      </View>
-                    </View>
-
-                    <View direction="row">
-                      <Text>Pending Rewards:</Text>
-                      <Text>{formatEther(farm.pendingRewards)} PONDER</Text>
-                    </View>
-
-                    <View direction="row" gap={8}>
-                      <Button
-                        onClick={() => handleHarvest(farm.pid)}
-                        disabled={farm.pendingRewards === BigInt(0) || isHarvesting}
-                        loading={isHarvesting && selectedPool === farm.pid}
-                      >
-                        Harvest
-                      </Button>
-
-                      <Button
-                        onClick={() =>
-                          onManageFarm?.({
-                            pid: farm.pid,
-                            lpToken: farm.lpToken,
-                            token0Symbol: farm.token0Symbol,
-                            token1Symbol: farm.token1Symbol,
-                            depositFee: farm.depositFee,
-                            boostMultiplier: farm.boostMultiplier,
-                          })
-                        }
-                      >
-                        Manage Position
-                      </Button>
-                    </View>
-                  </View>
-                ) : (
-                  <Text align="center">Connect wallet to view your position</Text>
-                )}
-              </View>
-            </View>
-          </Card>
-        ))
+      {selectedPool !== null && positions[selectedPool] && (
+        <StakeModal
+          poolId={selectedPool}
+          lpToken={positions[selectedPool].lpToken}
+          position={positions[selectedPool]}
+          active={selectedPool !== null}
+          onClose={() => setSelectedPool(null)}
+        />
       )}
     </View>
   )

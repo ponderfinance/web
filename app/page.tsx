@@ -7,7 +7,7 @@ export default function Home() {
       <View insetTop={32}>
         <SwapInterface
           defaultTokenIn="0x394c708B7Bd536C9961EA1748389F5bBDE3b480D"
-          defaultTokenOut="0xBa71efd94be63bD47B78eF458DE982fE29f552f7"
+          defaultTokenOut="0x96C5A82c5DE603AeB973F0fef40e8C46A86cb01f"
         />
       </View>
 

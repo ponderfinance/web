@@ -11,10 +11,10 @@ export default function Pool() {
         <CreatePair />
         <AddLiquidityForm
           defaultTokenA="0x394c708B7Bd536C9961EA1748389F5bBDE3b480D"
-          defaultTokenB="0x4d26358485B4261956532D3c4816b753842bb9Ce"
+          defaultTokenB="0xBa71efd94be63bD47B78eF458DE982fE29f552f7"
         />
         <RemoveLiquidityForm />
-        <LiquidityPositionsList />
+        {/*<LiquidityPositionsList />*/}
       </View>
     </View>
   )

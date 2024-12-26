@@ -77,7 +77,7 @@ export default function FarmingPage() {
         </Text>
       </View>
 
-      <FarmList onManageFarm={handleManageFarm} />
+      <FarmList />
 
       {/* Modal overlay */}
       {selectedFarm && (
