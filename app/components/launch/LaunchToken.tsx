@@ -40,8 +40,8 @@ export default function LaunchCreationForm() {
         imageURI: validatedData.imageURI,
       })
 
-      const result = await tx.wait()
-      setLaunchId(result.launchId.toString())
+      // const result = await tx.wait()
+      // setLaunchId(result.launchId.toString())
       reset()
     } catch (err: any) {
       if (err instanceof z.ZodError) {

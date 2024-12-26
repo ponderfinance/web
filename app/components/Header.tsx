@@ -34,7 +34,7 @@ export const Header = () => {
             </Link>
           </Text>
           <Text variant="body-1">
-            <Link href="/launcn" variant="plain">
+            <Link href="/launch" variant="plain">
               Launch{' '}
             </Link>
           </Text>

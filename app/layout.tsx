@@ -69,9 +69,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" data-rs-theme="ponder" data-rs-color-mode="dark">
-      <body
-        className={`${arialNarrow.variable} ${silkscreen.variable} ${arialNarrow.className}`}
-      >
+      <body>
         <Providers>
           <Header />
           {children}

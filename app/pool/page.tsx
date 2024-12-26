@@ -1,14 +1,20 @@
 'use client'
 import { View } from 'reshaped'
-import SwapInterface from '@/app/components/Swap'
+import AddLiquidityForm from '@/app/components/AddLiquidityForm'
+import LiquidityPositionsList from '@/app/components/LiqudityPositionsList'
+import RemoveLiquidityForm from '@/app/components/RemoveLiquidityForm'
+import CreatePair from '@/app/components/CreatePair'
 export default function Pool() {
   return (
     <View direction="column">
       <View insetTop={32}>
-        <SwapInterface
-          defaultTokenIn="0x83140338c917690Ad94Da099aC4BFCf2Cf9c5291"
-          defaultTokenOut="0x3b9656251F82a40118E08210823Fff1A97F60C2D"
+        <CreatePair />
+        <AddLiquidityForm
+          defaultTokenA="0x394c708B7Bd536C9961EA1748389F5bBDE3b480D"
+          defaultTokenB="0x4d26358485B4261956532D3c4816b753842bb9Ce"
         />
+        <RemoveLiquidityForm />
+        <LiquidityPositionsList />
       </View>
     </View>
   )

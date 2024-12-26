@@ -1,576 +1,369 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { Text, Card, Button, View } from 'reshaped'
-import { usePonderSDK } from '@ponderfinance/sdk'
-import { useForm } from 'react-hook-form'
-import { Address, formatUnits, parseUnits } from 'viem'
-import { z } from 'zod'
-import { erc20Abi } from 'viem'
+import { type Address, formatUnits, parseUnits, zeroAddress } from 'viem'
+import { useAccount, useBalance } from 'wagmi'
+import {
+  useTokenBalance,
+  useTokenInfo,
+  useTokenAllowance,
+  usePonderSDK,
+  usePairExists,
+  usePairInfo,
+  useAddLiquidity,
+} from '@ponderfinance/sdk'
 import { bitkubTestnetChain } from '@/app/constants/chains'
-import { useAccount } from 'wagmi'
-import { ponderrouterAbi } from '@ponderfinance/dex'
 
-const addLiquiditySchema = z.object({
-  tokenA: z.string().startsWith('0x').length(42),
-  tokenB: z.string().startsWith('0x').length(42),
-  amountA: z.string().min(1),
-  amountB: z.string().min(1),
-})
-
-type FormValues = z.infer<typeof addLiquiditySchema>
-
-interface TokenInfo {
-  decimals: number
-  symbol: string
-  balance: bigint
-  allowance: bigint
+interface AddLiquidityFormProps {
+  defaultTokenA?: Address
+  defaultTokenB?: Address
 }
 
-interface PairInfo {
-  exists: boolean
-  reserve0: bigint
-  reserve1: bigint
-  isNewPair: boolean
-}
-
-export default function AddLiquidityForm() {
+export default function AddLiquidityForm({
+  defaultTokenA,
+  defaultTokenB = zeroAddress,
+}: AddLiquidityFormProps) {
   const sdk = usePonderSDK()
-  const account = useAccount()
-  const [isLoading, setIsLoading] = useState(false)
+  const { address: account } = useAccount()
+
+  // Form state
+  const [tokenA, setTokenA] = useState<Address | undefined>(defaultTokenA)
+  const [tokenB, setTokenB] = useState<Address | undefined>(defaultTokenB)
+  const [amountA, setAmountA] = useState('')
+  const [amountB, setAmountB] = useState('')
+  const [slippage, setSlippage] = useState(1.0) // 1% default
+  const [error, setError] = useState<string>('')
   const [isApprovingA, setIsApprovingA] = useState(false)
   const [isApprovingB, setIsApprovingB] = useState(false)
-  const [error, setError] = useState<string>('')
-  const [debug, setDebug] = useState<string>('')
-  const [tokenAInfo, setTokenAInfo] = useState<TokenInfo>()
-  const [tokenBInfo, setTokenBInfo] = useState<TokenInfo>()
-  const [pairInfo, setPairInfo] = useState<PairInfo>()
 
-  const {
-    handleSubmit,
-    register,
-    watch,
-    reset,
-    formState: { errors },
-  } = useForm<FormValues>()
+  // Get KKUB address for current chain
+  //TODO: make dependent on chain
+  const kkubAddress = '0xBa71efd94be63bD47B78eF458DE982fE29f552f7'
 
-  const tokenAAddress = watch('tokenA')
-  const tokenBAddress = watch('tokenB')
-  const amountA = watch('amountA')
-  const amountB = watch('amountB')
+  // Check if we're dealing with a native KUB pair
+  const isKUBPair = tokenB === zeroAddress
 
-  // Token info fetching
+  // SDK Hooks for tokens
+  const { data: tokenAInfo } = useTokenInfo(tokenA as Address)
+  const { data: tokenBInfo } = useTokenInfo(
+    isKUBPair ? (null as unknown as Address) : (tokenB as Address)
+  )
+  const { data: tokenABalance } = useTokenBalance(tokenA as Address, account as Address)
+  const { data: tokenBBalance } = useTokenBalance(
+    isKUBPair ? (null as unknown as Address) : (tokenB as Address),
+    account as Address
+  )
+  const { data: tokenAAllowance, refetch: refetchAllowanceA } = useTokenAllowance(
+    tokenA as Address,
+    sdk?.router?.address as Address,
+    account as Address
+  )
+  const { data: tokenBAllowance, refetch: refetchAllowanceB } = useTokenAllowance(
+    isKUBPair ? (null as unknown as Address) : (tokenB as Address),
+    sdk?.router?.address as Address,
+    account as Address
+  )
+
+  // Get native KUB balance if needed
+  const { data: kubBalance } = useBalance({
+    address: account,
+  })
+
+  // For pair existence check, use KKUB address if it's a native pair
+  const pairTokenB = isKUBPair ? kkubAddress : (tokenB as Address)
+  const { data: pairExists } = usePairExists(tokenA as Address, pairTokenB)
+  const { data: pairInfo } = usePairInfo(pairExists?.pairAddress as Address)
+
+  // Add liquidity mutation
+  const { mutateAsync: addLiquidity, isPending: isAddingLiquidity } = useAddLiquidity()
+
+  // Auto-calculate amount B based on amount A and reserves
   useEffect(() => {
-    const fetchTokenInfo = async () => {
-      if (!sdk || !account.address) {
-        console.log('Missing requirements:', {
-          sdk: !!sdk,
-          accountAddress: account.address,
-        })
+    if (!amountA || !tokenAInfo || !pairInfo) {
+      setAmountB('')
+      return
+    }
+
+    try {
+      const amountABigInt = parseUnits(amountA, tokenAInfo.decimals)
+
+      if (
+        BigInt(pairInfo.reserve0) === BigInt(0) &&
+        BigInt(pairInfo.reserve1) === BigInt(0)
+      ) {
+        // For new pairs, use 1:1 ratio or let user decide
+        setAmountB(amountA)
         return
       }
 
-      try {
-        if (tokenAAddress?.length === 42) {
-          console.log('Fetching Token A info for:', tokenAAddress)
-          const [decimalsA, symbolA, balanceA, allowanceA] = await Promise.all([
-            sdk.publicClient.readContract({
-              address: tokenAAddress as Address,
-              abi: erc20Abi,
-              functionName: 'decimals',
-            }),
-            sdk.publicClient.readContract({
-              address: tokenAAddress as Address,
-              abi: erc20Abi,
-              functionName: 'symbol',
-            }),
-            sdk.publicClient.readContract({
-              address: tokenAAddress as Address,
-              abi: erc20Abi,
-              functionName: 'balanceOf',
-              args: [account.address],
-            }),
-            sdk.publicClient.readContract({
-              address: tokenAAddress as Address,
-              abi: erc20Abi,
-              functionName: 'allowance',
-              args: [account.address, sdk.router.address],
-            }),
-          ])
+      // Check if tokenA is token0 in the pair
+      const isToken0 = tokenA?.toLowerCase() === pairInfo.token0.toLowerCase()
+      const reserveIn = isToken0 ? BigInt(pairInfo.reserve0) : BigInt(pairInfo.reserve1)
+      const reserveOut = isToken0 ? BigInt(pairInfo.reserve1) : BigInt(pairInfo.reserve0)
 
-          console.log('Token A details:', {
-            symbol: symbolA,
-            decimals: decimalsA,
-            balance: balanceA.toString(),
-            allowance: allowanceA.toString(),
-          })
-
-          setTokenAInfo({
-            decimals: decimalsA,
-            symbol: symbolA,
-            balance: balanceA,
-            allowance: allowanceA,
-          })
-        }
-
-        if (tokenBAddress?.length === 42) {
-          console.log('Fetching Token B info for:', tokenBAddress)
-          const [decimalsB, symbolB, balanceB, allowanceB] = await Promise.all([
-            sdk.publicClient.readContract({
-              address: tokenBAddress as Address,
-              abi: erc20Abi,
-              functionName: 'decimals',
-            }),
-            sdk.publicClient.readContract({
-              address: tokenBAddress as Address,
-              abi: erc20Abi,
-              functionName: 'symbol',
-            }),
-            sdk.publicClient.readContract({
-              address: tokenBAddress as Address,
-              abi: erc20Abi,
-              functionName: 'balanceOf',
-              args: [account.address],
-            }),
-            sdk.publicClient.readContract({
-              address: tokenBAddress as Address,
-              abi: erc20Abi,
-              functionName: 'allowance',
-              args: [account.address, sdk.router.address],
-            }),
-          ])
-
-          console.log('Token B details:', {
-            symbol: symbolB,
-            decimals: decimalsB,
-            balance: balanceB.toString(),
-            allowance: allowanceB.toString(),
-          })
-
-          setTokenBInfo({
-            decimals: decimalsB,
-            symbol: symbolB,
-            balance: balanceB,
-            allowance: allowanceB,
-          })
-        }
-      } catch (err) {
-        console.error('Token info fetch error:', err)
-        setError('Failed to fetch token information')
-      }
+      // Calculate optimal amount using the same formula as the router
+      const amountBBigInt = (amountABigInt * reserveOut) / reserveIn
+      const decimalsB = isKUBPair ? 18 : tokenBInfo?.decimals || 18
+      setAmountB(formatUnits(amountBBigInt, decimalsB))
+    } catch (err) {
+      console.error('Error calculating amount B:', err)
     }
+  }, [amountA, tokenA, tokenB, pairInfo, tokenAInfo, tokenBInfo, isKUBPair])
 
-    fetchTokenInfo()
-    const interval = setInterval(fetchTokenInfo, 10000)
-    return () => clearInterval(interval)
-  }, [sdk, account.address, tokenAAddress, tokenBAddress, isApprovingA, isApprovingB])
+  // Input handlers with decimal validation
+  const handleAmountAInput = (value: string) => {
+    if (!/^\d*\.?\d*$/.test(value)) return
+    const parts = value.split('.')
+    if (parts[1] && parts[1].length > (tokenAInfo?.decimals || 18)) return
+    setAmountA(value)
+  }
 
-  // Pair info fetching
-  useEffect(() => {
-    const fetchPairInfo = async () => {
-      if (!sdk || !tokenAAddress || !tokenBAddress) return
-      if (tokenAAddress.length !== 42 || tokenBAddress.length !== 42) return
+  const handleAmountBInput = (value: string) => {
+    if (!/^\d*\.?\d*$/.test(value)) return
+    const parts = value.split('.')
+    if (parts[1] && parts[1].length > (isKUBPair ? 18 : tokenBInfo?.decimals || 18))
+      return
+    setAmountB(value)
+  }
 
-      try {
-        console.log('Fetching pair info for tokens:', { tokenAAddress, tokenBAddress })
-        const pairAddress = await sdk.factory.getPair(
-          tokenAAddress as Address,
-          tokenBAddress as Address
-        )
-
-        console.log('Pair address:', pairAddress)
-
-        if (pairAddress === '0x0000000000000000000000000000000000000000') {
-          setPairInfo({
-            exists: false,
-            reserve0: BigInt(0),
-            reserve1: BigInt(0),
-            isNewPair: true,
-          })
-          return
-        }
-
-        const pair = sdk.getPair(pairAddress)
-        const { reserve0, reserve1 } = await pair.getReserves()
-
-        console.log('Pair reserves:', {
-          reserve0: reserve0.toString(),
-          reserve1: reserve1.toString(),
-        })
-
-        setPairInfo({
-          exists: true,
-          reserve0,
-          reserve1,
-          isNewPair: reserve0 === BigInt(0) && reserve1 === BigInt(0),
-        })
-      } catch (err) {
-        console.error('Pair info fetch error:', err)
-        setError('Failed to fetch pair information')
-      }
-    }
-
-    fetchPairInfo()
-  }, [sdk, tokenAAddress, tokenBAddress])
-
-  const handleApprove = async (token: Address, spender: Address, amount: bigint) => {
-    if (!sdk || !account.address || !sdk.walletClient) {
-      const error = 'Missing requirements for approval'
-      console.error(error, {
-        sdk: !!sdk,
-        accountAddress: account.address,
-        walletClient: !!sdk?.walletClient,
-      })
-      throw new Error(error)
-    }
-
-    console.log('Approval request:', {
-      token,
-      spender,
-      amount: amount.toString(),
-      routerAddress: sdk.router.address,
-      chainId: bitkubTestnetChain.id,
-    })
+  // Handle token approval
+  const handleApproval = async (token: Address, amount: bigint) => {
+    if (!sdk?.walletClient?.account || !sdk?.router?.address) return
 
     try {
       const hash = await sdk.walletClient.writeContract({
         address: token,
-        abi: erc20Abi,
+        abi: [
+          {
+            name: 'approve',
+            type: 'function',
+            stateMutability: 'nonpayable',
+            inputs: [
+              { name: 'spender', type: 'address' },
+              { name: 'amount', type: 'uint256' },
+            ],
+            outputs: [{ name: '', type: 'bool' }],
+          },
+        ],
         functionName: 'approve',
-        args: [spender, amount],
+        args: [sdk.router.address, amount],
         chain: bitkubTestnetChain,
-        account: account.address,
+        account: sdk.walletClient.account,
       })
 
-      console.log('Approval transaction hash:', hash)
-      const receipt = await sdk.publicClient.waitForTransactionReceipt({ hash })
-      console.log('Approval receipt:', receipt)
-
-      if (receipt.status !== 'success') {
-        throw new Error('Approval transaction failed')
-      }
-    } catch (err: any) {
+      await sdk.publicClient.waitForTransactionReceipt({ hash })
+    } catch (err) {
       console.error('Approval error:', err)
-      throw new Error(`Approval failed: ${err.message}`)
+      throw err
     }
   }
 
-  const onSubmit = async (data: FormValues) => {
-    if (!sdk || !tokenAInfo || !tokenBInfo) {
-      console.error('Missing requirements:', {
-        sdk: !!sdk,
-        tokenAInfo: !!tokenAInfo,
-        tokenBInfo: !!tokenBInfo,
-      })
-      setError('SDK or token info is missing')
-      return
-    }
-    if (!account.address) {
-      setError('Wallet not connected')
-      return
-    }
+  // Handle liquidity addition
+  const handleAddLiquidity = async () => {
+    if (!account || !tokenAInfo || !tokenA || !tokenB) return
 
     try {
-      console.log('Form submission data:', data)
-      const validatedData = addLiquiditySchema.parse(data)
-
-      setIsLoading(true)
       setError('')
-      setDebug('')
+      const amountADesired = parseUnits(amountA, tokenAInfo.decimals)
+      const amountBDesired = parseUnits(
+        amountB,
+        isKUBPair ? 18 : tokenBInfo?.decimals || 18
+      )
+      const slippageBps = BigInt(Math.round(slippage * 100))
 
-      console.log('Chain verification:', {
-        expectedChain: bitkubTestnetChain.id,
-        routerChain: sdk.router.chainId,
-      })
-
-      // Parse input amounts
-      const amountADesired = parseUnits(validatedData.amountA, tokenAInfo.decimals)
-      const amountBDesired = parseUnits(validatedData.amountB, tokenBInfo.decimals)
-
-      console.log('Parsed amounts:', {
-        amountADesired: amountADesired.toString(),
-        amountBDesired: amountBDesired.toString(),
-        tokenAAllowance: tokenAInfo.allowance.toString(),
-        tokenBAllowance: tokenBInfo.allowance.toString(),
-      })
-
-      // Check token balances
-      if (amountADesired > tokenAInfo.balance) {
-        throw new Error(`Insufficient ${tokenAInfo.symbol} balance`)
-      }
-      if (amountBDesired > tokenBInfo.balance) {
-        throw new Error(`Insufficient ${tokenBInfo.symbol} balance`)
-      }
-
-      // Sort tokens and align corresponding amounts
-      const [token0, token1] = [validatedData.tokenA, validatedData.tokenB].sort() as [
-        Address,
-        Address,
-      ]
-      const amount0Desired =
-        token0 === validatedData.tokenA ? amountADesired : amountBDesired
-      const amount1Desired =
-        token1 === validatedData.tokenB ? amountBDesired : amountADesired
-
-      console.log('Sorted tokens and aligned amounts:', {
-        token0,
-        token1,
-        amount0Desired: amount0Desired.toString(),
-        amount1Desired: amount1Desired.toString(),
-      })
+      // Calculate minimum amounts with slippage tolerance
+      const amountAMin = (amountADesired * (BigInt(10000) - slippageBps)) / BigInt(10000)
+      const amountBMin = (amountBDesired * (BigInt(10000) - slippageBps)) / BigInt(10000)
 
       // Handle token approvals
-      if (amount0Desired > tokenAInfo.allowance) {
-        console.log(`Approving ${tokenAInfo.symbol} for ${sdk.router.address}`)
-        setDebug('Approving token A...')
+      if (needsApprovalA) {
         setIsApprovingA(true)
-        await handleApprove(token0 as Address, sdk.router.address, amount0Desired)
+        await handleApproval(tokenA, amountADesired)
+        await refetchAllowanceA()
         setIsApprovingA(false)
       }
 
-      if (amount1Desired > tokenBInfo.allowance) {
-        console.log(`Approving ${tokenBInfo.symbol} for ${sdk.router.address}`)
-        setDebug('Approving token B...')
+      if (!isKUBPair && needsApprovalB) {
         setIsApprovingB(true)
-        await handleApprove(token1 as Address, sdk.router.address, amount1Desired)
+        await handleApproval(tokenB, amountBDesired)
+        await refetchAllowanceB()
         setIsApprovingB(false)
       }
 
-      // Calculate minimum amounts with slippage tolerance
-      const slippageTolerance = pairInfo?.isNewPair ? BigInt(1000) : BigInt(100) // 10% for new pair, 1% otherwise
-      const amount0Min =
-        (amount0Desired * (BigInt(10000) - slippageTolerance)) / BigInt(10000)
-      const amount1Min =
-        (amount1Desired * (BigInt(10000) - slippageTolerance)) / BigInt(10000)
-      const deadline = BigInt(Math.floor(Date.now() / 1000) + 1200) // 20 minutes from now
-
-      console.log('Slippage-adjusted minimum amounts and deadline:', {
-        amount0Min: amount0Min.toString(),
-        amount1Min: amount1Min.toString(),
-        deadline: deadline.toString(),
-      })
-
       // Add liquidity
-      console.log('Preparing to add liquidity with params:', {
-        tokenA: token0,
-        tokenB: token1,
-        amountADesired: amount0Desired.toString(),
-        amountBDesired: amount1Desired.toString(),
-        amountAMin: amount0Min.toString(),
-        amountBMin: amount1Min.toString(),
-        to: account.address,
-        deadline: deadline.toString(),
-        isNewPair: pairInfo?.isNewPair,
+      const result = await addLiquidity({
+        tokenA,
+        tokenB: isKUBPair ? kkubAddress : tokenB,
+        amountADesired,
+        amountBDesired,
+        amountAMin,
+        amountBMin,
+        to: account,
+        deadline: BigInt(Math.floor(Date.now() / 1000) + 1200),
       })
 
-      try {
-        console.log('Simulating addLiquidity transaction...')
-
-        const simulationResult = await sdk.publicClient.simulateContract({
-          address: sdk.router.address,
-          abi: ponderrouterAbi,
-          functionName: 'addLiquidity',
-          args: [
-            token0,
-            token1,
-            amount0Desired,
-            amount1Desired,
-            amount0Min,
-            amount1Min,
-            account.address,
-            deadline,
-          ],
-          account: account.address,
-        })
-
-        console.log('Simulation result:', simulationResult)
-      } catch (err: any) {
-        console.error('Simulation failed:', err)
-        setError(`Simulation failed: ${err.reason || err.message}`)
-        return
-      }
-
-      console.log('Estimating gas for addLiquidity transaction...')
-
-      const hash = await sdk.router.addLiquidity({
-        tokenA: token0,
-        tokenB: token1,
-        amountADesired: amount0Desired,
-        amountBDesired: amount1Desired,
-        amountAMin: amount0Min,
-        amountBMin: amount1Min,
-        to: account.address,
-        deadline,
+      console.log('Liquidity added:', {
+        hash: result.hash,
+        amounts: result.amounts,
+        events: result.events,
       })
 
-      console.log('Transaction hash for addLiquidity:', hash)
-
-      // Wait for the transaction receipt
-      const receipt = await sdk.publicClient.waitForTransactionReceipt({
-        hash,
-        timeout: 60_000,
-      })
-
-      console.log('Transaction receipt:', receipt)
-
-      if (receipt.status !== 'success') {
-        throw new Error('Add liquidity transaction failed')
-      }
-
-      reset()
-      setDebug('Liquidity added successfully!')
+      // Reset form on success
+      setAmountA('')
+      setAmountB('')
     } catch (err: any) {
       console.error('Add liquidity error:', err)
       setError(err.message || 'Failed to add liquidity')
-    } finally {
-      setIsLoading(false)
+      throw err
     }
   }
 
-  if (!sdk) {
-    return (
-      <Card>
-        <View align="center" justify="center">
-          <Text>Loading...</Text>
-        </View>
-      </Card>
-    )
-  }
+  // Approval checks
+  const needsApprovalA = useMemo(() => {
+    if (!tokenAInfo || !amountA) return false
+    const amountABigInt = parseUnits(amountA, tokenAInfo.decimals)
+    const allowanceA = tokenAAllowance?.amount || BigInt(0)
+    return amountABigInt > allowanceA
+  }, [tokenAInfo, amountA, tokenAAllowance])
+
+  const needsApprovalB = useMemo(() => {
+    if (isKUBPair || !tokenBInfo || !amountB) return false
+    const amountBBigInt = parseUnits(amountB, tokenBInfo.decimals)
+    const allowanceB = tokenBAllowance?.amount || BigInt(0)
+    return amountBBigInt > allowanceB
+  }, [isKUBPair, tokenBInfo, amountB, tokenBAllowance])
+
+  // Validation
+  const isValid = useMemo(() => {
+    if (!tokenAInfo || !amountA || !amountB) return false
+
+    const amountABigInt = parseUnits(amountA, tokenAInfo.decimals)
+    const amountBBigInt = parseUnits(amountB, isKUBPair ? 18 : tokenBInfo?.decimals || 18)
+
+    if (isKUBPair) {
+      return (
+        amountABigInt <= (tokenABalance || BigInt(0)) &&
+        amountBBigInt <= (kubBalance?.value || BigInt(0))
+      )
+    } else {
+      return (
+        amountABigInt <= (tokenABalance || BigInt(0)) &&
+        amountBBigInt <= (tokenBBalance || BigInt(0))
+      )
+    }
+  }, [
+    tokenAInfo,
+    tokenBInfo,
+    amountA,
+    amountB,
+    tokenABalance,
+    tokenBBalance,
+    kubBalance,
+    isKUBPair,
+  ])
 
   return (
     <Card>
-      <form onSubmit={handleSubmit(onSubmit)}>
-        <View gap={16}>
-          <View gap={8}>
-            <Text variant="title-3">Add Liquidity</Text>
-            {pairInfo?.isNewPair && (
+      <View gap={16} padding={8}>
+        <Text variant="title-3">{isKUBPair ? 'Add KUB Liquidity' : 'Add Liquidity'}</Text>
+
+        {pairExists?.canCreate && <Text>This will create a new liquidity pair!</Text>}
+        {error && <Text color="critical">{error}</Text>}
+
+        {/* Token A Input */}
+        <View gap={4}>
+          <View direction="row" justify="space-between">
+            <Text>{tokenAInfo?.symbol || 'Token A'}</Text>
+            {tokenABalance && tokenAInfo && (
               <Text>
-                This will be the first liquidity addition - you are setting the initial
-                price ratio!
+                Balance: {formatUnits(tokenABalance, tokenAInfo.decimals)}{' '}
+                {tokenAInfo.symbol}
               </Text>
-            )}
-
-            {error && <Text>{error}</Text>}
-            {debug && <Text color="positive">{debug}</Text>}
-
-            <View gap={4}>
-              <Text>Token A Address</Text>
-              <input
-                type="text"
-                placeholder="0x..."
-                {...register('tokenA')}
-                className="w-full p-2 border rounded"
-              />
-              {tokenAInfo && (
-                <Text>
-                  {tokenAInfo.symbol} - Balance:{' '}
-                  {formatUnits(tokenAInfo.balance, tokenAInfo.decimals)}
-                </Text>
-              )}
-              {errors.tokenA && <Text>Invalid token address</Text>}
-            </View>
-
-            <View gap={4}>
-              <Text>Amount A</Text>
-              <input
-                type="text"
-                placeholder="0.0"
-                {...register('amountA')}
-                className="w-full p-2 border rounded"
-              />
-              {errors.amountA && <Text>Invalid amount</Text>}
-            </View>
-
-            <View gap={4}>
-              <Text>Token B Address</Text>
-              <input
-                type="text"
-                placeholder="0x..."
-                {...register('tokenB')}
-                className="w-full p-2 border rounded"
-              />
-              {tokenBInfo && (
-                <Text>
-                  {tokenBInfo.symbol} - Balance:{' '}
-                  {formatUnits(tokenBInfo.balance, tokenBInfo.decimals)}
-                </Text>
-              )}
-              {errors.tokenB && <Text>Invalid token address</Text>}
-            </View>
-
-            <View gap={4}>
-              <Text>Amount B</Text>
-              <input
-                type="text"
-                placeholder="0.0"
-                {...register('amountB')}
-                className="w-full p-2 border rounded"
-              />
-              {errors.amountB && <Text>Invalid amount</Text>}
-            </View>
-
-            {pairInfo?.exists && !pairInfo.isNewPair && (
-              <View gap={2}>
-                <Text>Current Pool Ratio</Text>
-                <Text>
-                  1 {tokenAInfo?.symbol} ={' '}
-                  {formatUnits(
-                    (pairInfo.reserve1 * BigInt(10 ** (tokenAInfo?.decimals || 18))) /
-                      pairInfo.reserve0,
-                    tokenBInfo?.decimals || 18
-                  )}{' '}
-                  {tokenBInfo?.symbol}
-                </Text>
-              </View>
-            )}
-
-            {pairInfo?.isNewPair && amountA && amountB && (
-              <View gap={2}>
-                <Text>Initial Pool Ratio</Text>
-                <Text>
-                  1 {tokenAInfo?.symbol} ={' '}
-                  {(Number(amountB) / Number(amountA)).toFixed(6)} {tokenBInfo?.symbol}
-                </Text>
-              </View>
-            )}
-
-            {tokenAInfo && (
-              <View gap={2}>
-                <Text>Token A Allowance</Text>
-                <Text>
-                  {formatUnits(tokenAInfo.allowance, tokenAInfo.decimals)}{' '}
-                  {tokenAInfo.symbol}
-                </Text>
-              </View>
-            )}
-
-            {tokenBInfo && (
-              <View gap={2}>
-                <Text>Token B Allowance</Text>
-                <Text>
-                  {formatUnits(tokenBInfo.allowance, tokenBInfo.decimals)}{' '}
-                  {tokenBInfo.symbol}
-                </Text>
-              </View>
             )}
           </View>
 
-          <Button
-            type="submit"
-            disabled={isLoading || isApprovingA || isApprovingB}
-            loading={isLoading || isApprovingA || isApprovingB}
-            fullWidth
-          >
-            {isApprovingA
-              ? 'Approving Token A...'
-              : isApprovingB
-                ? 'Approving Token B...'
-                : isLoading
-                  ? 'Adding Liquidity...'
-                  : pairInfo?.isNewPair
-                    ? 'Add Initial Liquidity'
-                    : 'Add Liquidity'}
-          </Button>
+          <input
+            value={amountA}
+            onChange={(e) => handleAmountAInput(e.target.value)}
+            placeholder="0.0"
+            className="w-full p-2 border rounded"
+          />
         </View>
-      </form>
+
+        {/* Token B Input */}
+        <View gap={4}>
+          <View direction="row" justify="space-between">
+            <Text>{isKUBPair ? 'KUB' : tokenBInfo?.symbol || 'Token B'}</Text>
+            {isKUBPair
+              ? kubBalance && (
+                  <Text>Balance: {formatUnits(kubBalance.value, 18)} KUB</Text>
+                )
+              : tokenBBalance &&
+                tokenBInfo && (
+                  <Text>
+                    Balance: {formatUnits(tokenBBalance, tokenBInfo.decimals)}{' '}
+                    {tokenBInfo.symbol}
+                  </Text>
+                )}
+          </View>
+
+          <input
+            value={amountB}
+            onChange={(e) => handleAmountBInput(e.target.value)}
+            placeholder="0.0"
+            className="w-full p-2 border rounded"
+          />
+        </View>
+
+        {/* Pool Info */}
+        {pairInfo && !pairExists?.canCreate && (
+          <View gap={2}>
+            <Text>Current Pool Ratio</Text>
+            <Text>
+              1 {tokenAInfo?.symbol} ={' '}
+              {/*{formatUnits(*/}
+              {/*  (BigInt(pairInfo.reserve1) * BigInt(10 ** (tokenAInfo?.decimals || 18))) /*/}
+              {/*    BigInt(pairInfo.reserve0),*/}
+              {/*  isKUBPair ? 18 : tokenBInfo?.decimals || 18*/}
+              {/*)}{' '}*/}
+              {isKUBPair ? 'KUB' : tokenBInfo?.symbol}
+            </Text>
+          </View>
+        )}
+
+        {/* Action Button */}
+        {!account ? (
+          <Button fullWidth>Connect Wallet</Button>
+        ) : !isValid ? (
+          <Button fullWidth disabled>
+            {!amountA || !amountB ? 'Enter Amounts' : 'Insufficient Balance'}
+          </Button>
+        ) : isApprovingA ? (
+          <Button fullWidth loading>
+            Approving {tokenAInfo?.symbol}...
+          </Button>
+        ) : isApprovingB ? (
+          <Button fullWidth loading>
+            Approving {tokenBInfo?.symbol}...
+          </Button>
+        ) : needsApprovalA ? (
+          <Button fullWidth onClick={() => handleAddLiquidity()}>
+            Approve {tokenAInfo?.symbol}
+          </Button>
+        ) : needsApprovalB ? (
+          <Button fullWidth onClick={() => handleAddLiquidity()}>
+            Approve {tokenBInfo?.symbol}
+          </Button>
+        ) : (
+          <Button
+            fullWidth
+            disabled={!isValid || isAddingLiquidity}
+            loading={isAddingLiquidity}
+            onClick={handleAddLiquidity}
+          >
+            {pairExists?.canCreate ? 'Create Pair & Add Liquidity' : 'Add Liquidity'}
+          </Button>
+        )}
+      </View>
     </Card>
   )
 }

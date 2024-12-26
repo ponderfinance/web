@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { Text, Card, Button, View } from 'reshaped'
 import { type Address, formatUnits, parseUnits } from 'viem'
 import { useAccount } from 'wagmi'
@@ -13,49 +13,112 @@ import {
   useTokenAllowance,
   useTransaction,
   usePonderSDK,
+  type SwapResult,
 } from '@ponderfinance/sdk'
 
 interface SwapInterfaceProps {
   defaultTokenIn?: Address
   defaultTokenOut?: Address
+  className?: string
 }
+
+// Base swap params shared across all swap types
+interface BaseSwapParams {
+  path: Address[]
+  to: Address
+  deadline: bigint
+}
+
+interface SwapExactTokensForTokensParams extends BaseSwapParams {
+  amountIn: bigint
+  amountOutMin: bigint
+}
+
+interface SwapTokensForExactTokensParams extends BaseSwapParams {
+  amountOut: bigint
+  amountInMax: bigint
+}
+
+interface SwapExactETHForTokensParams extends BaseSwapParams {
+  amountOutMin: bigint
+}
+
+interface SwapTokensForExactETHParams extends BaseSwapParams {
+  amountOut: bigint
+  amountInMax: bigint
+}
+
+interface SwapExactTokensForETHParams extends BaseSwapParams {
+  amountIn: bigint
+  amountOutMin: bigint
+}
+
+interface SwapETHForExactTokensParams extends BaseSwapParams {
+  amountOut: bigint
+  value: bigint
+}
+
+type SwapParams =
+  | {
+      type: 'exactETHForTokens'
+      params: SwapExactETHForTokensParams
+      value: bigint
+    }
+  | {
+      type: 'tokensForExactETH'
+      params: SwapTokensForExactETHParams
+    }
+  | {
+      type: 'exactTokensForETH'
+      params: SwapExactTokensForETHParams
+    }
+  | {
+      type: 'ETHForExactTokens'
+      params: SwapETHForExactTokensParams
+      value: bigint
+    }
+  | {
+      type: 'exactTokensForTokens'
+      params: SwapExactTokensForTokensParams
+    }
+
+const MAX_UINT256 = BigInt(
+  '0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff'
+)
+const DEFAULT_DEADLINE_MINUTES = 20
+const DEFAULT_SLIPPAGE = 0.5 // 0.5%
+const HIGH_PRICE_IMPACT_THRESHOLD = 2 // 2%
+const CRITICAL_PRICE_IMPACT_THRESHOLD = 5 // 5%
 
 const verifyPoolLiquidity = async (
   route: any,
   sdk: any
 ): Promise<{ isValid: boolean; reason?: string }> => {
-  try {
-    if (!route.hops?.[0]?.pair) {
-      return { isValid: false, reason: 'Invalid route' }
-    }
+  if (!route?.hops?.[0]?.pair) {
+    return { isValid: false, reason: 'Invalid route' }
+  }
 
+  try {
     const pair = sdk.getPair(route.hops[0].pair)
     const [token0, reserves] = await Promise.all([pair.token0(), pair.getReserves()])
+
+    console.log('RES', reserves)
 
     const isToken0In = route.path[0].toLowerCase() === token0.toLowerCase()
     const reserveIn = isToken0In ? reserves.reserve0 : reserves.reserve1
     const reserveOut = isToken0In ? reserves.reserve1 : reserves.reserve0
 
-    console.log('Pool state:', {
-      reserveIn: reserveIn.toString(),
-      reserveOut: reserveOut.toString(),
-      amountIn: route.amountIn.toString(),
-      pair: route.hops[0].pair,
-    })
-
-    // Check if input amount is too large compared to pool reserves
-    if (BigInt(route.amountIn) > BigInt(reserveIn) / BigInt(2)) {
-      return {
-        isValid: false,
-        reason: 'Amount too large for pool liquidity',
-      }
-    }
-
-    // Verify minimum reserves
     if (BigInt(reserveIn) === BigInt(0) || BigInt(reserveOut) === BigInt(0)) {
       return {
         isValid: false,
-        reason: 'Pool has insufficient liquidity',
+        reason: 'Pool has no liquidity',
+      }
+    }
+
+    if (BigInt(route.amountIn) > (BigInt(reserveIn) * BigInt(3)) / BigInt(4)) {
+      return {
+        isValid: false,
+        reason: 'Amount too large relative to pool size',
       }
     }
 
@@ -66,9 +129,10 @@ const verifyPoolLiquidity = async (
   }
 }
 
-export default function SwapInterface({
+export function SwapInterface({
   defaultTokenIn,
   defaultTokenOut,
+  className,
 }: SwapInterfaceProps) {
   const sdk = usePonderSDK()
   const { address: account } = useAccount()
@@ -77,7 +141,10 @@ export default function SwapInterface({
   const [tokenIn, setTokenIn] = useState<Address | undefined>(defaultTokenIn)
   const [tokenOut, setTokenOut] = useState<Address | undefined>(defaultTokenOut)
   const [amountIn, setAmountIn] = useState<string>('')
-  const [slippage, setSlippage] = useState(0.5) // 0.5% default
+  const [slippage, setSlippage] = useState(DEFAULT_SLIPPAGE)
+  const [error, setError] = useState<string | null>(null)
+  const [isProcessing, setIsProcessing] = useState(false)
+  const [approvalsPending, setApprovalsPending] = useState<Set<Address>>(new Set())
 
   // Token information
   const { data: tokenInInfo } = useTokenInfo(tokenIn || ('' as Address))
@@ -91,74 +158,101 @@ export default function SwapInterface({
     !!tokenIn && !!account && !!sdk?.router.address
   )
 
-  // Get optimal route and amounts
+  // Route calculation
+  const parsedAmountIn = useMemo(() => {
+    if (!tokenInInfo || !amountIn) return BigInt(0)
+    try {
+      return parseUnits(amountIn, tokenInInfo.decimals)
+    } catch {
+      return BigInt(0)
+    }
+  }, [amountIn, tokenInInfo])
+
   const { data: route, isLoading: isRouteLoading } = useSwapRoute(
     {
       tokenIn: tokenIn as Address,
       tokenOut: tokenOut as Address,
-      amountIn: tokenInInfo
-        ? parseUnits(amountIn || '0', tokenInInfo.decimals)
-        : BigInt(0),
+      amountIn: parsedAmountIn,
       maxHops: 3,
     },
-    Boolean(tokenIn && tokenOut && amountIn && tokenInInfo)
+    Boolean(tokenIn && tokenOut && parsedAmountIn > BigInt(0) && tokenInInfo)
   )
 
-  // Handle amount input with proper decimal validation
-  const handleAmountInput = (value: string) => {
-    if (!/^\d*\.?\d*$/.test(value)) return
+  // Add this right after the useSwapRoute hook
+  useEffect(() => {
+    const debugRoute = async () => {
+      if (!sdk || !tokenIn || !tokenOut || !parsedAmountIn) return
 
-    const parts = value.split('.')
-    if (parts[1] && parts[1].length > (tokenInInfo?.decimals || 18)) return
+      try {
+        // 1. Check if pair exists
+        const pair = await sdk.factory.getPair(tokenIn, tokenOut)
+        console.log('🔍 Pair exists:', {
+          tokenIn,
+          tokenOut,
+          pair,
+          hasPair: pair !== '0x0000000000000000000000000000000000000000',
+        })
 
-    setAmountIn(value)
-  }
+        if (pair !== '0x0000000000000000000000000000000000000000') {
+          // 2. Check pair reserves
+          const pairContract = sdk.getPair(pair)
+          const [reserves, token0] = await Promise.all([
+            pairContract.getReserves(),
+            pairContract.token0(),
+          ])
+          console.log('🔍 Pair reserves:', {
+            reserves,
+            token0,
+            tokenInIsToken0: token0.toLowerCase() === tokenIn.toLowerCase(),
+          })
 
-  // Calculate expected output amount based on route
-  const expectedOutputAmount = useMemo(() => {
-    if (!route || !tokenOutInfo) return ''
-    try {
-      const amountOutBigInt = BigInt(route.amountOut)
-      return formatUnits(amountOutBigInt, tokenOutInfo.decimals)
-    } catch (err) {
-      console.error('Error calculating expected output:', err)
-      return ''
+          // 3. Try direct route check
+          const amounts = await sdk.router.getAmountsOut(parsedAmountIn, [
+            tokenIn,
+            tokenOut,
+          ])
+          console.log('🔍 Direct route check:', {
+            amountIn: parsedAmountIn.toString(),
+            amountOut: amounts[1].toString(),
+          })
+        }
+      } catch (err) {
+        console.error('🔥 Route debug failed:', err)
+      }
     }
-  }, [route, tokenOutInfo])
 
-  // Price impact warning
-  const showPriceImpactWarning = useMemo(() => {
-    if (!route) return false
-    return route.priceImpact > 2
-  }, [route])
+    debugRoute()
+  }, [sdk, tokenIn, tokenOut, parsedAmountIn])
 
-  // Display route information
-  const routeDisplay = useMemo(() => {
-    if (!route || !route.hops.length) return null
+  console.log('ROUTE', route)
 
-    return route.hops.map((hop, index) => ({
-      from: {
-        address: hop.tokenIn,
-        symbol: index === 0 ? tokenInInfo?.symbol : `Token${index}`,
-      },
-      to: {
-        address: hop.tokenOut,
-        symbol:
-          index === route.hops.length - 1 ? tokenOutInfo?.symbol : `Token${index + 1}`,
-      },
-      pair: hop.pair,
-      amountIn: formatUnits(BigInt(hop.amountIn), tokenInInfo?.decimals || 18),
-      amountOut: formatUnits(BigInt(hop.amountOut), tokenOutInfo?.decimals || 18),
-      fee: formatUnits(BigInt(hop.fee), tokenInInfo?.decimals || 18),
-    }))
-  }, [route, tokenInInfo, tokenOutInfo])
+  // Expected output calculations
+  const expectedOutput = useMemo(() => {
+    if (!route?.amountOut || !tokenOutInfo) return null
+    return {
+      raw: BigInt(route.amountOut),
+      formatted: formatUnits(BigInt(route.amountOut), tokenOutInfo.decimals),
+    }
+  }, [route?.amountOut, tokenOutInfo])
 
-  // Gas estimation
+  const minimumReceived = useMemo(() => {
+    if (!expectedOutput?.raw || !tokenOutInfo) return null
+    const slippageBps = BigInt(Math.round(slippage * 100))
+    const slippageAmount = (expectedOutput.raw * slippageBps) / BigInt(10000)
+    const minAmount = expectedOutput.raw - slippageAmount
+    return {
+      raw: minAmount,
+      formatted: formatUnits(minAmount, tokenOutInfo.decimals),
+    }
+  }, [expectedOutput, slippage, tokenOutInfo])
+
+  // Swap execution setup
   const { calldata: swapCalldata } = useSwapCallback({
+    //@ts-ignore
     route,
     recipient: account,
     slippageBps: Math.round(slippage * 100),
-    deadline: BigInt(Math.floor(Date.now() / 1000) + 1200),
+    deadline: BigInt(Math.floor(Date.now() / 1000) + DEFAULT_DEADLINE_MINUTES * 60),
   }) || { calldata: null }
 
   const { data: gasEstimate } = useGasEstimate(
@@ -166,111 +260,454 @@ export default function SwapInterface({
     Boolean(swapCalldata)
   )
 
-  // Token approval
-  const { mutateAsync: approve, isPending: isApproving } = useSwapApproval()
-
-  // Swap execution
+  // Contract interactions
+  const { mutateAsync: approve } = useSwapApproval()
   const { mutateAsync: swap, isPending: isSwapping } = useSwap()
   const [txHash, setTxHash] = useState<string>()
   const { data: txStatus } = useTransaction(txHash as `0x${string}`)
 
-  const handleApproval = async () => {
-    if (!route || !account || !sdk?.router.address) return
+  // Validation states
+  const isApprovalRequired = useMemo(() => {
+    if (!route?.amountIn || !tokenInAllowance?.amount || !tokenIn) return false
+    return BigInt(route.amountIn) > BigInt(tokenInAllowance.amount)
+  }, [route?.amountIn, tokenInAllowance?.amount, tokenIn])
+
+  const isValidTrade = useMemo(() => {
+    if (!route?.amountIn || !tokenInBalance || !account) return false
+
+    const amountInBigInt = BigInt(route.amountIn)
+    const balanceBigInt = BigInt(tokenInBalance)
+
+    return (
+      amountInBigInt <= balanceBigInt &&
+      amountInBigInt > BigInt(0) &&
+      BigInt(route.amountOut) > BigInt(0)
+    )
+  }, [route, tokenInBalance, account])
+
+  const showPriceImpactWarning = (route?.priceImpact || 0) > HIGH_PRICE_IMPACT_THRESHOLD
+  const showCriticalPriceImpactWarning =
+    (route?.priceImpact || 0) > CRITICAL_PRICE_IMPACT_THRESHOLD
+
+  // Input handlers
+  const handleAmountInput = (value: string) => {
+    if (!tokenInInfo) return
+    setError(null)
+
+    // Validate numeric input with decimals
+    if (!/^\d*\.?\d*$/.test(value)) return
+
+    const parts = value.split('.')
+    if (parts[1] && parts[1].length > tokenInInfo.decimals) return
+
+    // Validate maximum amount
+    try {
+      const parsedAmount = parseUnits(value || '0', tokenInInfo.decimals)
+      if (parsedAmount > MAX_UINT256) return
+    } catch {
+      return
+    }
+
+    setAmountIn(value)
+  }
+
+  const handleApproval = useCallback(async () => {
+    if (!route?.path[0] || !account || !route.amountIn || !tokenIn) return
+    setError(null)
 
     try {
-      const amountInBigInt = BigInt(route.amountIn)
-      console.log('Starting approval process...', {
+      setApprovalsPending((prev) => new Set(prev).add(tokenIn))
+      const result = await approve({
         tokenIn: route.path[0],
-        amountInBigInt: amountInBigInt.toString(),
-        currentAllowance: tokenInAllowance?.amount?.toString(),
+        amountIn: BigInt(route.amountIn),
+        useUnlimited: true,
       })
 
-      const MAX_UINT256 = BigInt(
-        '115792089237316195423570985008687907853269984665640564039457584007913129639935'
-      )
-      await approve({
-        tokenIn: route.path[0],
-        amountIn: MAX_UINT256,
+      // Wait for approval to be mined
+      await sdk.publicClient.waitForTransactionReceipt({
+        hash: result.hash,
+        confirmations: 1,
       })
 
-      await new Promise((resolve) => setTimeout(resolve, 2000))
       await refetchAllowance?.()
-
-      const newAllowance = tokenInAllowance?.amount
-      console.log('Approval complete:', {
-        newAllowance: newAllowance?.toString(),
-        requiredAmount: amountInBigInt.toString(),
+      setApprovalsPending((prev) => {
+        const next = new Set(prev)
+        next.delete(tokenIn)
+        return next
       })
 
-      if (!newAllowance || newAllowance < amountInBigInt) {
-        throw new Error('Approval failed - allowance not set correctly')
-      }
-    } catch (err) {
+      return result
+    } catch (err: any) {
       console.error('Approval failed:', err)
+      setError(err.message || 'Failed to approve token')
+      setApprovalsPending((prev) => {
+        const next = new Set(prev)
+        next.delete(tokenIn)
+        return next
+      })
       throw err
     }
-  }
+  }, [route])
 
   const handleSwap = async () => {
-    if (!route || !account) return
+    if (!route || !account || !minimumReceived?.raw || !sdk) return
+    setError(null)
+    setIsProcessing(true)
 
-    // Verify pool state first
-    const poolCheck = await verifyPoolLiquidity(route, sdk)
-    if (!poolCheck.isValid) {
-      throw new Error(`Swap validation failed: ${poolCheck.reason}`)
-    }
+    debugSwapAttempt()
 
     try {
-      if (isApprovalRequired) {
-        await handleApproval()
+      const deadline = BigInt(
+        Math.floor(Date.now() / 1000) + DEFAULT_DEADLINE_MINUTES * 60
+      )
+      const kkubAddress = '0xBa71efd94be63bD47B78eF458DE982fE29f552f7'
+
+      const isETHIn = tokenIn?.toLowerCase() === kkubAddress?.toLowerCase()
+      const isETHOut = tokenOut?.toLowerCase() === kkubAddress?.toLowerCase()
+
+      let swapParams: SwapParams // Explicitly type this
+
+      if (isETHIn && parsedAmountIn) {
+        swapParams = {
+          type: 'exactETHForTokens',
+          params: {
+            amountOutMin: minimumReceived.raw,
+            path: route.path,
+            to: account,
+            deadline,
+          },
+          value: parsedAmountIn,
+        }
+      } else if (isETHOut && parsedAmountIn) {
+        swapParams = {
+          type: 'exactTokensForETH',
+          params: {
+            amountIn: parsedAmountIn,
+            amountOutMin: minimumReceived.raw,
+            path: route.path,
+            to: account,
+            deadline,
+          },
+        }
+      } else if (isETHOut && route.amountOut) {
+        swapParams = {
+          type: 'tokensForExactETH',
+          params: {
+            amountOut: route.amountOut,
+            amountInMax: parsedAmountIn || BigInt(0),
+            path: route.path,
+            to: account,
+            deadline,
+          },
+        }
+      } else if (isETHIn && route.amountOut) {
+        swapParams = {
+          type: 'ETHForExactTokens',
+          params: {
+            amountOut: route.amountOut,
+            path: route.path,
+            to: account,
+            deadline,
+            value: parsedAmountIn || BigInt(0),
+          },
+          value: parsedAmountIn || BigInt(0),
+        }
+      } else {
+        swapParams = {
+          type: 'exactTokensForTokens',
+          params: {
+            amountIn: parsedAmountIn || BigInt(0),
+            amountOutMin: minimumReceived.raw,
+            path: route.path,
+            to: account,
+            deadline,
+          },
+        }
       }
 
-      const amountInBigInt = BigInt(route.amountIn)
-      const currentAllowance = BigInt(tokenInAllowance?.amount || 0)
+      console.log('Swap Params:', swapParams)
+      const result = await swap(swapParams)
+      setTxHash(result.hash)
+      setAmountIn('')
 
-      if (currentAllowance < amountInBigInt) {
-        throw new Error('Insufficient allowance for swap')
-      }
-
-      const amountOutBigInt = BigInt(route.amountOut)
-      const slippageBps = BigInt(Math.round(slippage * 100))
-      const minAmountOut =
-        minimumReceived?.amount ||
-        amountOutBigInt - (amountOutBigInt * slippageBps) / BigInt(10000)
-
-      console.log('Executing swap with params:', {
-        amountIn: amountInBigInt.toString(),
-        amountOutMin: minAmountOut.toString(),
-        path: route.path,
-        to: account,
-        deadline: (Math.floor(Date.now() / 1000) + 1200).toString(),
-        allowance: currentAllowance.toString(),
+      await sdk.publicClient.waitForTransactionReceipt({
+        hash: result.hash,
+        confirmations: 1,
       })
-
-      const swapResult = await swap({
-        amountIn: amountInBigInt,
-        amountOutMin: minAmountOut,
-        path: route.path,
-        to: account,
-        deadline: BigInt(Math.floor(Date.now() / 1000) + 1200),
-      })
-
-      setTxHash(swapResult.hash)
     } catch (err: any) {
-      console.error('Swap failed:', {
-        error: err,
-        message: err.message,
-        details: err.details,
-        code: err.code,
-      })
-      throw err
+      console.error('Swap error:', err)
+      setError(parseSwapError(err))
+    } finally {
+      setIsProcessing(false)
     }
   }
 
-  const handleSwitchTokens = () => {
-    setTokenIn(tokenOut)
-    setTokenOut(tokenIn)
-    setAmountIn('')
+  const MINIMAL_PAIR_ABI = [
+    {
+      inputs: [],
+      name: 'getReserves',
+      outputs: [
+        {
+          internalType: 'uint112',
+          name: 'reserve0',
+          type: 'uint112',
+        },
+        {
+          internalType: 'uint112',
+          name: 'reserve1',
+          type: 'uint112',
+        },
+        {
+          internalType: 'uint32',
+          name: 'blockTimestampLast',
+          type: 'uint32',
+        },
+      ],
+      stateMutability: 'view',
+      type: 'function',
+    },
+    {
+      inputs: [],
+      name: 'token0',
+      outputs: [
+        {
+          internalType: 'address',
+          name: '',
+          type: 'address',
+        },
+      ],
+      stateMutability: 'view',
+      type: 'function',
+    },
+    {
+      inputs: [],
+      name: 'token1',
+      outputs: [
+        {
+          internalType: 'address',
+          name: '',
+          type: 'address',
+        },
+      ],
+      stateMutability: 'view',
+      type: 'function',
+    },
+  ] as const
+
+  const MINIMAL_ERC20_ABI = [
+    {
+      inputs: [
+        {
+          internalType: 'address',
+          name: 'owner',
+          type: 'address',
+        },
+        {
+          internalType: 'address',
+          name: 'spender',
+          type: 'address',
+        },
+      ],
+      name: 'allowance',
+      outputs: [
+        {
+          internalType: 'uint256',
+          name: '',
+          type: 'uint256',
+        },
+      ],
+      stateMutability: 'view',
+      type: 'function',
+    },
+  ] as const
+
+  const MINIMAL_ROUTER_ABI = [
+    {
+      inputs: [
+        {
+          internalType: 'uint256',
+          name: 'amountIn',
+          type: 'uint256',
+        },
+        {
+          internalType: 'address[]',
+          name: 'path',
+          type: 'address[]',
+        },
+      ],
+      name: 'getAmountsOut',
+      outputs: [
+        {
+          internalType: 'uint256[]',
+          name: 'amounts',
+          type: 'uint256[]',
+        },
+      ],
+      stateMutability: 'view',
+      type: 'function',
+    },
+    {
+      inputs: [],
+      name: 'factory',
+      outputs: [
+        {
+          internalType: 'address',
+          name: '',
+          type: 'address',
+        },
+      ],
+      stateMutability: 'view',
+      type: 'function',
+    },
+  ] as const
+
+  const debugSwapAttempt = async () => {
+    if (!route || !tokenIn || !tokenOut || !account || !sdk || !minimumReceived?.raw)
+      return
+
+    // Add to your swap debug code:
+    const amountIn = BigInt(parsedAmountIn)
+    const standardFee = (amountIn * BigInt(30)) / BigInt(10000)
+    const ponderSequentialFee1 = (amountIn * BigInt(15)) / BigInt(10000)
+    const ponderSequentialFee2 =
+      ((amountIn - ponderSequentialFee1) * BigInt(15)) / BigInt(10000)
+    const totalPonderFee = ponderSequentialFee1 + ponderSequentialFee2
+    console.log('Fee Comparison:', {
+      standardFeeAmount: standardFee.toString(),
+      sequentialFeeAmount: totalPonderFee.toString(),
+      difference: (standardFee - totalPonderFee).toString(),
+    })
+
+    try {
+      // 1. Check Token Ordering & Path
+      const pair = await sdk.factory.getPair(tokenIn, tokenOut)
+      const token0 = await sdk.publicClient.readContract({
+        address: pair,
+        abi: MINIMAL_PAIR_ABI,
+        functionName: 'token0',
+      })
+
+      // 2. Check Reserves & Calculate Expected Output
+      const reserves = await sdk.publicClient.readContract({
+        address: pair,
+        abi: MINIMAL_PAIR_ABI,
+        functionName: 'getReserves',
+      })
+      const [reserveIn, reserveOut] =
+        token0.toLowerCase() === tokenIn.toLowerCase()
+          ? [reserves[0], reserves[1]]
+          : [reserves[1], reserves[0]]
+
+      // 3. Direct Router Check
+      const routerAmounts = await sdk.router.getAmountsOut(parsedAmountIn, [
+        tokenIn,
+        tokenOut,
+      ])
+
+      // 4. Compare different calculations
+      const routerOutput = routerAmounts[1]
+      const minimumOutput = minimumReceived.raw
+      const routeOutput = route.amountOut
+
+      // In debugSwapAttempt
+      const token0Info = await sdk.publicClient.readContract({
+        address: tokenIn,
+        abi: [
+          {
+            inputs: [],
+            name: 'decimals',
+            outputs: [{ type: 'uint8', name: '' }],
+            stateMutability: 'view',
+            type: 'function',
+          },
+        ],
+        functionName: 'decimals',
+      })
+      const token1Info = await sdk.publicClient.readContract({
+        address: tokenOut,
+        abi: [
+          {
+            inputs: [],
+            name: 'decimals',
+            outputs: [{ type: 'uint8', name: '' }],
+            stateMutability: 'view',
+            type: 'function',
+          },
+        ],
+        functionName: 'decimals',
+      })
+
+      console.log('Token Decimals:', {
+        tokenIn: token0Info,
+        tokenOut: token1Info,
+      })
+
+      console.log('Swap Debug:', {
+        pair,
+        token0,
+        path: [tokenIn, tokenOut],
+        reserves: {
+          reserveIn: reserveIn.toString(),
+          reserveOut: reserveOut.toString(),
+        },
+        amounts: {
+          amountIn: parsedAmountIn.toString(),
+          routerOutput: routerOutput.toString(),
+          minimumOutput: minimumOutput.toString(),
+          routeOutput: routeOutput.toString(),
+        },
+        differences: {
+          routerVsRoute:
+            (
+              ((Number(routerOutput) - Number(routeOutput)) / Number(routerOutput)) *
+              100
+            ).toFixed(2) + '%',
+          routerVsMin:
+            (
+              ((Number(routerOutput) - Number(minimumOutput)) / Number(routerOutput)) *
+              100
+            ).toFixed(2) + '%',
+        },
+      })
+    } catch (err) {
+      console.error('Debug failed:', err)
+    }
+  }
+
+
+  // Add this to your SwapInterface component
+
+  const parseSwapError = (error: any): string => {
+    const message = error.message || error.toString()
+    if (message.includes('INSUFFICIENT_OUTPUT_AMOUNT')) {
+      return 'Insufficient output amount - try increasing slippage tolerance'
+    }
+    if (message.includes('EXCESSIVE_INPUT_AMOUNT')) {
+      return 'Input amount too large for pool liquidity'
+    }
+    if (message.includes('EXPIRED')) {
+      return 'Transaction deadline expired - please try again'
+    }
+    if (message.includes('INSUFFICIENT_LIQUIDITY')) {
+      return 'Insufficient liquidity in pool'
+    }
+    if (message.includes('INVALID_PATH')) {
+      return 'Invalid swap path - please try again'
+    }
+    if (message.includes('TRANSFER_FAILED')) {
+      return 'Token transfer failed - please check your balance and allowance'
+    }
+    if (message.includes('rejected')) {
+      return 'Transaction rejected by user'
+    }
+    if (message.includes('User rejected high impact swap')) {
+      return 'Swap cancelled due to high price impact'
+    }
+    if (message.includes('user rejected transaction')) {
+      return 'Transaction cancelled'
+    }
+
+    return `Swap failed: ${message}`
   }
 
   // Reset on successful transaction
@@ -278,88 +715,50 @@ export default function SwapInterface({
     if (txStatus?.state === 'confirmed') {
       setAmountIn('')
       setTxHash(undefined)
+      setError(null)
     }
   }, [txStatus])
 
-  // Validation
-  const isApprovalRequired = useMemo(() => {
-    if (!route || !tokenInAllowance?.amount) return true
-
-    const amountInBigInt = BigInt(route.amountIn)
-    const allowanceBigInt = BigInt(tokenInAllowance.amount)
-
-    console.log('Approval check:', {
-      allowance: allowanceBigInt.toString(),
-      required: amountInBigInt.toString(),
-      isRequired: amountInBigInt > allowanceBigInt,
-    })
-
-    return amountInBigInt > allowanceBigInt
-  }, [route, tokenInAllowance])
-
-  const isValidTrade = useMemo(() => {
-    if (!route || !tokenInBalance || !account || !tokenInInfo) return false
-
-    const amountInBigInt = BigInt(route.amountIn)
-    const balanceBigInt = BigInt(tokenInBalance)
-
-    console.log('Trade validation:', {
-      amountIn: formatUnits(amountInBigInt, tokenInInfo.decimals),
-      balance: formatUnits(balanceBigInt, tokenInInfo.decimals),
-      priceImpact: route.priceImpact,
-      rawAmountIn: amountInBigInt.toString(),
-      rawBalance: balanceBigInt.toString(),
-    })
-
-    console.log(
-      'IS VALID',
-      amountInBigInt <= balanceBigInt,
-      route.priceImpact <= 15,
-      BigInt(route.amountOut) > BigInt(0),
-      amountInBigInt > BigInt(0)
-    )
-
-    return (
-      amountInBigInt <= balanceBigInt &&
-      // route.priceImpact <= 15 &&
-      BigInt(route.amountOut) > BigInt(0) &&
-      amountInBigInt > BigInt(0)
-    )
-  }, [route, tokenInBalance, account, tokenInInfo])
-
-  // Calculate minimum received amount accounting for slippage
-  const minimumReceived = useMemo(() => {
-    if (!route || !tokenOutInfo) return null
-
-    try {
-      const slippageBps = BigInt(Math.round(slippage * 100))
-      const amountOutBigInt = BigInt(route.amountOut)
-      const bpsBasedSlippage = (amountOutBigInt * slippageBps) / BigInt(10000)
-      const minAmount = amountOutBigInt - bpsBasedSlippage
-
-      return {
-        amount: minAmount,
-        formatted: formatUnits(minAmount, tokenOutInfo.decimals),
+  // Validate amounts on route changes
+  useEffect(() => {
+    if (route && tokenInInfo && amountIn) {
+      try {
+        const parsedAmount = parseUnits(amountIn, tokenInInfo.decimals)
+        if (parsedAmount !== BigInt(route.amountIn)) {
+          setAmountIn(formatUnits(BigInt(route.amountIn), tokenInInfo.decimals))
+        }
+      } catch (err) {
+        console.error('Amount validation failed:', err)
       }
-    } catch (err) {
-      console.error('Error calculating minimum received:', err)
-      return null
     }
-  }, [route, tokenOutInfo, slippage])
+  }, [route, tokenInInfo, amountIn])
 
   return (
-    <View align="center" width="100%">
-      <View width={{ s: '100%', m: 120 }}>
-        <View backgroundColor="elevation-base" borderRadius="large">
-          <View padding={8} maxHeight={'400px'} overflow={'auto'}>
-            {/* Token Input */}
+    <View align="center" width="100%" className={className}>
+      <View width={{ s: '100%', m: '480px' }}>
+        <Card>
+          <View padding={8} maxHeight="600px" overflow="auto">
+            {/* Input Token Section */}
             <View gap={8}>
               <View direction="row" justify="space-between">
-                <Text>Sell</Text>
+                <Text>You Pay</Text>
                 {tokenInBalance && tokenInInfo && (
                   <Text>
-                    Balance: {formatUnits(BigInt(tokenInBalance), tokenInInfo.decimals)}{' '}
+                    Balance: {formatUnits(tokenInBalance, tokenInInfo.decimals)}{' '}
                     {tokenInInfo.symbol}
+                    {tokenInBalance > BigInt(0) && (
+                      <Button
+                        variant="ghost"
+                        size="small"
+                        onClick={() => {
+                          if (tokenInInfo && tokenInBalance) {
+                            setAmountIn(formatUnits(tokenInBalance, tokenInInfo.decimals))
+                          }
+                        }}
+                      >
+                        MAX
+                      </Button>
+                    )}
                   </Text>
                 )}
               </View>
@@ -369,32 +768,46 @@ export default function SwapInterface({
                   value={amountIn}
                   onChange={(e) => handleAmountInput(e.target.value)}
                   placeholder="0.0"
-                  className="flex-1"
+                  disabled={!tokenIn || !tokenOut}
+                  className="w-full p-2 rounded border focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
                 <Button
                   onClick={() => {
-                    /* Open token selector */
+                    /* Token selector integration point */
                   }}
                   variant="outline"
+                  disabled={isProcessing}
                 >
                   {tokenInInfo?.symbol || 'Select Token'}
                 </Button>
               </View>
             </View>
 
-            <View align="center">
-              <Button variant="ghost" onClick={handleSwitchTokens}>
+            {/* Switch Tokens Button */}
+            <View align="center" padding={4}>
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  if (!isProcessing) {
+                    setTokenIn(tokenOut)
+                    setTokenOut(tokenIn)
+                    setAmountIn('')
+                    setError(null)
+                  }
+                }}
+                disabled={isProcessing}
+              >
                 ↓
               </Button>
             </View>
 
-            {/* Token Output */}
+            {/* Output Token Section */}
             <View gap={8}>
               <View direction="row" justify="space-between">
-                <Text>Buy</Text>
+                <Text>You Receive</Text>
                 {tokenOutBalance && tokenOutInfo && (
                   <Text>
-                    Balance: {formatUnits(BigInt(tokenOutBalance), tokenOutInfo.decimals)}{' '}
+                    Balance: {formatUnits(tokenOutBalance, tokenOutInfo.decimals)}{' '}
                     {tokenOutInfo.symbol}
                   </Text>
                 )}
@@ -402,45 +815,37 @@ export default function SwapInterface({
 
               <View direction="row" gap={8}>
                 <input
-                  value={expectedOutputAmount}
+                  value={expectedOutput?.formatted || ''}
                   readOnly
                   placeholder="0.0"
-                  className="flex-1 bg-gray-50"
+                  className="w-full p-2 rounded bg-gray-50"
                 />
                 <Button
                   onClick={() => {
-                    /* Open token selector */
+                    /* Token selector integration point */
                   }}
                   variant="outline"
+                  disabled={isProcessing}
                 >
                   {tokenOutInfo?.symbol || 'Select Token'}
                 </Button>
               </View>
             </View>
 
-            {/* Route Information */}
-            {routeDisplay && routeDisplay.length > 0 && (
-              <View gap={4} className="bg-gray-50 p-4 rounded">
-                <Text weight="medium">Route</Text>
-                {routeDisplay.map((hop, index) => (
-                  <View key={index} gap={2}>
-                    <Text>
-                      {hop.from.symbol} → {hop.to.symbol}
-                    </Text>
-                    <Text color="neutral">
-                      {hop.amountIn} → {hop.amountOut} (Fee: {hop.fee})
-                    </Text>
-                  </View>
-                ))}
-              </View>
-            )}
-
             {/* Trade Details */}
             {route && (
-              <View gap={4} className="bg-gray-50 p-4 rounded">
+              <View gap={4} className="bg-gray-50 p-4 rounded mt-4">
                 <View direction="row" justify="space-between">
                   <Text>Price Impact</Text>
-                  <Text color={route.priceImpact > 2 ? 'critical' : 'warning'}>
+                  <Text
+                    color={
+                      showCriticalPriceImpactWarning
+                        ? 'critical'
+                        : showPriceImpactWarning
+                          ? 'warning'
+                          : 'neutral'
+                    }
+                  >
                     {route.priceImpact.toFixed(2)}%
                   </Text>
                 </View>
@@ -458,58 +863,155 @@ export default function SwapInterface({
                     <Text>{gasEstimate.estimateInKUB} KUB</Text>
                   </View>
                 )}
+
+                {route.totalFee > BigInt(0) && (
+                  <View direction="row" justify="space-between">
+                    <Text>Trading Fee</Text>
+                    <Text>
+                      {formatUnits(route.totalFee, tokenInInfo?.decimals || 18)}{' '}
+                      {tokenInInfo?.symbol}
+                    </Text>
+                  </View>
+                )}
               </View>
             )}
 
-            {/* Action Button */}
-            {!account ? (
-              <Button fullWidth size="large">
-                Connect Wallet
-              </Button>
-            ) : !route ? (
-              <Button fullWidth size="large" disabled>
-                Enter an amount
-              </Button>
-            ) : !isValidTrade ? (
-              <Button fullWidth size="large" disabled>
-                Insufficient Balance
-              </Button>
-            ) : isSwapping || (!!txHash && txStatus?.state === 'pending') ? (
-              <Button fullWidth size="large" loading disabled>
-                {isSwapping ? 'Swapping...' : 'Processing...'}
-              </Button>
-            ) : isApprovalRequired ? (
-              <Button
-                fullWidth
-                size="large"
-                loading={isApproving}
-                disabled={isApproving}
-                onClick={handleApproval}
-              >
-                Approve {tokenInInfo?.symbol}
-              </Button>
-            ) : (
-              <Button
-                fullWidth
-                disabled={!isValidTrade || !route}
-                size="large"
-                onClick={handleSwap}
-              >
-                Swap
-              </Button>
-            )}
-
-
-            {/* Price Impact Warning */}
-            {showPriceImpactWarning && (
-              <Text color="warning" align="center">
-                Warning: High price impact. You will lose {route?.priceImpact.toFixed(2)}%
-                of your trade value.
+            {/* Error Display */}
+            {error && (
+              <Text color="critical" align="center" className="mt-4">
+                {error}
               </Text>
             )}
+
+            {/* Debug Button */}
+            <Button
+              onClick={debugSwapAttempt}
+              variant="ghost"
+              size="small"
+              className="mt-2"
+            >
+              Debug Swap
+            </Button>
+
+            {/* Action Buttons */}
+            <View gap={4} className="mt-4">
+              {!account ? (
+                <Button fullWidth size="large">
+                  Connect Wallet
+                </Button>
+              ) : !tokenIn || !tokenOut ? (
+                <Button fullWidth size="large" disabled>
+                  Select Tokens
+                </Button>
+              ) : !route || !amountIn ? (
+                <Button fullWidth size="large" disabled>
+                  Enter Amount
+                </Button>
+              ) : !isValidTrade ? (
+                <Button fullWidth size="large" disabled>
+                  Insufficient Balance
+                </Button>
+              ) : isProcessing || (!!txHash && txStatus?.state === 'pending') ? (
+                <Button fullWidth size="large" loading disabled>
+                  {isSwapping ? 'Swapping...' : 'Processing...'}
+                </Button>
+              ) : isApprovalRequired ? (
+                <Button
+                  fullWidth
+                  size="large"
+                  loading={approvalsPending.has(tokenIn)}
+                  disabled={approvalsPending.has(tokenIn) || isProcessing}
+                  onClick={handleApproval}
+                >
+                  Approve {tokenInInfo?.symbol}
+                </Button>
+              ) : (
+                <Button
+                  fullWidth
+                  size="large"
+                  disabled={!isValidTrade || !route || isProcessing}
+                  onClick={handleSwap}
+                >
+                  Swap
+                </Button>
+              )}
+
+              {/* Price Impact Warning */}
+              {showPriceImpactWarning && (
+                <Text
+                  color={showCriticalPriceImpactWarning ? 'critical' : 'warning'}
+                  align="center"
+                >
+                  {showCriticalPriceImpactWarning
+                    ? `Warning: High price impact (${route?.priceImpact.toFixed(
+                        2
+                      )}% loss)`
+                    : `High price impact (${route?.priceImpact.toFixed(
+                        2
+                      )}% loss). Consider reducing your trade size.`}
+                </Text>
+              )}
+
+              {/* Slippage Controls */}
+              <View gap={4}>
+                <Text align="center" color="neutral">
+                  Slippage Tolerance
+                </Text>
+                <View direction="row" gap={2} justify="center">
+                  <Button
+                    variant={slippage === 0.1 ? 'outline' : 'ghost'}
+                    size="small"
+                    onClick={() => setSlippage(0.1)}
+                    disabled={isProcessing}
+                  >
+                    0.1%
+                  </Button>
+                  <Button
+                    variant={slippage === 0.5 ? 'outline' : 'ghost'}
+                    size="small"
+                    onClick={() => setSlippage(0.5)}
+                    disabled={isProcessing}
+                  >
+                    0.5%
+                  </Button>
+                  <Button
+                    variant={slippage === 1.0 ? 'outline' : 'ghost'}
+                    size="small"
+                    onClick={() => setSlippage(1.0)}
+                    disabled={isProcessing}
+                  >
+                    1.0%
+                  </Button>
+                </View>
+              </View>
+
+              {/* Route Information */}
+              {route && route.hops.length > 1 && (
+                <View gap={2} className="mt-2">
+                  <Text weight="medium" align="center">
+                    Route
+                  </Text>
+                  {route.hops.map((hop, index) => (
+                    <View key={index} direction="row" justify="center" gap={2}>
+                      <Text color="neutral">
+                        {index === 0 ? tokenInInfo?.symbol : `Token${index}`}
+                      </Text>
+                      <Text color="neutral">→</Text>
+                      <Text color="neutral">
+                        {index === route.hops.length - 1
+                          ? tokenOutInfo?.symbol
+                          : `Token${index + 1}`}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              )}
+            </View>
           </View>
-        </View>
+        </Card>
       </View>
     </View>
   )
 }
+
+export default SwapInterface

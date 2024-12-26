@@ -70,7 +70,7 @@ export default function FarmingPage() {
   return (
     <View gap={24} className="max-w-4xl mx-auto p-4">
       <View gap={8}>
-        <Text variant="title-1">Yield Farming</Text>
+        <Text variant="body-1">Yield Farming</Text>
         <Text>
           Stake your LP tokens to earn PONDER rewards. Boost your earnings by staking
           PONDER tokens.

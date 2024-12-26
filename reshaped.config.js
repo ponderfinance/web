@@ -3,7 +3,7 @@ const config = {
   themes: {
     ponder: {
       color: {
-        backgroundPage: { hex: '#131313' },
+        backgroundPage: { hex: '#131310' },
       },
       viewport: {
         m: { minPx: 660 },
