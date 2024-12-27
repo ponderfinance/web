@@ -85,11 +85,11 @@ export default function Providers({ children }: { children: React.ReactNode }) {
         appId={process.env.NEXT_PUBLIC_PRIVY_APP_ID as string}
         config={privyConfig}
       >
-        <WagmiProvider config={wagmiConfig}>
-          <WalletProvider queryClient={queryClient}>
-            <Reshaped theme="reshaped">{children}</Reshaped>
-          </WalletProvider>
-        </WagmiProvider>
+        <Reshaped theme="reshaped">
+          <WagmiProvider config={wagmiConfig}>
+            <WalletProvider queryClient={queryClient}>{children}</WalletProvider>
+          </WagmiProvider>
+        </Reshaped>
       </PrivyProvider>
     </QueryClientProvider>
   )

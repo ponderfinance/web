@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback } from 'react'
-import { View, Text, Button } from 'reshaped'
+import { View, Text, Button, Badge } from 'reshaped'
 import { useAccount } from 'wagmi'
 import { formatEther, formatUnits, parseEther, type Address } from 'viem'
+import { useTokenApproval } from '@ponderfinance/sdk'
 import { erc20Abi } from 'viem'
 import {
   usePonderSDK,
@@ -9,9 +10,11 @@ import {
   usePoolInfo,
   useStakeInfo,
   usePendingRewards,
+  useBoostStake,
+  useBoostUnstake,
   useHarvest,
 } from '@ponderfinance/sdk'
-import StakeModal from './StakeModal'
+import StakeModal from '../../../components/StakeModal'
 
 interface TokenInfo {
   address: Address
@@ -37,6 +40,81 @@ interface MetricsCardProps {
   value: string
   subtitle?: string
 }
+
+interface BoostInfo {
+  currentMultiplier: number
+  maxMultiplier: number
+  ponderRequired: bigint
+  ponderStaked: bigint
+  additionalRewards: bigint
+}
+
+interface BoostDisplayProps {
+  boost: BoostInfo
+  onBoost: () => void
+  onUnboost: () => void
+  isBoostLoading: boolean
+  isUnboostLoading: boolean
+}
+
+const BoostDisplay = ({
+  boost,
+  onBoost,
+  onUnboost,
+  isBoostLoading,
+  isUnboostLoading,
+}: BoostDisplayProps) => (
+  <View gap={2} padding={4} backgroundColor="neutral-faded">
+    <View direction="row" justify="space-between" align="center">
+      <Text variant="caption-1">Boost Multiplier</Text>
+      <Badge color={boost.ponderStaked > BigInt(0) ? 'primary' : 'neutral'}>
+        {(boost.currentMultiplier / 10000).toFixed(2)}x
+      </Badge>
+    </View>
+
+    <View direction="row" justify="space-between">
+      <Text variant="caption-1">PONDER Staked</Text>
+      <Text variant="caption-1">{formatEther(boost.ponderStaked)}</Text>
+    </View>
+
+    <View direction="row" justify="space-between">
+      <Text variant="caption-1">Required for Max Boost</Text>
+      <Text variant="caption-1">{formatEther(boost.ponderRequired)}</Text>
+    </View>
+
+    {boost.additionalRewards > BigInt(0) && (
+      <View direction="row" justify="space-between">
+        <Text variant="caption-1">Additional Rewards</Text>
+        <Text variant="caption-1" color="primary">
+          +{formatEther(boost.additionalRewards)} PONDER
+        </Text>
+      </View>
+    )}
+
+    <View direction="row" gap={2}>
+      <Button
+        variant="outline"
+        onClick={onBoost}
+        disabled={isBoostLoading}
+        loading={isBoostLoading}
+        fullWidth
+      >
+        Boost
+      </Button>
+      {boost.ponderStaked > BigInt(0) && (
+        <Button
+          variant="outline"
+          onClick={onUnboost}
+          disabled={isUnboostLoading}
+          loading={isUnboostLoading}
+          fullWidth
+        >
+          Unboost
+        </Button>
+      )}
+    </View>
+  </View>
+)
 
 const MetricsCard = ({ title, value, subtitle }: MetricsCardProps) => (
   <View grow borderRadius="medium" padding={4} backgroundColor="neutral-faded">
@@ -82,8 +160,17 @@ const PoolCard = ({ pid, address, position, onManage }: PoolCardProps) => {
   const { data: pool, isLoading, error } = usePoolInfo(pid)
   const { data: stakeInfo } = useStakeInfo(pid, address)
   const { data: pendingRewards } = usePendingRewards(pid, address)
-  const { mutate: harvest, isPending: isHarvesting } = useHarvest()
+  const { mutateAsync: harvest, isPending: isHarvesting } = useHarvest()
+  const { mutateAsync: boostStake, isPending: isBoostLoading } = useBoostStake()
+  const { mutateAsync: boostUnstake, isPending: isUnboostLoading } = useBoostUnstake()
 
+  const sdk = usePonderSDK()
+  const ponderToken = sdk.ponder.address
+  const { approve, isApproved } = useTokenApproval(
+    ponderToken,
+    sdk.masterChef.address,
+    !!stakeInfo?.boost.ponderRequired
+  )
   const handleHarvest = useCallback(async () => {
     try {
       await harvest({ poolId: pid })
@@ -91,6 +178,55 @@ const PoolCard = ({ pid, address, position, onManage }: PoolCardProps) => {
       console.error('Failed to harvest:', err)
     }
   }, [harvest, pid])
+
+  const handleBoost = useCallback(async () => {
+    if (!stakeInfo?.boost.ponderRequired || !ponderToken) return
+    try {
+      // Check if approval needed
+      if (!isApproved(stakeInfo.boost.ponderRequired)) {
+        await approve.mutateAsync({
+          token: ponderToken,
+          spender: sdk.masterChef.address,
+          amount: stakeInfo.boost.ponderRequired,
+        })
+      }
+
+      // Perform boost
+      const result = await boostStake({
+        poolId: pid,
+        amount: stakeInfo.boost.ponderRequired,
+      })
+      console.log('Boost completed:', result)
+    } catch (err) {
+      if (err instanceof Error && err.message === 'Already approved') {
+        // If already approved, proceed with boost
+        try {
+          const result = await boostStake({
+            poolId: pid,
+            amount: stakeInfo.boost.ponderRequired,
+          })
+          console.log('Boost completed:', result)
+        } catch (boostErr) {
+          console.error('Failed to boost:', boostErr)
+        }
+      } else {
+        console.error('Failed to approve/boost:', err)
+      }
+    }
+  }, [boostStake, pid, stakeInfo, sdk, ponderToken, approve, isApproved])
+
+  const handleUnboost = useCallback(async () => {
+    if (!stakeInfo?.ponderStaked) return
+    try {
+      const result = await boostUnstake({
+        poolId: pid,
+        amount: stakeInfo.ponderStaked,
+      })
+      console.log('Unboost completed:', result)
+    } catch (err) {
+      console.error('Failed to unboost:', err)
+    }
+  }, [boostUnstake, pid, stakeInfo])
 
   if (isLoading) {
     return (
@@ -112,6 +248,14 @@ const PoolCard = ({ pid, address, position, onManage }: PoolCardProps) => {
 
   const hasStakedBalance = stakeInfo?.amount && stakeInfo.amount > BigInt(0)
   const hasPendingRewards = pendingRewards?.total && pendingRewards.total > BigInt(0)
+
+  const boostInfo = stakeInfo?.boost && {
+    currentMultiplier: pool.boostMultiplier,
+    maxMultiplier: pool.boostMultiplier,
+    ponderRequired: stakeInfo.boost.ponderRequired,
+    ponderStaked: stakeInfo.ponderStaked,
+    additionalRewards: stakeInfo.boost.additionalRewards,
+  }
 
   return (
     <View padding={4} borderRadius="medium" backgroundColor="neutral-faded">
@@ -163,6 +307,17 @@ const PoolCard = ({ pid, address, position, onManage }: PoolCardProps) => {
                 </View>
               )}
             </View>
+
+            {/* Boost section */}
+            {boostInfo && hasStakedBalance && (
+              <BoostDisplay
+                boost={boostInfo}
+                onBoost={handleBoost}
+                onUnboost={handleUnboost}
+                isBoostLoading={isBoostLoading}
+                isUnboostLoading={isUnboostLoading}
+              />
+            )}
 
             <View direction="row" gap={2}>
               <Button variant="outline" onClick={() => onManage(pid)} fullWidth>
@@ -269,12 +424,16 @@ export default function FarmList() {
               : '0'
 
           const token0Amount = formatUnits(
-            totalSupply > BigInt(0) ? (lpBalance * reserves.reserve0) / totalSupply : BigInt(0),
+            totalSupply > BigInt(0)
+              ? (lpBalance * reserves.reserve0) / totalSupply
+              : BigInt(0),
             token0Decimals
           )
 
           const token1Amount = formatUnits(
-            totalSupply > BigInt(0) ? (lpBalance * reserves.reserve1) / totalSupply : BigInt(0),
+            totalSupply > BigInt(0)
+              ? (lpBalance * reserves.reserve1) / totalSupply
+              : BigInt(0),
             token1Decimals
           )
 

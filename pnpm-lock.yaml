@@ -5,6 +5,9 @@ settings:
   excludeLinksFromLockfile: false
 
 dependencies:
+  '@phosphor-icons/react':
+    specifier: ^2.1.7
+    version: 2.1.7(react-dom@18.2.0)(react@18.2.0)
   '@pinata/sdk':
     specifier: ^2.1.0
     version: 2.1.0
@@ -12,8 +15,8 @@ dependencies:
     specifier: ^0.1.29
     version: 0.1.29
   '@ponderfinance/sdk':
-    specifier: ^0.1.50
-    version: 0.1.50(@types/react@18.3.16)(react-dom@18.2.0)(react@18.2.0)(typescript@5.7.2)
+    specifier: ^0.1.54
+    version: 0.1.54(@types/react@18.3.16)(react-dom@18.2.0)(react@18.2.0)(typescript@5.7.2)
   '@privy-io/react-auth':
     specifier: 1.70.0
     version: 1.70.0(@babel/core@7.26.0)(@types/react@18.3.16)(react-dom@18.2.0)(react-is@19.0.0)(react@18.2.0)(typescript@5.7.2)
@@ -23,6 +26,9 @@ dependencies:
   '@wagmi/core':
     specifier: ^2.14.2
     version: 2.16.0(@types/react@18.3.16)(react@18.2.0)(typescript@5.7.2)(use-sync-external-store@1.2.0)(viem@2.21.55)
+  bignumber.js:
+    specifier: ^9.1.2
+    version: 9.1.2
   lightweight-charts:
     specifier: ^4.2.2
     version: 4.2.2
@@ -1444,6 +1450,17 @@ packages:
     resolution: {integrity: sha512-IHnV6A+zxU7XwmKFinmYjUcwlyK9+xkG3/s9KcQhI9BjQKycrJ1JRO+FbNYPwZiPKW3je/DR0k7w8/gLa5eaxQ==}
     dev: false
 
+  /@phosphor-icons/react@2.1.7(react-dom@18.2.0)(react@18.2.0):
+    resolution: {integrity: sha512-g2e2eVAn1XG2a+LI09QU3IORLhnFNAFkNbo2iwbX6NOKSLOwvEMmTa7CgOzEbgNWR47z8i8kwjdvYZ5fkGx1mQ==}
+    engines: {node: '>=10'}
+    peerDependencies:
+      react: '>= 16.8'
+      react-dom: '>= 16.8'
+    dependencies:
+      react: 18.2.0
+      react-dom: 18.2.0(react@18.2.0)
+    dev: false
+
   /@pinata/sdk@2.1.0:
     resolution: {integrity: sha512-hkS0tcKtsjf9xhsEBs2Nbey5s+Db7x5rlOH9TaWHBXkJ7IwwOs2xnEDigNaxAHKjYAwcw+m2hzpO5QgOfeF7Zw==}
     deprecated: Please install the new IPFS SDK at pinata-web3. More information at https://docs.pinata.cloud/web3/sdk
@@ -1467,8 +1484,8 @@ packages:
     resolution: {integrity: sha512-PGBVBW+3s7yKFxxXqkh/U128Nhnm9IOXxg2gUrmnbwFwsh7CKU+s8iT9VxbuJPNlTOdtdvMKyMm5u9LmIeZ8cw==}
     dev: false
 
-  /@ponderfinance/sdk@0.1.50(@types/react@18.3.16)(react-dom@18.2.0)(react@18.2.0)(typescript@5.7.2):
-    resolution: {integrity: sha512-YK2APoxOwefY0kFYCthVERDUpyfTaTD1lO3j6Jo9qpVG/bTO4Gib4keYmFKMNefdOOvOxrVI62krLHowVqAftQ==}
+  /@ponderfinance/sdk@0.1.54(@types/react@18.3.16)(react-dom@18.2.0)(react@18.2.0)(typescript@5.7.2):
+    resolution: {integrity: sha512-hr+xTxbUlDjVTWLPq0nlnqqJDJ/UVw5CuPcymc3k5TX49KLADQ5A7aJ9MSIi83Ylu+/QBqxuu3X87Gz9wxfAKA==}
     peerDependencies:
       react: '>=18'
       react-dom: '>=18'

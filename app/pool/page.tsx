@@ -7,7 +7,7 @@ import CreatePair from '@/app/components/CreatePair'
 export default function Pool() {
   return (
     <View direction="column">
-      <View insetTop={32}>
+      <View paddingTop={32}>
         <CreatePair />
         <AddLiquidityForm
           defaultTokenA="0x394c708B7Bd536C9961EA1748389F5bBDE3b480D"

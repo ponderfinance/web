@@ -3,7 +3,7 @@ import { Text, Card, Button, View } from 'reshaped'
 import { useAccount } from 'wagmi'
 import { Address, formatUnits, formatEther, parseUnits } from 'viem'
 import { erc20Abi } from 'viem'
-import { bitkubTestnetChain } from '@/app/constants/chains'
+import { bitkubTestnetChain, CURRENT_CHAIN } from '@/app/constants/chains'
 import { usePonderSDK } from '@ponderfinance/sdk'
 
 interface StakingInterfaceProps {
@@ -83,7 +83,7 @@ export default function StakingInterface({
         abi: erc20Abi,
         functionName: 'approve',
         args: [sdk.masterChef.address, BigInt(2) ** BigInt(256) - BigInt(1)], // Max approval
-        chain: bitkubTestnetChain,
+        chain: CURRENT_CHAIN,
         account: account.address,
       })
 
@@ -142,7 +142,7 @@ export default function StakingInterface({
     }
   }
 
-  if ( isLoading) {
+  if (isLoading) {
     return (
       <Card>
         <View align="center" justify="center" padding={8}>

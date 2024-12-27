@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { Text, View, Button } from 'reshaped'
 import FarmList from './FarmList'
-import StakingInterface from './StakingInterface'
-import BoostInterface from './BoostInterface'
+import StakingInterface from '../../../components/StakingInterface'
+import BoostInterface from '../../../components/BoostInterface'
 import { Address } from 'viem'
 
 interface ManageFarmModalProps {

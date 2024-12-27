@@ -4,7 +4,7 @@ import { usePonderSDK } from '@ponderfinance/sdk'
 import { useAccount } from 'wagmi'
 import { formatEther, parseUnits } from 'viem'
 import { erc20Abi } from 'viem'
-import { bitkubTestnetChain } from '@/app/constants/chains'
+import { bitkubTestnetChain, CURRENT_CHAIN } from '@/app/constants/chains'
 
 interface BoostInterfaceProps {
   pid: number
@@ -76,7 +76,7 @@ export default function BoostInterface({ pid, boostMultiplier }: BoostInterfaceP
         abi: erc20Abi,
         functionName: 'approve',
         args: [sdk.masterChef.address, BigInt(2) ** BigInt(256) - BigInt(1)],
-        chain: bitkubTestnetChain,
+        chain: CURRENT_CHAIN,
         account: account.address,
       })
 
@@ -135,7 +135,7 @@ export default function BoostInterface({ pid, boostMultiplier }: BoostInterfaceP
     }
   }
 
-  if ( isLoading) {
+  if (isLoading) {
     return (
       <Card>
         <View align="center" justify="center" padding={8}>

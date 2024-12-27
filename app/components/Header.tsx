@@ -16,7 +16,10 @@ export const Header = () => {
       paddingTop={4}
     >
       <View direction="row" gap={12} align="center">
-        <Text variant="body-1">Ponder</Text>
+        <Link href="/">
+          <Text variant="body-1">Ponder</Text>
+        </Link>
+
         <View direction="row" gap={8}>
           <Text variant="body-1">
             <Link href="/swap" variant="plain">

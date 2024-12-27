@@ -5,7 +5,7 @@ import LaunchContributionCard from "@/app/components/launch/LaunchContributionCa
 export default function Launch() {
   return (
     <View direction="column">
-      <View insetTop={32}>
+      <View paddingTop={32}>
         <LaunchCreationForm />
         <LaunchContributionCard launchId={BigInt(1)} />
       </View>

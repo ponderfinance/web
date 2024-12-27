@@ -11,7 +11,7 @@ import {
   usePairInfo,
   useAddLiquidity,
 } from '@ponderfinance/sdk'
-import { bitkubTestnetChain } from '@/app/constants/chains'
+import { CURRENT_CHAIN } from '@/app/constants/chains'
 
 interface AddLiquidityFormProps {
   defaultTokenA?: Address
@@ -146,7 +146,7 @@ export default function AddLiquidityForm({
         ],
         functionName: 'approve',
         args: [sdk.router.address, amount],
-        chain: bitkubTestnetChain,
+        chain: CURRENT_CHAIN,
         account: sdk.walletClient.account,
       })
 
@@ -199,12 +199,6 @@ export default function AddLiquidityForm({
         amountBMin,
         to: account,
         deadline: BigInt(Math.floor(Date.now() / 1000) + 1200),
-      })
-
-      console.log('Liquidity added:', {
-        hash: result.hash,
-        amounts: result.amounts,
-        events: result.events,
       })
 
       // Reset form on success
@@ -319,8 +313,7 @@ export default function AddLiquidityForm({
           <View gap={2}>
             <Text>Current Pool Ratio</Text>
             <Text>
-              1 {tokenAInfo?.symbol} ={' '}
-              {/*{formatUnits(*/}
+              1 {tokenAInfo?.symbol} = {/*{formatUnits(*/}
               {/*  (BigInt(pairInfo.reserve1) * BigInt(10 ** (tokenAInfo?.decimals || 18))) /*/}
               {/*    BigInt(pairInfo.reserve0),*/}
               {/*  isKUBPair ? 18 : tokenBInfo?.decimals || 18*/}

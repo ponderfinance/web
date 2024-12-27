@@ -117,23 +117,11 @@ export default function LaunchContributionCard({
 
       try {
         const contributionAmount = parseEther(amount)
-        console.log('Checking approval:', {
-          ponderAddress: sdk.ponder.address,
-          launcherAddress: sdk.launcher.address,
-          userAddress: sdk.walletClient.account.address,
-          amount: contributionAmount.toString(),
-        })
 
         const allowance = await sdk.ponder.allowance(
           sdk.walletClient.account.address,
           sdk.launcher.address
         )
-
-        console.log('Approval status:', {
-          currentAllowance: allowance.toString(),
-          neededAmount: contributionAmount.toString(),
-          hasApproved: allowance >= contributionAmount,
-        })
 
         setHasApproved(allowance >= contributionAmount)
       } catch (err) {
@@ -152,18 +140,9 @@ export default function LaunchContributionCard({
       setIsApproving(true)
       const amountToApprove = parseEther(amount)
 
-      console.log('Approving PONDER:', {
-        ponderAddress: sdk.ponder.address,
-        launcherAddress: sdk.launcher.address,
-        amount: amountToApprove.toString(),
-      })
-
       const tx = await sdk.ponder.approve(sdk.launcher.address, amountToApprove)
 
-      console.log('Approval transaction sent:', tx)
-
       const receipt = await sdk.publicClient.waitForTransactionReceipt({ hash: tx })
-      console.log('Approval transaction confirmed:', receipt)
 
       setHasApproved(true)
     } catch (err) {
@@ -187,19 +166,12 @@ export default function LaunchContributionCard({
           sdk.ponder.allowance(sdk.walletClient.account.address, sdk.launcher.address),
         ])
 
-        console.log('Contribution checks:', {
-          contributionAmount: contributionAmount.toString(),
-          currentAllowance: allowance.toString(),
-          currentBalance: ponderBalance.toString(),
-        })
-
         if (ponderBalance < contributionAmount) {
           throw new Error('Insufficient PONDER balance')
         }
 
         // Check if we need approval for the contribution amount
         if (allowance < contributionAmount) {
-          console.log('Approving contribution amount:', contributionAmount.toString())
           const approvalTx = await sdk.ponder.approve(
             sdk.launcher.address,
             contributionAmount
@@ -211,7 +183,6 @@ export default function LaunchContributionCard({
       }
 
       // Now contribute
-      console.log('Contributing with amount:', contributionAmount.toString())
       const result = await contribute.mutateAsync({
         launchId,
         amount: contributionAmount,

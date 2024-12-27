@@ -1,10 +1,24 @@
+import { View, Text } from 'reshaped'
+
 export const Footer = () => {
+  const currentYear = new Date().getFullYear()
+
   return (
-    <footer className="fixed bottom-0 left-0 right-0 border-t border-gray-200 p-2">
-      <div className="mx-auto flex max-w-screen-2xl items-center justify-between">
+    <View
+      direction="row"
+      align="center"
+      justify="space-between"
+      paddingInline={4}
+      paddingTop={16}
+      paddingBottom={4}
+    >
+      <View>
+        <Text variant="caption-1">&copy; {currentYear} Sellout Labs, Inc</Text>
+      </View>
+      <View>
         <div className="flex gap-4 text-sm">
           <a
-            href="https://github.com/taayyohh/ponder"
+            href="https://github.com/taayyohh/ponderfinance"
             target="_blank"
             rel="noreferrer"
             className="uppercase"
@@ -12,7 +26,7 @@ export const Footer = () => {
             GITHUB
           </a>
         </div>
-      </div>
-    </footer>
+      </View>
+    </View>
   )
 }

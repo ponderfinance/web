@@ -7,6 +7,7 @@ import { Barlow_Condensed } from 'next/font/google'
 import 'reshaped/themes/reshaped/theme.css'
 import '@/app/themes/ponder/theme.css'
 import './globals.css'
+import { Footer } from '@/app/components/Footer'
 
 const arialNarrow = localFont({
   src: [
@@ -74,6 +75,7 @@ export default function RootLayout({
           <Header />
           {children}
         </Providers>
+        <Footer />
       </body>
     </html>
   )

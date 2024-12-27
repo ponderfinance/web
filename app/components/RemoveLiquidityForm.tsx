@@ -5,7 +5,7 @@ import { useForm } from 'react-hook-form'
 import { Address, formatUnits, parseUnits } from 'viem'
 import { z } from 'zod'
 import { erc20Abi } from 'viem'
-import { bitkubTestnetChain } from '@/app/constants/chains'
+import { bitkubTestnetChain, CURRENT_CHAIN } from '@/app/constants/chains'
 import { useAccount } from 'wagmi'
 
 const removeLiquiditySchema = z.object({
@@ -146,7 +146,7 @@ export default function RemoveLiquidityForm() {
         abi: erc20Abi,
         functionName: 'approve',
         args: [spender, amount],
-        chain: bitkubTestnetChain,
+        chain: CURRENT_CHAIN,
         account: account.address,
       })
 
@@ -208,7 +208,6 @@ export default function RemoveLiquidityForm() {
       setIsLoading(false)
     }
   }
-
 
   return (
     <Card>
