@@ -34,13 +34,13 @@ export const Header = () => {
             </Link>
           </Text>
           <Text variant="body-1">
-            <Link href="/farm" variant="plain">
-              Farm{' '}
+            <Link href="/earn" variant="plain">
+              Earn{' '}
             </Link>
           </Text>
           <Text variant="body-1">
-            <Link href="/launch" variant="plain">
-              Launch{' '}
+            <Link href="/create" variant="plain">
+              Create{' '}
             </Link>
           </Text>
         </View>
