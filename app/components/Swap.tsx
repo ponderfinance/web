@@ -706,7 +706,7 @@ export function SwapInterface({
               </View>
 
               {/* Route Information */}
-              {route && route.hops.length > 1 && (
+              {route && route.hops.length > 0 && (
                 <View gap={2} className="mt-2">
                   <Text weight="medium" align="center">
                     Route

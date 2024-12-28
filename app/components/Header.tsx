@@ -17,7 +17,9 @@ export const Header = () => {
     >
       <View direction="row" gap={12} align="center">
         <Link href="/">
-          <Text variant="body-1">Ponder</Text>
+          <View align="center" direction="row" justify="center">
+            <Image src={'/koi-logo.png'} alt={'Koi Logo'} width={64} height={64} />
+          </View>
         </Link>
 
         <View direction="row" gap={8}>

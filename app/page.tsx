@@ -1,7 +1,7 @@
 'use client'
 import { View } from 'reshaped'
 import SwapInterface from '@/app/components/Swap'
-import PonderPriceChart from '@/app/components/PonderPriceChart'
+
 export default function Home() {
   return (
     <View direction="column">
