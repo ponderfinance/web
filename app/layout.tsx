@@ -1,52 +1,14 @@
 import type { Metadata } from 'next'
 import Providers from '@/app/providers'
-import localFont from 'next/font/local'
 import { Header } from '@/app/components/Header'
-import { Barlow_Condensed } from 'next/font/google'
-
-import 'reshaped/themes/reshaped/theme.css'
-import '@/app/themes/ponder/theme.css'
-import './globals.css'
 import { Footer } from '@/app/components/Footer'
-
-const arialNarrow = localFont({
-  src: [
-    {
-      path: '../public/fonts/arialnarrow.ttf',
-      weight: '400',
-      style: 'normal',
-    },
-    {
-      path: '../public/fonts/arialnarrow_bold.ttf',
-      weight: '700',
-      style: 'normal',
-    },
-    {
-      path: '../public/fonts/arialnarrow_italic.ttf',
-      weight: '400',
-      style: 'italic',
-    },
-    {
-      path: '../public/fonts/arialnarrow_bolditalic.ttf',
-      weight: '700',
-      style: 'italic',
-    },
-  ],
-  display: 'swap',
-  variable: '--font-arial-narrow',
-})
+import 'reshaped/themes/reshaped/theme.css'
+import './globals.css'
 
 // Silkscreen font configuration
-const silkscreen = Barlow_Condensed({
-  weight: ['400', '700'],
-  subsets: ['latin'],
-  display: 'swap',
-  variable: '--font-barlow-condensed', // Add this line to use as CSS variable
-})
-
 export const metadata: Metadata = {
-  title: 'Ponder Finance Decentralized Exchange',
-  description: 'trade. earn. meme.',
+  title: 'Ponder Finance',
+  description: 'trade. pool. earn. create',
   openGraph: {
     images: {
       url: '/og-image.png',
@@ -69,7 +31,7 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en" data-rs-theme="ponder" data-rs-color-mode="dark">
+    <html lang="en" data-rs-theme="reshaped" data-rs-color-mode="dark">
       <body>
         <Providers>
           <Header />

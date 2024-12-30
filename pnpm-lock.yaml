@@ -48,8 +48,8 @@ dependencies:
     specifier: ^3.39.3
     version: 3.39.3(react-dom@18.2.0)(react@18.2.0)
   reshaped:
-    specifier: ^3.2.7
-    version: 3.3.0(postcss@8.4.49)(react-dom@18.2.0)(react@18.2.0)
+    specifier: ^3.3.5
+    version: 3.3.5(postcss@8.4.49)(react-dom@18.2.0)(react@18.2.0)
   viem:
     specifier: ^2.21.51
     version: 2.21.55(typescript@5.7.2)(zod@3.24.1)
@@ -6705,8 +6705,8 @@ packages:
     resolution: {integrity: sha512-NKN5kMDylKuldxYLSUfrbo5Tuzh4hd+2E8NPPX02mZtn1VuREQToYe/ZdlJy+J3uCpfaiGF05e7B8W0iXbQHmg==}
     dev: false
 
-  /reshaped@3.3.0(postcss@8.4.49)(react-dom@18.2.0)(react@18.2.0):
-    resolution: {integrity: sha512-6xzKb1xM9DsfWst2L9lJmbgxA4dH5GNeU2pbG25xUNXeN4kdh/T0wHzM7V/rQ+Ii6uEWiwb7pPHnmO6UpYadTw==}
+  /reshaped@3.3.5(postcss@8.4.49)(react-dom@18.2.0)(react@18.2.0):
+    resolution: {integrity: sha512-/ZnCpohyr4MxNlrrqnRHerWk69JavkfO8ZqaoE7jeRu8Z0RgaaFmWFCsGeK0fi0AA6l1mt6+1htFnzYbiWl4UA==}
     engines: {yarn: '>=1.0.0'}
     hasBin: true
     peerDependencies:

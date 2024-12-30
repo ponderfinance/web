@@ -7,7 +7,7 @@ export default function Swap() {
       <View paddingTop={32}>
         <SwapInterface
           defaultTokenIn="0x174859cF3Baef0d65F854398CD949447eccc5b5f"
-          defaultTokenOut="0xBa71efd94be63bD47B78eF458DE982fE29f552f7"
+          defaultTokenOut="0x72a79851059a4DF3A6f64B942b227af7cd39165a"
         />
       </View>
     </View>
