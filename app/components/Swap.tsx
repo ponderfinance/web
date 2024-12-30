@@ -17,6 +17,7 @@ import {
 } from '@ponderfinance/sdk'
 import { roundDecimal, shortenNumber } from '@/app/utils/numbers'
 import { ArrowDown } from '@phosphor-icons/react'
+import { usePrivy } from '@privy-io/react-auth'
 
 interface SwapInterfaceProps {
   defaultTokenIn?: Address
@@ -109,6 +110,7 @@ export function SwapInterface({
   const [error, setError] = useState<string | null>(null)
   const [isProcessing, setIsProcessing] = useState(false)
   const [approvalsPending, setApprovalsPending] = useState<Set<Address>>(new Set())
+  const { login } = usePrivy()
 
   // Token information
   const { data: tokenInInfo } = useTokenInfo(tokenIn || ('' as Address))
@@ -406,10 +408,6 @@ export function SwapInterface({
     }
   }, [route, tokenInInfo, amountIn])
 
-  if (!sdk || !account) {
-    return <Text>Loading...</Text>
-  }
-
   return (
     <View align="center" width="100%" className={className}>
       <View width={{ s: '100%', m: '480px' }}>
@@ -612,7 +610,13 @@ export function SwapInterface({
             {/* Action Buttons */}
             <View gap={4} className="mt-4">
               {!account ? (
-                <Button fullWidth size="large" variant="solid" color="primary">
+                <Button
+                  fullWidth
+                  size="large"
+                  variant="solid"
+                  color="primary"
+                  onClick={login}
+                >
                   Connect Wallet
                 </Button>
               ) : !tokenIn || !tokenOut ? (
