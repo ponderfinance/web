@@ -31,7 +31,7 @@ function WalletProvider({
     })
 
     const transport =
-      typeof window !== 'undefined'
+      typeof window !== 'undefined' && window.ethereum
         ? custom(window.ethereum)
         : http(bitkubTestnetChain.rpcUrls.default.http[0])
 
