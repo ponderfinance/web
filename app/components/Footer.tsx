@@ -13,7 +13,10 @@ export const Footer = () => {
       paddingBottom={4}
     >
       <View>
-        <Text variant="caption-1">&copy; {currentYear} Sellout Labs, Inc</Text>
+        <Text variant="caption-1">
+          &copy; {currentYear} <em style={{ fontFamily: 'serif', fontSize: 14 }}>i</em>{' '}
+          Labs
+        </Text>
       </View>
       <View>
         <div className="flex gap-4 text-sm">
