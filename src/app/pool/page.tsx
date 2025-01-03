@@ -13,7 +13,7 @@ export default function Pool() {
         {/*<CreatePair />*/}
         <AddLiquidityStepper
           defaultTokenA="0x0852465CE1aeD3644bdc629c6acb0BB9F6FB8e46"
-          defaultTokenB="0x074282BB91529743C66D5AF429dF1ea1BB0519a0"
+          defaultTokenB="0xFccD21D36D2C06837C8e43db3169592BB042E256"
         />
         {/*<RemoveLiquidityForm />*/}
         <LiquidityPositionsList />
