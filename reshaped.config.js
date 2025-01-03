@@ -3,7 +3,11 @@ const config = {
   themes: {
     ponder: {
       color: {
-        backgroundPage: { hex: '#131310' },
+        backgroundPage: { hex: '#1E1E1E' },
+        backgroundPrimary: { hex: '#94E0FE' },
+        backgroundDisabled: { hex: '#2d4954' },
+        backgroundElevationBase: { hex: '#202629' },
+        backgroundElevationOverlay: { hex: '#212121' },
       },
       viewport: {
         m: { minPx: 660 },

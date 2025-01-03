@@ -7,7 +7,7 @@ import { getConfig } from 'reshaped/config/postcss';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const config = getConfig({
-  themeMediaCSSPath: resolve(__dirname, 'app/themes/ponder/media.css'),
+  themeMediaCSSPath: resolve(__dirname, './src/themes/ponder/media.css'),
 });
 
 export default {
