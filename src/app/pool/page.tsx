@@ -12,7 +12,7 @@ export default function Pool() {
       <View paddingTop={32}>
         {/*<CreatePair />*/}
         <AddLiquidityStepper
-          defaultTokenA="0x0852465CE1aeD3644bdc629c6acb0BB9F6FB8e46"
+          defaultTokenA="0xBa71efd94be63bD47B78eF458DE982fE29f552f7"
           defaultTokenB="0xFccD21D36D2C06837C8e43db3169592BB042E256"
         />
         {/*<RemoveLiquidityForm />*/}
