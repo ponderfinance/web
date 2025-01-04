@@ -20,7 +20,7 @@ function StakeInterface() {
   // Get staking info
   const { data: stakingInfo, isLoading: isLoadingInfo } = useStakingInfo(address)
 
-  // Get PONDER balance and allowance
+  // Get KOI balance and allowance
   const { data: ponderBalance } = useTokenBalance(sdk.ponder.address, address, !!address)
 
   const { data: allowanceData } = useTokenAllowance(
@@ -65,36 +65,36 @@ function StakeInterface() {
   return (
     <View gap={16} padding={16} className="rounded-lg bg-gray-50">
       <View gap={8}>
-        <Text variant="title-3">PONDER Staking</Text>
-        <Text>Stake PONDER to receive xPONDER and earn protocol fees</Text>
+        <Text variant="title-3">KOI Staking</Text>
+        <Text>Stake KOI to receive xKOI and earn protocol fees</Text>
       </View>
 
       <View gap={8} className="border rounded-lg p-4">
         <View direction="row" justify="space-between">
           <Text>Total Staked</Text>
           <Text>
-            {stakingInfo ? formatUnits(stakingInfo.totalStaked, 18) : '0'} PONDER
+            {stakingInfo ? formatUnits(stakingInfo.totalStaked, 18) : '0'} KOI
           </Text>
         </View>
 
         <View direction="row" justify="space-between">
           <Text>Exchange Rate</Text>
           <Text>
-            1 xPONDER = {stakingInfo ? stakingInfo.exchangeRate.toFixed(4) : '1'} PONDER
+            1 xKOI = {stakingInfo ? stakingInfo.exchangeRate.toFixed(4) : '1'} KOI
           </Text>
         </View>
 
         <View direction="row" justify="space-between">
           <Text>Your Stake</Text>
           <Text>
-            {stakingInfo ? formatUnits(stakingInfo.userShares, 18) : '0'} xPONDER
+            {stakingInfo ? formatUnits(stakingInfo.userShares, 18) : '0'} xKOI
           </Text>
         </View>
 
         <View direction="row" justify="space-between">
           <Text>Your Value</Text>
           <Text>
-            {stakingInfo ? formatUnits(stakingInfo.userBalance, 18) : '0'} PONDER
+            {stakingInfo ? formatUnits(stakingInfo.userBalance, 18) : '0'} KOI
           </Text>
         </View>
 
@@ -134,12 +134,12 @@ function StakeInterface() {
             </Button>
           </View>
           <Text variant="caption-1" color="neutral">
-            Balance: {ponderBalance ? formatUnits(ponderBalance, 18) : '0'} PONDER
+            Balance: {ponderBalance ? formatUnits(ponderBalance, 18) : '0'} KOI
           </Text>
         </View>
 
         <View gap={4}>
-          <Text variant="title-4">Unstake PONDER</Text>
+          <Text variant="title-4">Unstake KOI</Text>
           <View direction="row" gap={8}>
             <input
               value={unstakeAmount}
@@ -162,7 +162,7 @@ function StakeInterface() {
             </Button>
           </View>
           <Text variant="caption-1" color="neutral">
-            Balance: {stakingInfo ? formatUnits(stakingInfo.userShares, 18) : '0'} xPONDER
+            Balance: {stakingInfo ? formatUnits(stakingInfo.userShares, 18) : '0'} xKOI
           </Text>
         </View>
       </View>
@@ -174,9 +174,9 @@ export default function StakingPage() {
   return (
     <View gap={24} className="max-w-4xl mx-auto p-4">
       <View gap={8}>
-        <Text variant="body-1">PONDER Staking</Text>
+        <Text variant="body-1">KOI Staking</Text>
         <Text>
-          Stake your PONDER tokens to earn protocol fees. Staked PONDER (xPONDER)
+          Stake your KOI tokens to earn protocol fees. Staked KOI (xKOI)
           automatically compounds your earnings through rebases.
         </Text>
       </View>

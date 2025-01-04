@@ -77,13 +77,13 @@ export default function BoostModal({
         <Text variant="title-3">Boost Pool {poolId}</Text>
 
         <View gap={2}>
-          <Text variant="caption-1">Current PONDER Staked</Text>
-          <Text>{formatEther(currentBoost)} PONDER</Text>
+          <Text variant="caption-1">Current KOI Staked</Text>
+          <Text>{formatEther(currentBoost)} KOI</Text>
         </View>
 
         <View gap={2}>
           <Text variant="caption-1">Required for Max Boost</Text>
-          <Text>{formatEther(ponderRequired)} PONDER</Text>
+          <Text>{formatEther(ponderRequired)} KOI</Text>
         </View>
 
         <View gap={2}>

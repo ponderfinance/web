@@ -73,7 +73,7 @@ const BoostDisplay = ({
     </View>
 
     <View direction="row" justify="space-between">
-      <Text variant="caption-1">PONDER Staked</Text>
+      <Text variant="caption-1">KOI Staked</Text>
       <Text variant="caption-1">{formatEther(boost.ponderStaked)}</Text>
     </View>
 
@@ -142,7 +142,7 @@ const FarmMetrics = ({ metrics }: FarmMetricsProps) => (
     <MetricsCard
       title="Daily Rewards"
       value={formatEther(metrics.rewardsPerDay)}
-      subtitle="PONDER"
+      subtitle="KOI"
     />
     <MetricsCard title="Average APR" value={`${metrics.averageApr}%`} />
     <MetricsCard title="Active Farms" value={metrics.activePools.toString()} />

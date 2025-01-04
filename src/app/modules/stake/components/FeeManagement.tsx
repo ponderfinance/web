@@ -283,7 +283,7 @@ export default function FeesPage() {
         <Text variant="body-1">Protocol Fees</Text>
         <Text>
           Manage and monitor protocol fee collection and distribution. Fees are collected
-          from all protocol pairs and distributed to xPONDER stakers, treasury, and team.
+          from all protocol pairs and distributed to xKOI stakers, treasury, and team.
         </Text>
       </View>
 

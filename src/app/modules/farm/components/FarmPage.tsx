@@ -72,8 +72,8 @@ export default function FarmingPage() {
       <View gap={8}>
         <Text variant="body-1">Yield Farming</Text>
         <Text>
-          Stake your LP tokens to earn PONDER rewards. Boost your earnings by staking
-          PONDER tokens.
+          Stake your LP tokens to earn KOI rewards. Boost your earnings by staking
+          KOI tokens.
         </Text>
       </View>
 
