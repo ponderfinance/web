@@ -181,18 +181,16 @@ export default function LiquidityPositionsList() {
       <Card>
         <View align="center" justify="center" gap={8} padding={16}>
           <Text>You have no liquidity positions</Text>
-          <Button href="/add">
-            Add Liquidity
-          </Button>
+          <Button href="/add">Add Liquidity</Button>
         </View>
       </Card>
     )
   }
 
   return (
-    <View gap={16}>
+    <View gap={16} paddingInline={16} maxWidth={{ s: '100%', m: '1180px' }}>
       <View gap={8}>
-        <Text variant="title-3">Your Liquidity Positions</Text>
+        <Text variant="featured-2">Your Positions</Text>
         <Text>View and manage your liquidity across all pairs</Text>
       </View>
 
@@ -228,25 +226,15 @@ export default function LiquidityPositionsList() {
                 <Text>LP Tokens:</Text>
                 <View gap={2} align="end">
                   <Text>{formatEther(position.userLPBalance)}</Text>
-                  {position.stakedInFarm && (
-                    <Text color="positive">
-                      Farming Active
-                    </Text>
-                  )}
+                  {position.stakedInFarm && <Text color="positive">Farming Active</Text>}
                 </View>
               </View>
 
               <View direction="row" gap={8}>
-                <Button href={`/remove?pair=${position.pairAddress}`}>
-                  Remove
-                </Button>
-                <Button href={`/add?pair=${position.pairAddress}`}>
-                  Add
-                </Button>
+                <Button href={`/remove?pair=${position.pairAddress}`}>Remove</Button>
+                <Button href={`/add?pair=${position.pairAddress}`}>Add</Button>
                 {position.stakedInFarm ? (
-                  <Button href="/farm">
-                    View Farm
-                  </Button>
+                  <Button href="/farm">View Farm</Button>
                 ) : (
                   <Button href={`/farm?pair=${position.pairAddress}`}>
                     Start Farming

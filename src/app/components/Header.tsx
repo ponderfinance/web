@@ -25,7 +25,7 @@ export const Header = () => {
         </Link>
 
         <View direction="row" gap={4}>
-          <Popover triggerType="hover">
+          <Popover triggerType="hover" padding={1}>
             <Popover.Trigger>
               {(attributes) => (
                 <Button attributes={attributes} variant="ghost">
@@ -36,7 +36,7 @@ export const Header = () => {
               )}
             </Popover.Trigger>
             <Popover.Content>
-              <View direction="column" gap={2}>
+              <View direction="column" gap={1}>
                 <Link href={'/swap'}>
                   <View
                     direction="row"
@@ -67,19 +67,19 @@ export const Header = () => {
             </Popover.Content>
           </Popover>
 
-          <Popover triggerType="hover">
+          <Popover triggerType="hover" padding={1}>
             <Popover.Trigger>
               {(attributes) => (
                 <Button attributes={attributes} variant="ghost">
                   <Text variant="body-1">
-                    <Link href="/pool">Pool </Link>
+                    <Link href="/positions">Pool </Link>
                   </Text>
                 </Button>
               )}
             </Popover.Trigger>
             <Popover.Content>
-              <View direction="column" gap={2}>
-                <Link href={'/pool'}>
+              <View direction="column" gap={1}>
+                <Link href={'/positions'}>
                   <View
                     direction="row"
                     gap={2}
@@ -91,7 +91,7 @@ export const Header = () => {
                     <Text variant="body-2">View positions</Text>
                   </View>
                 </Link>
-                <Link href={'/pool/create'}>
+                <Link href={'/positions/create'}>
                   <View
                     direction="row"
                     gap={2}

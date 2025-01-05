@@ -13,7 +13,7 @@ export default function Home() {
         </View>
 
         <SwapInterface
-          defaultTokenIn="0xFccD21D36D2C06837C8e43db3169592BB042E256"
+          defaultTokenIn="0x986d56796f3B335B7564097fa1A7A31AEb7B3928"
           defaultTokenOut="0xBa71efd94be63bD47B78eF458DE982fE29f552f7"
         />
         <View paddingTop={4} paddingBottom={4}>

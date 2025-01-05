@@ -12,11 +12,11 @@ dependencies:
     specifier: ^2.1.0
     version: 2.1.0
   '@ponderfinance/dex':
-    specifier: ^0.1.35
-    version: 0.1.35
+    specifier: ^0.1.36
+    version: 0.1.36
   '@ponderfinance/sdk':
-    specifier: ^0.1.59
-    version: 0.1.59(@types/react@18.3.16)(react-dom@18.2.0)(react@18.2.0)(typescript@5.7.2)
+    specifier: ^0.1.60
+    version: 0.1.60(@types/react@18.3.16)(react-dom@18.2.0)(react@18.2.0)(typescript@5.7.2)
   '@privy-io/react-auth':
     specifier: 1.70.0
     version: 1.70.0(@babel/core@7.26.0)(@types/react@18.3.16)(react-dom@18.2.0)(react-is@19.0.0)(react@18.2.0)(typescript@5.7.2)
@@ -1480,17 +1480,17 @@ packages:
     dev: true
     optional: true
 
-  /@ponderfinance/dex@0.1.35:
-    resolution: {integrity: sha512-XpDG/ByjHuU6Rstz2YpRmj8snspUq/JMzMXw6ZRZ/mbYiSz/sKq0RPoZAlP3cI7jCoseSuM9jCsb3NasAq1DRw==}
+  /@ponderfinance/dex@0.1.36:
+    resolution: {integrity: sha512-bzqTTlSABw9hO5L9LBhScPemx/YRedlFawtAgtK+r6edzic+4B2IXlTekWFkmangeU4WL/lOdJl/j5RRKtzqlA==}
     dev: false
 
-  /@ponderfinance/sdk@0.1.59(@types/react@18.3.16)(react-dom@18.2.0)(react@18.2.0)(typescript@5.7.2):
-    resolution: {integrity: sha512-/maIGveO4RCLEKhsC09BdB8HcIp12a5ZQr/33Zj+QlqH7H+IBaNRfQxACotInMgddiMeU81PkRgOE06vxtq0xw==}
+  /@ponderfinance/sdk@0.1.60(@types/react@18.3.16)(react-dom@18.2.0)(react@18.2.0)(typescript@5.7.2):
+    resolution: {integrity: sha512-qgt8ciGxe7nFeN0g4ZlTjZ280YOmbwgB2iDYr1t/A6G7xGLoSscoojozZz9gS4v/ujiTh4LjxAeZrlHnBqtzsw==}
     peerDependencies:
       react: '>=18'
       react-dom: '>=18'
     dependencies:
-      '@ponderfinance/dex': 0.1.35
+      '@ponderfinance/dex': 0.1.36
       '@tanstack/react-query': 5.62.7(react@18.2.0)
       react: 18.2.0
       react-dom: 18.2.0(react@18.2.0)

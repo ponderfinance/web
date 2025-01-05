@@ -13,9 +13,7 @@ import {
   useTokenAllowance,
   useTransaction,
   usePonderSDK,
-  type SwapResult,
 } from '@ponderfinance/sdk'
-import { formatNumber, roundDecimal, shortenNumber } from '@/src/app/utils/numbers'
 import { ArrowDown } from '@phosphor-icons/react'
 import { usePrivy } from '@privy-io/react-auth'
 import { InterfaceTabs } from '@/src/app/modules/swap/components/InterfaceTabs'
