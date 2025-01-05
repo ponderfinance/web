@@ -2,8 +2,9 @@
 
 import { usePrivy } from '@privy-io/react-auth'
 import Image from 'next/image'
-import { Button, Text, View } from 'reshaped'
+import { Button, Popover, Text, View } from 'reshaped'
 import Link from 'next/link'
+import { PaperPlaneTilt, Path } from '@phosphor-icons/react'
 
 export const Header = () => {
   const { authenticated, login, logout } = usePrivy()
@@ -23,19 +24,100 @@ export const Header = () => {
           </View>
         </Link>
 
-        <View direction="row" gap={8}>
-          <Text variant="body-1">
-            <Link href="/swap">Trade </Link>
-          </Text>
-          <Text variant="body-1">
-            <Link href="/pool">Pool </Link>
-          </Text>
-          <Text variant="body-1">
-            <Link href="/earn">Earn </Link>
-          </Text>
-          <Text variant="body-1">
-            <Link href="/launch">Launch </Link>
-          </Text>
+        <View direction="row" gap={4}>
+          <Popover triggerType="hover">
+            <Popover.Trigger>
+              {(attributes) => (
+                <Button attributes={attributes} variant="ghost">
+                  <Text variant="body-1">
+                    <Link href={'/swap'}>Trade</Link>
+                  </Text>
+                </Button>
+              )}
+            </Popover.Trigger>
+            <Popover.Content>
+              <View direction="column" gap={2}>
+                <Link href={'/swap'}>
+                  <View
+                    direction="row"
+                    gap={2}
+                    align="center"
+                    padding={3}
+                    backgroundColor="elevation-base"
+                    borderRadius="medium"
+                  >
+                    <Path size={16} />
+                    <Text variant="body-2">Swap</Text>
+                  </View>
+                </Link>
+                <Link href={'/send'}>
+                  <View
+                    direction="row"
+                    gap={2}
+                    align="center"
+                    padding={3}
+                    backgroundColor="elevation-base"
+                    borderRadius="medium"
+                  >
+                    <PaperPlaneTilt size={16} />
+                    <Text variant="body-2">Send</Text>
+                  </View>
+                </Link>
+              </View>
+            </Popover.Content>
+          </Popover>
+
+          <Popover triggerType="hover">
+            <Popover.Trigger>
+              {(attributes) => (
+                <Button attributes={attributes} variant="ghost">
+                  <Text variant="body-1">
+                    <Link href="/pool">Pool </Link>
+                  </Text>
+                </Button>
+              )}
+            </Popover.Trigger>
+            <Popover.Content>
+              <View direction="column" gap={2}>
+                <Link href={'/pool'}>
+                  <View
+                    direction="row"
+                    gap={2}
+                    align="center"
+                    padding={3}
+                    backgroundColor="elevation-base"
+                    borderRadius="medium"
+                  >
+                    <Text variant="body-2">View positions</Text>
+                  </View>
+                </Link>
+                <Link href={'/pool/create'}>
+                  <View
+                    direction="row"
+                    gap={2}
+                    align="center"
+                    padding={3}
+                    backgroundColor="elevation-base"
+                    borderRadius="medium"
+                  >
+                    <Text variant="body-2">Create position</Text>
+                  </View>
+                </Link>
+              </View>
+            </Popover.Content>
+          </Popover>
+
+          <Link href="/earn">
+            <Button variant="ghost">
+              <Text variant="body-1">Earn </Text>
+            </Button>
+          </Link>
+
+          <Link href="/launch">
+            <Button variant="ghost">
+              <Text variant="body-1">Launch</Text>
+            </Button>
+          </Link>
         </View>
       </View>
 
