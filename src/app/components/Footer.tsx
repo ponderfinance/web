@@ -21,7 +21,7 @@ export const Footer = () => {
       {/*</View>*/}
       <View direction="row" justify="end" gap={4}>
         <a
-          href="https://github.com/taayyohh/ponderfinance"
+          href="https://github.com/ponderfinance"
           target="_blank"
           rel="noreferrer"
           className="uppercase"
@@ -29,7 +29,7 @@ export const Footer = () => {
           <GithubLogo size={18} />
         </a>
         <a
-          href="https://github.com/taayyohh/ponderfinance"
+          href="https://x.com/ponderdex"
           target="_blank"
           rel="noreferrer"
           className="uppercase"
