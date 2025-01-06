@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Text, Card, View, Button } from 'reshaped'
+import { Text, Card, View, Button, Skeleton } from 'reshaped'
 import { usePonderSDK } from '@ponderfinance/sdk'
 import { useAccount } from 'wagmi'
 import { Address, formatUnits, formatEther } from 'viem'
@@ -146,47 +146,6 @@ export default function LiquidityPositionsList() {
     return () => clearInterval(interval)
   }, [sdk, account.address])
 
-  if (!account.address) {
-    return (
-      <Card>
-        <View align="center" justify="center" padding={8}>
-          <Text>Connect wallet to view your liquidity positions</Text>
-        </View>
-      </Card>
-    )
-  }
-
-  if (isLoading) {
-    return (
-      <Card>
-        <View align="center" justify="center" padding={8}>
-          <Text>Loading your positions...</Text>
-        </View>
-      </Card>
-    )
-  }
-
-  if (error) {
-    return (
-      <Card>
-        <View align="center" justify="center" padding={8}>
-          <Text>{error}</Text>
-        </View>
-      </Card>
-    )
-  }
-
-  if (positions.length === 0) {
-    return (
-      <Card>
-        <View align="center" justify="center" gap={8} padding={16}>
-          <Text>You have no liquidity positions</Text>
-          <Button href="/add">Add Liquidity</Button>
-        </View>
-      </Card>
-    )
-  }
-
   return (
     <View gap={16} paddingInline={16}>
       <View gap={8}>
@@ -194,11 +153,17 @@ export default function LiquidityPositionsList() {
         <Text>View and manage your liquidity across all pairs</Text>
       </View>
 
+      {isLoading && (
+        <View direction="column" gap={4}>
+          <Skeleton height={20} width="100%" />
+          <Skeleton height={20} width="100%" />
+        </View>
+      )}
       {positions.map((position) => (
         <Card key={position.pairAddress}>
-          <View padding={16} gap={12}>
+          <View>
             <View gap={4}>
-              <Text variant="title-4">
+              <Text variant="featured-1">
                 {position.token0.symbol}/{position.token1.symbol}
               </Text>
               <Text>Pair: {position.pairAddress}</Text>
@@ -228,18 +193,6 @@ export default function LiquidityPositionsList() {
                   <Text>{formatEther(position.userLPBalance)}</Text>
                   {position.stakedInFarm && <Text color="positive">Farming Active</Text>}
                 </View>
-              </View>
-
-              <View direction="row" gap={8}>
-                <Button href={`/remove?pair=${position.pairAddress}`}>Remove</Button>
-                <Button href={`/add?pair=${position.pairAddress}`}>Add</Button>
-                {position.stakedInFarm ? (
-                  <Button href="/farm">View Farm</Button>
-                ) : (
-                  <Button href={`/farm?pair=${position.pairAddress}`}>
-                    Start Farming
-                  </Button>
-                )}
               </View>
             </View>
           </View>

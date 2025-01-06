@@ -4,8 +4,9 @@ import { usePrivy } from '@privy-io/react-auth'
 import Image from 'next/image'
 import { Button, Popover, Text, View } from 'reshaped'
 import Link from 'next/link'
-import { PaperPlaneTilt, Path } from '@phosphor-icons/react'
+import { PaperPlaneTilt, Path, Triangle } from '@phosphor-icons/react'
 import { usePathname } from 'next/navigation'
+import { Footer } from '@/src/app/components/Footer'
 
 export const Header = () => {
   const { authenticated, login, logout } = usePrivy()
@@ -29,7 +30,28 @@ export const Header = () => {
       <View direction="row" gap={12} align="center">
         <Link href="/">
           <View align="center" direction="row" justify="center">
-            <Image src={'/koi-logo.png'} alt={'Koi Logo'} width={48} height={48} />
+            <Popover triggerType="hover" padding={1}>
+              <Popover.Trigger>
+                {(attributes) => (
+                  <Button attributes={attributes} variant="ghost">
+                    <View direction="row" gap={3} align="center" justify="center">
+                      <Image
+                        src={'/koi-logo.png'}
+                        alt={'Koi Logo'}
+                        width={48}
+                        height={48}
+                      />
+                      <View attributes={{ style: { transform: 'rotate(180deg)' } }}>
+                        <Triangle size={10} />
+                      </View>
+                    </View>
+                  </Button>
+                )}
+              </Popover.Trigger>
+              <Popover.Content>
+                <Footer />
+              </Popover.Content>
+            </Popover>
           </View>
         </Link>
 
