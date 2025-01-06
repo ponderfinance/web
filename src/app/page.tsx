@@ -13,7 +13,7 @@ export default function Home() {
         </View>
 
         <SwapInterface
-          defaultTokenIn="0xC85689A776d8178e952bd0E58675d274bb62A797"
+          defaultTokenIn="0xbBf29f5b04d2469E9ebB12caBa0D902Ae59699Ff"
           defaultTokenOut="0xBa71efd94be63bD47B78eF458DE982fE29f552f7"
         />
         <View

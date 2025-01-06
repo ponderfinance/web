@@ -13,8 +13,8 @@
   "dependencies": {
     "@phosphor-icons/react": "^2.1.7",
     "@pinata/sdk": "^2.1.0",
-    "@ponderfinance/dex": "^0.1.38",
-    "@ponderfinance/sdk": "^0.1.61",
+    "@ponderfinance/dex": "^0.1.39",
+    "@ponderfinance/sdk": "^0.1.62",
     "@privy-io/react-auth": "1.70.0",
     "@tanstack/react-query": "^5.62.2",
     "@wagmi/core": "^2.14.2",
