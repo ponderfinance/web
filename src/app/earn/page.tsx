@@ -8,7 +8,7 @@ import FeesPage from '@/src/app/modules/stake/components/FeeManagement'
 export default function Farm() {
   return (
     <View direction="column">
-      <View paddingTop={32}>
+      <View insetTop={36}>
         <CreateFarm />
         <FeesPage />
         <StakingPage />

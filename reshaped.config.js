@@ -3,6 +3,7 @@ const config = {
   themes: {
     ponder: {
       color: {
+        foregroundPrimary: { hex: '#94E0FE' },
         backgroundPage: { hex: '#1E1E1E' },
         backgroundPrimary: { hex: '#94E0FE' },
         backgroundDisabled: { hex: '#2d4954' },

@@ -488,7 +488,7 @@ export function SwapInterface({
               backgroundColor="elevation-overlay"
               borderColor="neutral-faded"
               borderRadius="large"
-              attributes={{ style: { left: '50%', marginLeft: '-20px' } }}
+              attributes={{ style: { left: '50%', marginLeft: '-22px' } }}
               zIndex={2}
             >
               <Actionable
@@ -504,7 +504,7 @@ export function SwapInterface({
                 fullWidth={true}
               >
                 <View padding={2}>
-                  <ArrowDown size={24} />
+                  <ArrowDown size={28} />
                 </View>
               </Actionable>
             </View>

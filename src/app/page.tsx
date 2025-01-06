@@ -5,7 +5,7 @@ import SwapInterface from '@/src/app/components/Swap'
 export default function Home() {
   return (
     <View direction="column">
-      <View paddingTop={16} paddingBottom={16}>
+      <View insetTop={32} paddingBottom={16}>
         <View paddingBottom={16}>
           <Text variant="title-3" align="center">
             trade, <em> pool, earn and more</em>
@@ -16,9 +16,16 @@ export default function Home() {
           defaultTokenIn="0x986d56796f3B335B7564097fa1A7A31AEb7B3928"
           defaultTokenOut="0xBa71efd94be63bD47B78eF458DE982fE29f552f7"
         />
-        <View paddingTop={4} paddingBottom={4}>
+        <View
+          paddingTop={4}
+          paddingBottom={4}
+          maxWidth={'440px'}
+          align="center"
+          attributes={{ style: { margin: '0 auto' } }}
+        >
           <Text variant="body-1" align="center">
-            buy and sell crypto on Bitkub Chain
+            Bitkub Chain’s AMM with revenue-sharing at its core. Stake KOI, earn with
+            xKOI.
           </Text>
         </View>
       </View>

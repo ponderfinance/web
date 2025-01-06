@@ -52,13 +52,6 @@ function StakeInterface() {
     })
   }
 
-  if (isLoadingInfo) {
-    return (
-      <View padding={16} align="center">
-        <Text>Loading staking info...</Text>
-      </View>
-    )
-  }
 
   const currentStakeAmount = stakeAmount ? parseUnits(stakeAmount, 18) : BigInt(0)
 

@@ -188,7 +188,7 @@ export default function LiquidityPositionsList() {
   }
 
   return (
-    <View gap={16} paddingInline={16} maxWidth={{ s: '100%', m: '1180px' }}>
+    <View gap={16} paddingInline={16}>
       <View gap={8}>
         <Text variant="featured-2">Your Positions</Text>
         <Text>View and manage your liquidity across all pairs</Text>

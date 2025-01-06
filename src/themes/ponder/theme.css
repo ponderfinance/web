@@ -85,6 +85,7 @@
 --rs-radius-medium: 8px;
 --rs-radius-large: 12px;
 --rs-color-background-primary: #94E0FE;
+--rs-color-foreground-primary: #94E0FE;
 --rs-color-background-disabled: #2d4954;
 --rs-color-background-elevation-base: #202629;
 --rs-color-background-elevation-overlay: #212121;
@@ -122,7 +123,6 @@
 					--rs-color-background-primary-faded: #ecebfe;
 --rs-color-border-primary: #3b38ed;
 --rs-color-border-primary-faded: #dedcfb;
---rs-color-foreground-primary: #4f4cf0;
 --rs-color-background-critical: #e22c2c;
 --rs-color-background-critical-faded: #fdeded;
 --rs-color-border-critical: #bf2424;
@@ -168,7 +168,6 @@
 					--rs-color-background-primary-faded: #252544;
 --rs-color-border-primary: #8c8bf3;
 --rs-color-border-primary-faded: #323164;
---rs-color-foreground-primary: #8b8af7;
 --rs-color-background-critical: #d02626;
 --rs-color-background-critical-faded: #3e1f1f;
 --rs-color-border-critical: #f46969;

@@ -5,9 +5,11 @@ import Image from 'next/image'
 import { Button, Popover, Text, View } from 'reshaped'
 import Link from 'next/link'
 import { PaperPlaneTilt, Path } from '@phosphor-icons/react'
+import { usePathname } from 'next/navigation'
 
 export const Header = () => {
   const { authenticated, login, logout } = usePrivy()
+  const pathname = usePathname()
 
   return (
     <View
@@ -16,11 +18,18 @@ export const Header = () => {
       align="center"
       paddingInline={8}
       paddingTop={4}
+      paddingBottom={4}
+      borderColor="neutral-faded"
+      backgroundColor="page"
+      className="border-l-0 border-t-0 border-r-0"
+      position="fixed"
+      width="100%"
+      zIndex={50}
     >
       <View direction="row" gap={12} align="center">
         <Link href="/">
           <View align="center" direction="row" justify="center">
-            <Image src={'/koi-logo.png'} alt={'Koi Logo'} width={64} height={64} />
+            <Image src={'/koi-logo.png'} alt={'Koi Logo'} width={48} height={48} />
           </View>
         </Link>
 
@@ -29,7 +38,10 @@ export const Header = () => {
             <Popover.Trigger>
               {(attributes) => (
                 <Button attributes={attributes} variant="ghost">
-                  <Text variant="body-1">
+                  <Text
+                    variant="body-1"
+                    color={pathname === '/swap' ? 'neutral' : 'neutral-faded'}
+                  >
                     <Link href={'/swap'}>Trade</Link>
                   </Text>
                 </Button>
@@ -71,7 +83,10 @@ export const Header = () => {
             <Popover.Trigger>
               {(attributes) => (
                 <Button attributes={attributes} variant="ghost">
-                  <Text variant="body-1">
+                  <Text
+                    variant="body-1"
+                    color={pathname === '/pool' ? 'neutral' : 'neutral-faded'}
+                  >
                     <Link href="/positions">Pool </Link>
                   </Text>
                 </Button>
@@ -109,20 +124,39 @@ export const Header = () => {
 
           <Link href="/earn">
             <Button variant="ghost">
-              <Text variant="body-1">Earn </Text>
+              <Text
+                variant="body-1"
+                color={pathname === '/earn' ? 'neutral' : 'neutral-faded'}
+              >
+                Earn{' '}
+              </Text>
             </Button>
           </Link>
 
           <Link href="/launch">
             <Button variant="ghost">
-              <Text variant="body-1">Launch</Text>
+              <Text
+                variant="body-1"
+                color={pathname === '/launch' ? 'neutral' : 'neutral-faded'}
+              >
+                Launch
+              </Text>
             </Button>
           </Link>
         </View>
       </View>
 
-      <Button onClick={!authenticated ? login : logout} variant="outline">
-        {authenticated ? 'Logout' : 'Login'}
+      <Button
+        onClick={!authenticated ? login : logout}
+        variant="outline"
+        rounded={true}
+        color="primary"
+      >
+        <View padding={1} paddingTop={1.5} paddingBottom={1.5}>
+          <Text variant="body-3" weight="bold">
+            {authenticated ? 'Logout' : 'Login'}
+          </Text>
+        </View>
       </Button>
     </View>
   )

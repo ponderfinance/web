@@ -1,7 +1,8 @@
 import type { Metadata } from 'next'
+import { View } from 'reshaped'
 
 export const metadata: Metadata = {
-  title: 'Manage pool liquidity on Ponder',
+  title: 'Bitkub (KUB): Buy and sell on Ponder',
   description: 'Manage pool liquidity on Ponder',
   openGraph: {
     images: {
@@ -24,5 +25,13 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode
 }>) {
-  return <>{children}</>
+  return (
+    <View
+      maxWidth={{ s: '100%', m: '1180px' }}
+      attributes={{ style: { margin: '0 auto' } }}
+      insetTop={36}
+    >
+      {children}
+    </View>
+  )
 }
