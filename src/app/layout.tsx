@@ -4,6 +4,7 @@ import { Header } from '@/src/app/components/Header'
 import { Footer } from '@/src/app/components/Footer'
 // import 'reshaped/themes/reshaped/theme.css'
 import '@/src/themes/ponder/theme.css'
+import { Analytics } from '@vercel/analytics/react'
 
 import './globals.css'
 import { Pathway_Extreme } from 'next/font/google'
@@ -53,6 +54,7 @@ export default function RootLayout({
           {children}
           {/*<Footer />*/}
         </Providers>
+        <Analytics />
       </body>
     </html>
   )

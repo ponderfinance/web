@@ -147,12 +147,7 @@ export default function LiquidityPositionsList() {
   }, [sdk, account.address])
 
   return (
-    <View gap={16} paddingInline={16}>
-      <View gap={8}>
-        <Text variant="featured-2">Your Positions</Text>
-        <Text>View and manage your liquidity across all pairs</Text>
-      </View>
-
+    <View gap={16}>
       {isLoading && (
         <View direction="column" gap={4}>
           <Skeleton height={20} width="100%" />
