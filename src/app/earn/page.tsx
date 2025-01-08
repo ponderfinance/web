@@ -9,7 +9,7 @@ export default function Farm() {
   return (
     <View direction="column">
       <View insetTop={36}>
-        <CreateFarm />
+        {/*<CreateFarm />*/}
         <FeesPage />
         <StakingPage />
         <FarmingPage />
