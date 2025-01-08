@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { Text, Button, View, Actionable } from 'reshaped'
-import { type Address, formatUnits, parseUnits } from 'viem'
+import { type Address, encodeFunctionData, formatUnits, parseUnits } from 'viem'
 import { useAccount } from 'wagmi'
 import {
   useGasEstimate,
@@ -20,11 +20,24 @@ interface SendInterfaceProps {
   className?: string
 }
 
+// ERC20 ABI for transfer function
+const ERC20_ABI = [
+  {
+    constant: false,
+    inputs: [
+      { name: '_to', type: 'address' },
+      { name: '_value', type: 'uint256' },
+    ],
+    name: 'transfer',
+    outputs: [{ name: '', type: 'bool' }],
+    type: 'function',
+  },
+] as const
+
 const MAX_UINT256 = BigInt(
-  '0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff'
+    '0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff'
 )
 
-const DEFAULT_DEADLINE_MINUTES = 20
 const KUB_ADDRESS = '0x0000000000000000000000000000000000000000'
 
 export function SendInterface({ defaultTokenToSend, className }: SendInterfaceProps) {
@@ -43,6 +56,10 @@ export function SendInterface({ defaultTokenToSend, className }: SendInterfacePr
   const { data: tokenInfo } = useTokenInfo(tokenToSend || ('' as Address))
   const { data: tokenBalance } = useTokenBalance(tokenToSend || ('' as Address), account)
 
+  const isNativeToken = useMemo(() => {
+    return !tokenToSend || tokenToSend === KUB_ADDRESS
+  }, [tokenToSend])
+
   const parsedAmount = useMemo(() => {
     if (!tokenInfo || !amountToSend) return BigInt(0)
     try {
@@ -52,16 +69,22 @@ export function SendInterface({ defaultTokenToSend, className }: SendInterfacePr
     }
   }, [amountToSend, tokenInfo])
 
-  // Gas estimation
+  // Gas estimation for native token or ERC20
   const { data: gasEstimate } = useGasEstimate(
-    account
-      ? {
-          to: recipientAddress as Address,
-          value: parsedAmount,
-          data: '0x',
-        }
-      : undefined,
-    Boolean(account && recipientAddress && parsedAmount > BigInt(0))
+      account
+          ? {
+            to: isNativeToken ? recipientAddress as Address : tokenToSend!,
+            value: isNativeToken ? parsedAmount : BigInt(0),
+            data: isNativeToken
+                ? '0x'
+                : encodeFunctionData({
+                  abi: ERC20_ABI,
+                  functionName: 'transfer',
+                  args: [recipientAddress as Address, parsedAmount],
+                }),
+          }
+          : undefined,
+      Boolean(account && recipientAddress && parsedAmount > BigInt(0))
   )
 
   const [txHash, setTxHash] = useState<string>()
@@ -102,17 +125,32 @@ export function SendInterface({ defaultTokenToSend, className }: SendInterfacePr
   }
 
   const handleSend = async () => {
-    if (!account || !parsedAmount || !tokenToSend || !recipientAddress || !sdk) return
+    if (!account || !parsedAmount || !recipientAddress || !sdk) return
     setError(null)
     setIsProcessing(true)
 
     try {
-      const tx = await sdk.walletClient?.sendTransaction({
-        to: recipientAddress as Address,
-        value: parsedAmount,
-        account,
-        chain: CURRENT_CHAIN,
-      })
+      let tx: `0x${string}` | undefined
+
+      if (isNativeToken) {
+        // Native token transfer
+        tx = await sdk.walletClient?.sendTransaction({
+          to: recipientAddress as Address,
+          value: parsedAmount,
+          account,
+          chain: CURRENT_CHAIN,
+        })
+      } else {
+        // ERC20 transfer
+        tx = await sdk.walletClient?.writeContract({
+          address: tokenToSend!,
+          abi: ERC20_ABI,
+          functionName: 'transfer',
+          args: [recipientAddress as Address, parsedAmount],
+          account,
+          chain: CURRENT_CHAIN,
+        })
+      }
 
       setTxHash(tx)
       await sdk.publicClient.waitForTransactionReceipt({
@@ -138,6 +176,12 @@ export function SendInterface({ defaultTokenToSend, className }: SendInterfacePr
     if (message.includes('rejected')) {
       return 'Transaction rejected by user'
     }
+    if (message.includes('exceeds balance')) {
+      return 'Amount exceeds token balance'
+    }
+    if (message.includes('transfer amount exceeds allowance')) {
+      return 'Transfer amount exceeds allowance'
+    }
     return `Send failed: ${message}`
   }
 
@@ -151,159 +195,159 @@ export function SendInterface({ defaultTokenToSend, className }: SendInterfacePr
   }, [txStatus])
 
   return (
-    <View align="center" width="100%" className={className}>
-      <View width={{ s: '100%', m: '480px' }}>
-        <View padding={2} gap={2} borderRadius="large">
-          <InterfaceTabs />
-          <View maxHeight="600px" overflow="auto" gap={1}>
-            <View
-              gap={2}
-              padding={4}
-              paddingTop={6}
-              paddingBottom={6}
-              borderRadius="large"
-              borderColor="neutral-faded"
-            >
-              <Text color="neutral-faded" variant="body-3">
-                You're sending
-              </Text>
-              <View direction="row" gap={8} wrap={false}>
-                <View grow={true} align="center">
+      <View align="center" width="100%" className={className}>
+        <View width={{ s: '100%', m: '480px' }}>
+          <View padding={2} gap={2} borderRadius="large">
+            <InterfaceTabs />
+            <View maxHeight="600px" overflow="auto" gap={1}>
+              <View
+                  gap={2}
+                  padding={4}
+                  paddingTop={6}
+                  paddingBottom={6}
+                  borderRadius="large"
+                  borderColor="neutral-faded"
+              >
+                <Text color="neutral-faded" variant="body-3">
+                  You're sending
+                </Text>
+                <View direction="row" gap={8} wrap={false}>
+                  <View grow={true} align="center">
+                    <input
+                        value={amountToSend}
+                        onChange={(e) => handleAmountInput(e.target.value)}
+                        placeholder="0"
+                        disabled={!tokenToSend}
+                        className="flex w-full h-full text-4xl bg-[rgba(0,0,0,0)] focus:outline-0"
+                    />
+                  </View>
+
+                  <Button
+                      onClick={() => {
+                        /* Token selector integration point */
+                      }}
+                      variant="outline"
+                      disabled={isProcessing}
+                      rounded={true}
+                  >
+                    {tokenInfo?.symbol || 'Select Token'}
+                  </Button>
+                </View>
+                <View>
+                  {tokenBalance && tokenInfo && (
+                      <View direction="row" align="center" justify="end" gap={2}>
+                        <TokenBalanceDisplay
+                            tokenInBalance={tokenBalance}
+                            tokenInInfo={tokenInfo}
+                        />
+                        {tokenBalance > BigInt(0) && (
+                            <Actionable
+                                onClick={() => {
+                                  if (tokenInfo && tokenBalance) {
+                                    setAmountToSend(formatUnits(tokenBalance, tokenInfo.decimals))
+                                  }
+                                }}
+                            >
+                              <View
+                                  backgroundColor="primary-faded"
+                                  padding={1}
+                                  borderRadius="circular"
+                              >
+                                <Text variant="caption-2" color="primary" weight="bold">
+                                  MAX
+                                </Text>
+                              </View>
+                            </Actionable>
+                        )}
+                      </View>
+                  )}
+                </View>
+              </View>
+
+              {/* Recipient Address Section */}
+              <View
+                  gap={2}
+                  padding={4}
+                  paddingTop={6}
+                  paddingBottom={6}
+                  borderRadius="large"
+                  backgroundColor="elevation-base"
+              >
+                <Text color="neutral-faded" variant="body-3">
+                  To
+                </Text>
+                <View direction="row" gap={8} wrap={false}>
                   <input
-                    value={amountToSend}
-                    onChange={(e) => handleAmountInput(e.target.value)}
-                    placeholder="0"
-                    disabled={!tokenToSend}
-                    className="flex w-full h-full text-4xl bg-[rgba(0,0,0,0)] focus:outline-0"
+                      value={recipientAddress}
+                      onChange={(e) => handleAddressInput(e.target.value)}
+                      placeholder="Wallet address"
+                      className="flex w-full h-full text-xl bg-[rgba(0,0,0,0)] focus:outline-0"
                   />
                 </View>
-
-                <Button
-                  onClick={() => {
-                    /* Token selector integration point */
-                  }}
-                  variant="outline"
-                  disabled={isProcessing}
-                  rounded={true}
-                >
-                  {tokenInfo?.symbol || 'Select Token'}
-                </Button>
               </View>
-              <View>
-                {tokenBalance && tokenInfo && (
-                  <View direction="row" align="center" justify="end" gap={2}>
-                    <TokenBalanceDisplay
-                      tokenInBalance={tokenBalance}
-                      tokenInInfo={tokenInfo}
-                    />
-                    {tokenBalance > BigInt(0) && (
-                      <Actionable
-                        onClick={() => {
-                          if (tokenInfo && tokenBalance) {
-                            setAmountToSend(formatUnits(tokenBalance, tokenInfo.decimals))
-                          }
-                        }}
-                      >
-                        <View
-                          backgroundColor="primary-faded"
-                          padding={1}
-                          borderRadius="circular"
-                        >
-                          <Text variant="caption-2" color="primary" weight="bold">
-                            MAX
-                          </Text>
-                        </View>
-                      </Actionable>
-                    )}
+
+              {/* Transaction Details */}
+              {gasEstimate && (
+                  <View gap={4} className="bg-gray-50 p-4 rounded mt-4">
+                    <View direction="row" justify="space-between">
+                      <Text>Network Fee</Text>
+                      <Text>{gasEstimate.estimateInKUB} KUB</Text>
+                    </View>
                   </View>
+              )}
+
+              {/* Error Display */}
+              {error && (
+                  <Text color="critical" align="center" className="mt-4">
+                    {error}
+                  </Text>
+              )}
+
+              {/* Action Button */}
+              <View gap={4} className="mt-4">
+                {!account ? (
+                    <Button
+                        fullWidth
+                        size="large"
+                        variant="solid"
+                        color="primary"
+                        onClick={login}
+                    >
+                      Connect Wallet
+                    </Button>
+                ) : !tokenToSend ? (
+                    <Button fullWidth size="large" disabled>
+                      Select Token
+                    </Button>
+                ) : !amountToSend || !recipientAddress ? (
+                    <Button fullWidth size="large" disabled>
+                      Enter Amount and Recipient
+                    </Button>
+                ) : !isValidSend ? (
+                    <Button fullWidth size="large" disabled>
+                      Invalid Send
+                    </Button>
+                ) : isProcessing || (!!txHash && txStatus?.state === 'pending') ? (
+                    <Button fullWidth size="large" loading disabled>
+                      Sending...
+                    </Button>
+                ) : (
+                    <Button
+                        fullWidth
+                        size="large"
+                        disabled={!isValidSend || isProcessing}
+                        onClick={handleSend}
+                        variant="solid"
+                        color="primary"
+                    >
+                      Send
+                    </Button>
                 )}
               </View>
-            </View>
-
-            {/* Recipient Address Section */}
-            <View
-              gap={2}
-              padding={4}
-              paddingTop={6}
-              paddingBottom={6}
-              borderRadius="large"
-              backgroundColor="elevation-base"
-            >
-              <Text color="neutral-faded" variant="body-3">
-                To
-              </Text>
-              <View direction="row" gap={8} wrap={false}>
-                <input
-                  value={recipientAddress}
-                  onChange={(e) => handleAddressInput(e.target.value)}
-                  placeholder="Wallet address"
-                  className="flex w-full h-full text-xl bg-[rgba(0,0,0,0)] focus:outline-0"
-                />
-              </View>
-            </View>
-
-            {/* Transaction Details */}
-            {gasEstimate && (
-              <View gap={4} className="bg-gray-50 p-4 rounded mt-4">
-                <View direction="row" justify="space-between">
-                  <Text>Network Fee</Text>
-                  <Text>{gasEstimate.estimateInKUB} KUB</Text>
-                </View>
-              </View>
-            )}
-
-            {/* Error Display */}
-            {error && (
-              <Text color="critical" align="center" className="mt-4">
-                {error}
-              </Text>
-            )}
-
-            {/* Action Button */}
-            <View gap={4} className="mt-4">
-              {!account ? (
-                <Button
-                  fullWidth
-                  size="large"
-                  variant="solid"
-                  color="primary"
-                  onClick={login}
-                >
-                  Connect Wallet
-                </Button>
-              ) : !tokenToSend ? (
-                <Button fullWidth size="large" disabled>
-                  Select Token
-                </Button>
-              ) : !amountToSend || !recipientAddress ? (
-                <Button fullWidth size="large" disabled>
-                  Enter Amount and Recipient
-                </Button>
-              ) : !isValidSend ? (
-                <Button fullWidth size="large" disabled>
-                  Invalid Send
-                </Button>
-              ) : isProcessing || (!!txHash && txStatus?.state === 'pending') ? (
-                <Button fullWidth size="large" loading disabled>
-                  Sending...
-                </Button>
-              ) : (
-                <Button
-                  fullWidth
-                  size="large"
-                  disabled={!isValidSend || isProcessing}
-                  onClick={handleSend}
-                  variant="solid"
-                  color="primary"
-                >
-                  Send
-                </Button>
-              )}
             </View>
           </View>
         </View>
       </View>
-    </View>
   )
 }
 
