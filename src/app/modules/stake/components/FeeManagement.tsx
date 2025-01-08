@@ -24,10 +24,6 @@ function FeeDistributionCard({ feeInfo }: { feeInfo: any }) {
           <Text>{feeInfo && formatBPS(feeInfo.stakingRatio)}</Text>
         </View>
         <View direction="row" justify="space-between">
-          <Text>Treasury</Text>
-          <Text>{feeInfo && formatBPS(feeInfo.treasuryRatio)}</Text>
-        </View>
-        <View direction="row" justify="space-between">
           <Text>Team</Text>
           <Text>{feeInfo && formatBPS(feeInfo.teamRatio)}</Text>
         </View>
@@ -262,7 +258,7 @@ function FeeManagement() {
     <View gap={24} className="max-w-4xl mx-auto">
       <FeeDistributionCard feeInfo={feeInfo} />
       <PendingFeesCard feeInfo={feeInfo} />
-      <MetricsCard feeInfo={feeInfo} feeMetrics={feeMetrics} />
+      {/*<MetricsCard feeInfo={feeInfo} feeMetrics={feeMetrics} />*/}
       <ActionsCard
         onCollect={handleCollectFees}
         onDistribute={() => distributeFees()}
@@ -271,7 +267,7 @@ function FeeManagement() {
         isLoadingPairs={isLoadingPairs}
         hasPendingFees={!!hasPendingFees}
       />
-      <DistributionHistoryCard feeMetrics={feeMetrics} />
+      {/*<DistributionHistoryCard feeMetrics={feeMetrics} />*/}
     </View>
   )
 }
