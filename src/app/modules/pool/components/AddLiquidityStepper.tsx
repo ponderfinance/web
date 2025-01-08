@@ -21,7 +21,6 @@ interface AddLiquidityStepperProps {
 const TOKENS = {
   KKUB: '0xBa71efd94be63bD47B78eF458DE982fE29f552f7' as Address,
   KUB: zeroAddress as Address,
-  WESTSIDE: '0xc3D83117DB2F88Ff0f272b4AdB05E99B1E128E9d' as Address,
 }
 
 const AddLiquidityStepper = ({
@@ -97,6 +96,31 @@ const AddLiquidityStepper = ({
     }
   }
 
+  // Handle token approval
+  const handleApproval = async () => {
+    if (!account || !tokenA || !sdk?.router?.address || !tokenAInfo) return
+
+    try {
+      setError('')
+      const amountADesired = parseUnits(amountA, tokenAInfo.decimals)
+
+      console.log('Approving token:', {
+        token: tokenA,
+        spender: sdk.router.address,
+        amount: amountADesired.toString(),
+      })
+
+      await approveA.mutateAsync({
+        token: tokenA,
+        spender: sdk.router.address,
+        amount: amountADesired,
+      })
+    } catch (err: any) {
+      console.error('Approval error:', err)
+      setError(err.message || 'Failed to approve token')
+    }
+  }
+
   // Auto-calculate amount B based on amount A and reserves
   useEffect(() => {
     if (!amountA || !tokenAInfo || !pairInfo) {
@@ -120,8 +144,6 @@ const AddLiquidityStepper = ({
       const reserveOut = isToken0 ? BigInt(pairInfo.reserve1) : BigInt(pairInfo.reserve0)
 
       const amountBBigInt = (amountABigInt * reserveOut) / reserveIn
-
-      // Format with proper decimals (18 for ETH)
       const formattedAmount = formatUnits(amountBBigInt, 18)
       console.log('Calculated amount B:', formattedAmount)
 
@@ -132,7 +154,6 @@ const AddLiquidityStepper = ({
     }
   }, [amountA, tokenA, tokenB, pairInfo, tokenAInfo])
 
-  // Input handlers with decimal validation
   const handleAmountAInput = (value: string) => {
     if (!/^\d*\.?\d*$/.test(value)) return
 
@@ -155,7 +176,6 @@ const AddLiquidityStepper = ({
   const handleAmountBInput = (value: string) => {
     if (!/^\d*\.?\d*$/.test(value)) return
 
-    // ETH always has 18 decimals
     const parts = value.split('.')
     if (parts.length > 1 && parts[1].length > 18) return
 
@@ -174,23 +194,17 @@ const AddLiquidityStepper = ({
 
     try {
       setError('')
-
-      // Parse input amounts with correct decimals
       const amountADesired = parseUnits(amountA, tokenAInfo.decimals)
-      const amountBDesired = parseUnits(amountB, 18) // ETH/WETH always has 18 decimals
+      const amountBDesired = parseUnits(amountB, 18)
 
-      if (!validateAmounts(amountADesired, amountBDesired)) {
-        return
-      }
+      if (!validateAmounts(amountADesired, amountBDesired)) return
 
-      // Calculate minimum amounts with slippage
       const slippageBps = BigInt(Math.round(slippage * 100))
       const slippageMultiplier = BigInt(10000) - slippageBps
 
       const amountAMin = (amountADesired * slippageMultiplier) / BigInt(10000)
       const amountBMin = (amountBDesired * slippageMultiplier) / BigInt(10000)
 
-      // Debug log the values
       console.log('Add Liquidity Parameters:', {
         tokenA,
         isKUBPair,
@@ -201,37 +215,25 @@ const AddLiquidityStepper = ({
         slippage: slippage.toString(),
       })
 
-      // Handle token approval if needed
+      // Check if approval is needed before proceeding
       if (!isApprovedA(amountADesired)) {
-        try {
-          await approveA.mutateAsync({
-            token: tokenA,
-            spender: sdk?.router?.address as Address,
-            amount: amountADesired,
-          })
-        } catch (err: any) {
-          if (err.message !== 'Already approved') {
-            throw err
-          }
-        }
+        setError('Token approval required before adding liquidity')
+        return
       }
 
-      // For ETH pairs, we need to handle the order differently
       if (isKUBPair) {
-        const result = await addLiquidity({
-          tokenA: tokenA, // The non-ETH token
-          tokenB: TOKENS.KKUB, // This will be converted to WETH
-          amountADesired: amountADesired, // Token amount
-          amountBDesired: amountBDesired, // ETH amount
-          amountAMin: amountAMin, // Min token amount
-          amountBMin: amountBMin, // Min ETH amount
+        await addLiquidity({
+          tokenA: tokenA,
+          tokenB: TOKENS.KKUB,
+          amountADesired: amountADesired,
+          amountBDesired: amountBDesired,
+          amountAMin: amountAMin,
+          amountBMin: amountBMin,
           to: account,
-          deadline: BigInt(Math.floor(Date.now() / 1200)),
+          deadline: BigInt(Math.floor(Date.now() / 1000) + 1200),
         })
-
-        console.log('Transaction result:', result)
       } else {
-        const result = await addLiquidity({
+        await addLiquidity({
           tokenA,
           tokenB: tokenB as Address,
           amountADesired,
@@ -241,8 +243,6 @@ const AddLiquidityStepper = ({
           to: account,
           deadline: BigInt(Math.floor(Date.now() / 1000) + 1200),
         })
-
-        console.log('Transaction result:', result)
       }
 
       setAmountA('')
@@ -254,7 +254,17 @@ const AddLiquidityStepper = ({
     }
   }
 
-  // Validation
+  const isApprovalNeeded = useMemo(() => {
+    console.log('to', tokenAInfo)
+    if (!tokenAInfo || !amountA) return false
+    try {
+      const amountABigInt = parseUnits(amountA, tokenAInfo.decimals)
+      return !isApprovedA(amountABigInt)
+    } catch (err) {
+      return false
+    }
+  }, [tokenAInfo, amountA, isApprovedA])
+
   const isValid = useMemo(() => {
     if (!tokenAInfo || !amountA || !amountB) return false
 
@@ -276,16 +286,7 @@ const AddLiquidityStepper = ({
     } catch (err) {
       return false
     }
-  }, [
-    tokenAInfo,
-    tokenBInfo,
-    amountA,
-    amountB,
-    tokenABalance,
-    tokenBBalance,
-    kubBalance,
-    isKUBPair,
-  ])
+  }, [tokenAInfo, amountA, amountB, tokenABalance, tokenBBalance, kubBalance, isKUBPair])
 
   const handleNext = () => {
     setActiveStep((prev) => Math.min(1, prev + 1))
@@ -414,7 +415,11 @@ const AddLiquidityStepper = ({
         </Text>
       )}
 
-      {error && <Text color="critical">{error}</Text>}
+      {error && (
+        <Text color="critical" className="p-2 bg-red-50 rounded">
+          {error}
+        </Text>
+      )}
 
       <View gap={2}>
         <Text>Slippage Tolerance</Text>
@@ -431,24 +436,27 @@ const AddLiquidityStepper = ({
         </View>
       </View>
 
-      <View direction="row" gap={2}>
+      <View direction="row" gap={2} className="mt-4">
         <Button variant="outline" onClick={handleBack}>
           Back
         </Button>
+
         {!account ? (
           <Button fullWidth>Connect Wallet</Button>
         ) : !isValid ? (
           <Button fullWidth disabled>
             {!amountA || !amountB ? 'Enter Amounts' : 'Insufficient Balance'}
           </Button>
-        ) : approveA.isPending ? (
-          <Button fullWidth loading>
-            Approving {tokenAInfo?.symbol}...
-          </Button>
-        ) : !isApprovedA(parseUnits(amountA, tokenAInfo?.decimals || 18)) ? (
-          <Button fullWidth onClick={() => handleAddLiquidity()}>
-            Approve {tokenAInfo?.symbol}
-          </Button>
+        ) : isApprovalNeeded ? (
+          approveA.isPending ? (
+            <Button fullWidth loading>
+              Approving {tokenAInfo?.symbol}...
+            </Button>
+          ) : (
+            <Button fullWidth onClick={handleApproval}>
+              Approve {tokenAInfo?.symbol}
+            </Button>
+          )
         ) : (
           <Button
             fullWidth
@@ -463,7 +471,6 @@ const AddLiquidityStepper = ({
     </View>
   )
 
-  // Token Selector Modal
   const TokenSelector = ({
     open,
     onClose,
@@ -476,7 +483,6 @@ const AddLiquidityStepper = ({
     excludeToken?: Address
   }) => {
     const tokenList = [
-      { address: TOKENS.WESTSIDE, symbol: 'WESTSIDE', name: 'Westside Token' },
       { address: TOKENS.KKUB, symbol: 'KKUB', name: 'Wrapped KUB' },
       { address: TOKENS.KUB, symbol: 'KUB', name: 'KUB' },
     ].filter((token) => token.address !== excludeToken)
