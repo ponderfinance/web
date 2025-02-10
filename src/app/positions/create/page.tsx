@@ -9,7 +9,7 @@ export default function Pool() {
         {/*<CreatePair />*/}
         <AddLiquidityStepper
           defaultTokenA="0xa6980c964b43B9bAfA521f39ac5Bd084F94F59D5"
-          defaultTokenB="0xBa71efd94be63bD47B78eF458DE982fE29f552f7"
+          defaultTokenB="0x94AD416281f9Cbce05D0776b9d22a79A39d9f5F6"
         />
       </View>
     </View>

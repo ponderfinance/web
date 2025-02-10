@@ -397,15 +397,15 @@ const AddLiquidityStepper = ({
       {pairInfo && !pairExists?.canCreate && (
         <View gap={2}>
           <Text>Current Pool Ratio</Text>
-          <Text>
-            1 {tokenAInfo?.symbol} ={' '}
-            {formatUnits(
-              (BigInt(pairInfo.reserve1) * BigInt(10 ** (tokenAInfo?.decimals || 18))) /
-                BigInt(pairInfo.reserve0),
-              isKUBPair ? 18 : tokenBInfo?.decimals || 18
-            )}{' '}
-            {isKUBPair ? 'KUB' : tokenBInfo?.symbol}
-          </Text>
+          {/*<Text>*/}
+          {/*  1 {tokenAInfo?.symbol} ={' '}*/}
+          {/*  {formatUnits(*/}
+          {/*    (BigInt(pairInfo.reserve1) * BigInt(10 ** (tokenAInfo?.decimals || 18))) /*/}
+          {/*      BigInt(pairInfo.reserve0),*/}
+          {/*    isKUBPair ? 18 : tokenBInfo?.decimals || 18*/}
+          {/*  )}{' '}*/}
+          {/*  {isKUBPair ? 'KUB' : tokenBInfo?.symbol}*/}
+          {/*</Text>*/}
         </View>
       )}
 
