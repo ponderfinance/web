@@ -18,8 +18,8 @@ importers:
         specifier: ^1.0.4
         version: 1.0.4
       '@ponderfinance/sdk':
-        specifier: ^1.0.2
-        version: 1.0.2(@tanstack/query-core@5.62.7)(@types/react@18.3.16)(bufferutil@4.0.8)(encoding@0.1.13)(react-dom@18.2.0(react@18.2.0))(react@18.2.0)(typescript@5.7.2)(utf-8-validate@5.0.10)
+        specifier: ^1.0.3
+        version: 1.0.3(@tanstack/query-core@5.62.7)(@types/react@18.3.16)(bufferutil@4.0.8)(encoding@0.1.13)(react-dom@18.2.0(react@18.2.0))(react@18.2.0)(typescript@5.7.2)(utf-8-validate@5.0.10)
       '@privy-io/react-auth':
         specifier: 1.70.0
         version: 1.70.0(@babel/core@7.26.0)(@types/react@18.3.16)(bufferutil@4.0.8)(react-dom@18.2.0(react@18.2.0))(react-is@19.0.0)(react@18.2.0)(typescript@5.7.2)(utf-8-validate@5.0.10)
@@ -756,8 +756,8 @@ packages:
   '@ponderfinance/dex@1.0.4':
     resolution: {integrity: sha512-JSYb3fAceTW3PLwvX4xGbbkH6HxHgJ8tmAnsnq33gCkLosUAqC1A0MfYDIA8RgLNSb0/FE2/cmi1b4S2VbVEAg==}
 
-  '@ponderfinance/sdk@1.0.2':
-    resolution: {integrity: sha512-I2Wax3P9pLGrKq8WVVGFt81yBI8HJB927QR5vD5LXfZ0gxNwLD9WCMeBs5XhuvYZwYKYZGJ1kSwCnTCj5m4MjA==}
+  '@ponderfinance/sdk@1.0.3':
+    resolution: {integrity: sha512-RqTQldeUL/1sh/9xqtEuTcbcu8T1F2302cYqaVWdcxrHCFOgxWyggxsS+4X1cWadQIuz4TNiV/odDNrUzuq4Ew==}
     peerDependencies:
       react: '>=18'
       react-dom: '>=18'
@@ -4974,7 +4974,7 @@ snapshots:
 
   '@ponderfinance/dex@1.0.4': {}
 
-  '@ponderfinance/sdk@1.0.2(@tanstack/query-core@5.62.7)(@types/react@18.3.16)(bufferutil@4.0.8)(encoding@0.1.13)(react-dom@18.2.0(react@18.2.0))(react@18.2.0)(typescript@5.7.2)(utf-8-validate@5.0.10)':
+  '@ponderfinance/sdk@1.0.3(@tanstack/query-core@5.62.7)(@types/react@18.3.16)(bufferutil@4.0.8)(encoding@0.1.13)(react-dom@18.2.0(react@18.2.0))(react@18.2.0)(typescript@5.7.2)(utf-8-validate@5.0.10)':
     dependencies:
       '@ponderfinance/dex': 1.0.4
       '@tanstack/react-query': 5.62.7(react@18.2.0)
