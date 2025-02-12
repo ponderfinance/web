@@ -10,28 +10,6 @@ import {
   usePonderSDK,
 } from '@ponderfinance/sdk'
 
-function FeeDistributionCard({ feeInfo }: { feeInfo: any }) {
-  const formatBPS = (bps: bigint) => {
-    return `${Number(bps) / 100}%`
-  }
-
-  return (
-    <Card padding={16}>
-      <View gap={8}>
-        <Text variant="title-3">Fee Distribution Settings</Text>
-        <View direction="row" justify="space-between">
-          <Text>Staking Pool</Text>
-          <Text>{feeInfo && formatBPS(feeInfo.stakingRatio)}</Text>
-        </View>
-        <View direction="row" justify="space-between">
-          <Text>Team</Text>
-          <Text>{feeInfo && formatBPS(feeInfo.teamRatio)}</Text>
-        </View>
-      </View>
-    </Card>
-  )
-}
-
 function PendingFeesCard({ feeInfo }: { feeInfo: any }) {
   return (
     <Card padding={16}>
@@ -256,7 +234,6 @@ function FeeManagement() {
 
   return (
     <View gap={24} className="max-w-4xl mx-auto">
-      <FeeDistributionCard feeInfo={feeInfo} />
       <PendingFeesCard feeInfo={feeInfo} />
       {/*<MetricsCard feeInfo={feeInfo} feeMetrics={feeMetrics} />*/}
       <ActionsCard

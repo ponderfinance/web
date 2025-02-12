@@ -42,6 +42,9 @@ function StakeInterface() {
   const handleStake = () => {
     if (!stakeAmount) return
     const amount = parseUnits(stakeAmount, 18)
+
+    console.log('am', amount)
+
     stake({ amount })
   }
 

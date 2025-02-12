@@ -9,7 +9,6 @@ const MASTERCHEF_ABI = [
       { name: '_lpToken', type: 'address' },
       { name: '_depositFeeBP', type: 'uint16' },
       { name: '_boostMultiplier', type: 'uint16' },
-      { name: '_withUpdate', type: 'bool' },
     ],
     name: 'add',
     outputs: [],
@@ -48,7 +47,6 @@ export default function CreateFarm() {
           getAddress(values.lpToken),
           Number(values.depositFeeBP),
           Number(values.boostMultiplier),
-          true,
         ],
         account: sdk.walletClient.account.address,
       })
@@ -92,7 +90,7 @@ export default function CreateFarm() {
             name="allocPoint"
             value={values.allocPoint}
             onChange={handleChange}
-            placeholder="100"
+            placeholder="1000"
             className="w-full p-2 border rounded"
             required
           />

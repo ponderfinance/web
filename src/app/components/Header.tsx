@@ -39,7 +39,7 @@ export const Header = () => {
                         src={'/koi-logo.png'}
                         alt={'Koi Logo'}
                         width={120}
-                        height={120}
+                        height={23}
                       />
                       <View attributes={{ style: { transform: 'rotate(180deg)' } }}>
                         <Triangle size={10} />

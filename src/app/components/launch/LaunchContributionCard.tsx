@@ -158,6 +158,7 @@ export default function LaunchContributionCard({
 
     try {
       const contributionAmount = parseEther(amount)
+      console.log('c', contributionAmount)
 
       if (selectedToken === 'PONDER') {
         // Check PONDER balance and allowance
@@ -183,11 +184,14 @@ export default function LaunchContributionCard({
       }
 
       // Now contribute
+      console.log('a', { launchId, amount: contributionAmount, type: selectedToken })
       const result = await contribute.mutateAsync({
         launchId,
         amount: contributionAmount,
         type: selectedToken,
       })
+
+      // console.log('re', result)
 
       // Rest of the success handling...
     } catch (err) {
