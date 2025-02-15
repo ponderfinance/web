@@ -13,7 +13,7 @@ export default function Home() {
         </View>
 
         <SwapInterface
-          defaultTokenIn="0x9661CfaEa26227F72b160c1B8c3baa9DF12d4f62"
+          defaultTokenIn="0x49d233e6A933944f6c5DD5dd9d770018dAa2B368"
           defaultTokenOut="0xBa71efd94be63bD47B78eF458DE982fE29f552f7"
         />
         <View
@@ -24,8 +24,7 @@ export default function Home() {
           attributes={{ style: { margin: '0 auto' } }}
         >
           <Text variant="body-1" align="center">
-            Bitkub Chain’s AMM with revenue-sharing at its core. Stake KOI, earn with
-            xKOI.
+            Bitkub Chain’s AMM governed by xKOI.
           </Text>
         </View>
       </View>
