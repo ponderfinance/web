@@ -5,10 +5,16 @@ import SwapInterface from '@/src/app/components/Swap'
 export default function Home() {
   return (
     <View direction="column">
-      <View insetTop={32} paddingBottom={16}>
-        <View paddingBottom={16}>
-          <Text variant="title-3" align="center">
-            trade, <em> pool, earn and more</em>
+      <View
+        insetTop={32}
+        paddingBottom={16}
+        textAlign="center"
+        align="center"
+        grow={true}
+      >
+        <View paddingBottom={16} maxWidth="620px">
+          <Text variant="featured-1" align="center">
+            trade, <em> pool, and launch</em>
           </Text>
         </View>
 

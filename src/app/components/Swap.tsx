@@ -153,10 +153,18 @@ export function SwapInterface({
   }, [route?.amountOut, tokenOutInfo])
 
   const minimumReceived = useMemo(() => {
+    // Log each value:
+    console.log("expectedOutput.raw:", expectedOutput?.raw?.toString())
+    console.log("slippage:", slippage)
+    console.log("slippageBps:", BigInt(Math.round(slippage * 100)).toString())
+
     if (!expectedOutput?.raw || !tokenOutInfo) return null
     const slippageBps = BigInt(Math.round(slippage * 100))
     const slippageAmount = (expectedOutput.raw * slippageBps) / BigInt(10000)
     const minAmount = expectedOutput.raw - slippageAmount
+
+    console.log("calculated minAmount:", minAmount.toString())
+
     return {
       raw: minAmount,
       formatted: formatUnits(minAmount, tokenOutInfo.decimals),

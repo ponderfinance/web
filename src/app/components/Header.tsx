@@ -2,11 +2,12 @@
 
 import { usePrivy } from '@privy-io/react-auth'
 import Image from 'next/image'
-import { Button, Popover, Text, View } from 'reshaped'
+import { Button, Popover, Skeleton, Text, View } from 'reshaped'
 import Link from 'next/link'
 import { PaperPlaneTilt, Path, Triangle } from '@phosphor-icons/react'
 import { usePathname } from 'next/navigation'
 import { Footer } from '@/src/app/components/Footer'
+import { XKOIButton } from '@/src/app/components/xKOIButton'
 
 export const Header = () => {
   const { authenticated, login, logout } = usePrivy()
@@ -20,9 +21,7 @@ export const Header = () => {
       paddingInline={8}
       paddingTop={4}
       paddingBottom={4}
-      borderColor="neutral-faded"
       backgroundColor="page"
-      className="border-l-0 border-t-0 border-r-0"
       position="fixed"
       width="100%"
       zIndex={50}
@@ -144,17 +143,6 @@ export const Header = () => {
             </Popover.Content>
           </Popover>
 
-          <Link href="/earn">
-            <Button variant="ghost">
-              <Text
-                variant="body-1"
-                color={pathname === '/earn' ? 'neutral' : 'neutral-faded'}
-              >
-                Earn{' '}
-              </Text>
-            </Button>
-          </Link>
-
           <Link href="/launch">
             <Button variant="ghost">
               <Text
@@ -168,18 +156,18 @@ export const Header = () => {
         </View>
       </View>
 
-      <Button
-        onClick={!authenticated ? login : logout}
-        variant="outline"
-        rounded={true}
-        color="primary"
-      >
-        <View padding={1} paddingTop={1.5} paddingBottom={1.5}>
-          <Text variant="body-3" weight="bold">
-            {authenticated ? 'Logout' : 'Login'}
-          </Text>
-        </View>
-      </Button>
+      <View direction="row" gap={2}>
+        <XKOIButton />
+
+        <Button
+          onClick={!authenticated ? login : logout}
+          variant="outline"
+          rounded={true}
+          color="primary"
+        >
+          {authenticated ? 'Logout' : 'Login'}
+        </Button>
+      </View>
     </View>
   )
 }
