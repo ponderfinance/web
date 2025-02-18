@@ -7,7 +7,7 @@ export default function Launch() {
     <View direction="column">
       <View insetTop={36}>
         <LaunchCreationForm />
-        <LaunchContributionCard launchId={BigInt(0)} />
+        <LaunchContributionCard launchId={BigInt(1)} />
       </View>
     </View>
   )
