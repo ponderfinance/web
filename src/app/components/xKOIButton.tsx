@@ -11,7 +11,7 @@ export const XKOIButton = () => {
   if (!stakingInfo?.userShares) return null
 
   return (
-    <Button variant="outline" rounded={true} color="primary">
+    <Button variant="faded" rounded={true} color="neutral">
       <Link href="/xkoi" attributes={{ style: { textDecoration: 'none' } }}>
         <View direction="row" gap={2} align="center" justify="center">
           <Skeleton height={5} width={5} borderRadius="circular" />

@@ -159,12 +159,7 @@ export const Header = () => {
       <View direction="row" gap={2}>
         <XKOIButton />
 
-        <Button
-          onClick={!authenticated ? login : logout}
-          variant="outline"
-          rounded={true}
-          color="primary"
-        >
+        <Button onClick={!authenticated ? login : logout} variant="faded" color="neutral">
           {authenticated ? 'Logout' : 'Login'}
         </Button>
       </View>

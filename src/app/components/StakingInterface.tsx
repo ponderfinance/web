@@ -163,76 +163,74 @@ export default function StakingInterface({
   }
 
   return (
-    <Card>
-      <View padding={16} gap={16}>
+    <View padding={16} gap={4} width={{ s: '100%', m: 640 }}>
+      <View gap={4}>
+        <Text variant="title-3">Stake LP Tokens</Text>
+        <Text>
+          {token0Symbol}/{token1Symbol} Pool
+        </Text>
+        {depositFee > 0 && <Text>Deposit Fee: {depositFee}%</Text>}
+      </View>
+
+      {error && <Text>{error}</Text>}
+
+      <View gap={12}>
         <View gap={4}>
-          <Text variant="title-3">Stake LP Tokens</Text>
-          <Text>
-            {token0Symbol}/{token1Symbol} Pool
-          </Text>
-          {depositFee > 0 && <Text>Deposit Fee: {depositFee}%</Text>}
+          <Text>Available to Stake: {formatEther(lpBalance)} LP</Text>
+          <View direction="row" gap={8}>
+            <input
+              type="text"
+              value={stakeAmount}
+              onChange={(e) => setStakeAmount(e.target.value)}
+              placeholder="Amount to stake"
+              className="flex-1 p-2 border rounded"
+            />
+            {parseUnits(stakeAmount || '0', 18) > allowance ? (
+              <Button
+                onClick={handleApprove}
+                disabled={isApproving}
+                loading={isApproving}
+              >
+                Approve
+              </Button>
+            ) : (
+              <Button
+                onClick={handleStake}
+                disabled={
+                  !stakeAmount || isStaking || parseUnits(stakeAmount, 18) > lpBalance
+                }
+                loading={isStaking}
+              >
+                Stake
+              </Button>
+            )}
+          </View>
         </View>
 
-        {error && <Text>{error}</Text>}
-
-        <View gap={12}>
-          <View gap={4}>
-            <Text>Available to Stake: {formatEther(lpBalance)} LP</Text>
-            <View direction="row" gap={8}>
-              <input
-                type="text"
-                value={stakeAmount}
-                onChange={(e) => setStakeAmount(e.target.value)}
-                placeholder="Amount to stake"
-                className="flex-1 p-2 border rounded"
-              />
-              {parseUnits(stakeAmount || '0', 18) > allowance ? (
-                <Button
-                  onClick={handleApprove}
-                  disabled={isApproving}
-                  loading={isApproving}
-                >
-                  Approve
-                </Button>
-              ) : (
-                <Button
-                  onClick={handleStake}
-                  disabled={
-                    !stakeAmount || isStaking || parseUnits(stakeAmount, 18) > lpBalance
-                  }
-                  loading={isStaking}
-                >
-                  Stake
-                </Button>
-              )}
-            </View>
-          </View>
-
-          <View gap={4}>
-            <Text>Currently Staked: {formatEther(stakedAmount)} LP</Text>
-            <View direction="row" gap={8}>
-              <input
-                type="text"
-                value={unstakeAmount}
-                onChange={(e) => setUnstakeAmount(e.target.value)}
-                placeholder="Amount to unstake"
-                className="flex-1 p-2 border rounded"
-              />
-              <Button
-                onClick={handleUnstake}
-                disabled={
-                  !unstakeAmount ||
-                  isUnstaking ||
-                  parseUnits(unstakeAmount, 18) > stakedAmount
-                }
-                loading={isUnstaking}
-              >
-                Unstake
-              </Button>
-            </View>
+        <View gap={4}>
+          <Text>Currently Staked: {formatEther(stakedAmount)} LP</Text>
+          <View direction="row" gap={8}>
+            <input
+              type="text"
+              value={unstakeAmount}
+              onChange={(e) => setUnstakeAmount(e.target.value)}
+              placeholder="Amount to unstake"
+              className="flex-1 p-2 border rounded"
+            />
+            <Button
+              onClick={handleUnstake}
+              disabled={
+                !unstakeAmount ||
+                isUnstaking ||
+                parseUnits(unstakeAmount, 18) > stakedAmount
+              }
+              loading={isUnstaking}
+            >
+              Unstake
+            </Button>
           </View>
         </View>
       </View>
-    </Card>
+    </View>
   )
 }

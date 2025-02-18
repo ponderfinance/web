@@ -11,7 +11,7 @@ import {
   usePonderSDK,
 } from '@ponderfinance/sdk'
 
-function StakeInterface() {
+export function StakeInterface() {
   const { address } = useAccount()
   const [stakeAmount, setStakeAmount] = useState('')
   const [unstakeAmount, setUnstakeAmount] = useState('')
@@ -55,22 +55,17 @@ function StakeInterface() {
     })
   }
 
-
   const currentStakeAmount = stakeAmount ? parseUnits(stakeAmount, 18) : BigInt(0)
 
   return (
-    <View gap={16} padding={16} className="rounded-lg bg-gray-50">
+    <View gap={4} padding={4}>
+      <Text variant="title-6" weight="regular">
+        Stake KOI
+      </Text>
       <View gap={8}>
-        <Text variant="title-3">KOI Staking</Text>
-        <Text>Stake KOI to receive xKOI and earn protocol fees</Text>
-      </View>
-
-      <View gap={8} className="border rounded-lg p-4">
         <View direction="row" justify="space-between">
           <Text>Total Staked</Text>
-          <Text>
-            {stakingInfo ? formatUnits(stakingInfo.totalStaked, 18) : '0'} KOI
-          </Text>
+          <Text>{stakingInfo ? formatUnits(stakingInfo.totalStaked, 18) : '0'} KOI</Text>
         </View>
 
         <View direction="row" justify="space-between">
@@ -82,16 +77,12 @@ function StakeInterface() {
 
         <View direction="row" justify="space-between">
           <Text>Your Stake</Text>
-          <Text>
-            {stakingInfo ? formatUnits(stakingInfo.userShares, 18) : '0'} xKOI
-          </Text>
+          <Text>{stakingInfo ? formatUnits(stakingInfo.userShares, 18) : '0'} xKOI</Text>
         </View>
 
         <View direction="row" justify="space-between">
           <Text>Your Value</Text>
-          <Text>
-            {stakingInfo ? formatUnits(stakingInfo.userBalance, 18) : '0'} KOI
-          </Text>
+          <Text>{stakingInfo ? formatUnits(stakingInfo.userBalance, 18) : '0'} KOI</Text>
         </View>
 
         <View direction="row" justify="space-between">
@@ -162,22 +153,6 @@ function StakeInterface() {
           </Text>
         </View>
       </View>
-    </View>
-  )
-}
-
-export default function StakingPage() {
-  return (
-    <View gap={24} className="max-w-4xl mx-auto p-4">
-      <View gap={8}>
-        <Text variant="body-1">KOI Staking</Text>
-        <Text>
-          Stake your KOI tokens to earn protocol fees. Staked KOI (xKOI)
-          automatically compounds your earnings through rebases.
-        </Text>
-      </View>
-
-      <StakeInterface />
     </View>
   )
 }

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Text, View, Button, Card, Loader } from 'reshaped'
+import { Text, View, Button, Card, Loader, useToggle, Modal } from 'reshaped'
 import { useAccount } from 'wagmi'
 import { formatUnits, type Address } from 'viem'
 import {
@@ -9,6 +9,7 @@ import {
   useFeeMetrics,
   usePonderSDK,
 } from '@ponderfinance/sdk'
+import { StakeInterface } from '@/src/app/modules/stake/components/PonderStaking'
 
 function PendingFeesCard({ feeInfo }: { feeInfo: any }) {
   return (
@@ -250,14 +251,58 @@ function FeeManagement() {
 }
 
 export default function FeesPage() {
+  const { active, activate, deactivate } = useToggle(false)
+
   return (
     <View gap={24} className="max-w-4xl mx-auto p-4">
-      <View gap={8}>
-        <Text variant="body-1">Protocol Fees</Text>
-        <Text>
-          Manage and monitor protocol fee collection and distribution. Fees are collected
-          from all protocol pairs and distributed to xKOI stakers, treasury, and team.
-        </Text>
+      <View
+        direction="column"
+        gap={8}
+        borderColor="neutral-faded"
+        padding={8}
+        paddingInline={8}
+        borderRadius="large"
+      >
+        <View gap={1}>
+          <View direction="row" justify="space-between">
+            <Text variant="title-5" weight="regular">
+              xKOI
+            </Text>
+          </View>
+
+          <Text variant="body-3">
+            xKOI (staked KOI) governs Ponder Finance, with protocol fees (0.05% from
+            swaps, 0.01%–0.05% from launch token swaps) distributed proportionally to
+            staked xKOI holders through immutable smart contracts.
+          </Text>
+        </View>
+
+        <View grow={false}>
+          <Button
+            onClick={activate}
+            size="large"
+            fullWidth={false}
+            variant="solid"
+            color="primary"
+          >
+            <View paddingInline={6}>Stake</View>
+          </Button>
+
+          <Modal
+            active={active}
+            onClose={deactivate}
+            padding={8}
+            position={{ s: 'bottom', m: 'center' }}
+            size={{ s: '100%', m: '640px' }}
+          >
+            <View
+              maxHeight="80vh"
+              // attributes={{ style: { overflowY: 'scroll' } }}
+            >
+              <StakeInterface />
+            </View>
+          </Modal>
+        </View>
       </View>
 
       <FeeManagement />

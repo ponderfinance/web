@@ -1,6 +1,8 @@
 'use client'
 import { Text, View } from 'reshaped'
 import SwapInterface from '@/src/app/components/Swap'
+import Image from 'next/image'
+import Link from 'next/link'
 
 export default function Home() {
   return (
@@ -23,14 +25,25 @@ export default function Home() {
           defaultTokenOut="0xBa71efd94be63bD47B78eF458DE982fE29f552f7"
         />
         <View
+          direction="row"
+          gap={2}
           paddingTop={4}
           paddingBottom={4}
           maxWidth={'440px'}
           align="center"
           attributes={{ style: { margin: '0 auto' } }}
         >
+          <Image src={'/bitkub-logo.png'} alt={'Bitkub Logo'} width={40} height={40} />
+
           <Text variant="body-1" align="center">
-            Bitkub Chain’s AMM governed by xKOI.
+            Bitkub Chain’s AMM governed by{' '}
+            <Link
+              href={'/xkoi'}
+              style={{ textDecoration: 'underline', cursor: 'pointer' }}
+            >
+              xKOI
+            </Link>
+            .
           </Text>
         </View>
       </View>
