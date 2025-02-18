@@ -157,6 +157,8 @@ export const Header = () => {
       </View>
 
       <View direction="row" gap={2}>
+        <Image src={'/bitkub-logo.png'} alt={'Bitkub Logo'} width={40} height={40} />
+
         <XKOIButton />
 
         <Button onClick={!authenticated ? login : logout} variant="faded" color="neutral">

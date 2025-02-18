@@ -33,10 +33,8 @@ export default function Home() {
           align="center"
           attributes={{ style: { margin: '0 auto' } }}
         >
-          <Image src={'/bitkub-logo.png'} alt={'Bitkub Logo'} width={40} height={40} />
-
           <Text variant="body-1" align="center">
-            Bitkub Chain’s AMM governed by{' '}
+            Bitkub Chain’s AMM and fair token launch platform governed by{' '}
             <Link
               href={'/xkoi'}
               style={{ textDecoration: 'underline', cursor: 'pointer' }}
