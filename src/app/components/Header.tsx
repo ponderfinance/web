@@ -18,7 +18,7 @@ export const Header = () => {
       direction="row"
       justify="space-between"
       align="center"
-      paddingInline={8}
+      paddingInline={4}
       paddingTop={4}
       paddingBottom={4}
       backgroundColor="page"
@@ -26,7 +26,7 @@ export const Header = () => {
       width="100%"
       zIndex={50}
     >
-      <View direction="row" gap={12} align="center">
+      <View direction="row" gap={4} align="center">
         <Link href="/">
           <View align="center" direction="row" justify="center">
             <Popover triggerType="hover" padding={1}>
@@ -37,7 +37,7 @@ export const Header = () => {
                       <Image
                         src={'/koi-logo.png'}
                         alt={'Koi Logo'}
-                        width={120}
+                        width={80}
                         height={23}
                       />
                       <View attributes={{ style: { transform: 'rotate(180deg)' } }}>
@@ -54,7 +54,7 @@ export const Header = () => {
           </View>
         </Link>
 
-        <View direction="row" gap={4}>
+        <View direction="row" gap={2}>
           <Popover triggerType="hover" padding={1}>
             <Popover.Trigger>
               {(attributes) => (
