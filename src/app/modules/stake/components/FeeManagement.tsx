@@ -292,7 +292,13 @@ export default function FeesPage() {
           justify="space-between"
           align="center"
         >
-          <View direction="column" gap={4} padding={5} borderRadius="medium">
+          <View
+            direction="column"
+            gap={4}
+            padding={5}
+            borderRadius="medium"
+            borderColor="neutral-faded"
+          >
             <View gap={1}>
               <Text variant="caption-1" color="neutral-faded">
                 Your Balance
@@ -306,7 +312,7 @@ export default function FeesPage() {
               <Button
                 onClick={activate}
                 size="medium"
-                fullWidth={false}
+                fullWidth={true}
                 variant="solid"
                 color="primary"
               >
