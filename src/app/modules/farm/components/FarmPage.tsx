@@ -68,16 +68,24 @@ export default function FarmingPage() {
   }
 
   return (
-    <View gap={24} className="max-w-4xl mx-auto p-4">
-      <View gap={8}>
-        <Text variant="body-1">Yield Farming</Text>
-        <Text>
-          Stake your LP tokens to earn KOI rewards. Boost your earnings by staking
-          KOI tokens.
+    <View gap={6} maxWidth={{ s: '100%', m: '1086px' }} width="100%">
+      <View
+        direction="column"
+        gap={8}
+        borderColor="neutral-faded"
+        padding={8}
+        paddingInline={8}
+        borderRadius="large"
+      >
+        <Text variant="title-5" weight="regular">
+          KOI Emissions
         </Text>
+        <Text>
+          Provide liquidity and stake LP tokens to receive KOI. Lock KOI to amplify your
+          distribution rate.
+        </Text>
+        <FarmList />
       </View>
-
-      <FarmList />
 
       {/* Modal overlay */}
       {selectedFarm && (

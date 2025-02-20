@@ -489,14 +489,6 @@ export default function FarmList() {
     )
   }
 
-  if (isLoading || !poolLength) {
-    return (
-      <View align="center" justify="center" padding={8}>
-        <Text>Loading farms...</Text>
-      </View>
-    )
-  }
-
   return (
     <View gap={4}>
       {metrics && <FarmMetrics metrics={metrics} />}

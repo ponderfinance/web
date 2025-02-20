@@ -8,8 +8,12 @@ import {
   useCollectFees,
   useFeeMetrics,
   usePonderSDK,
+  useStakingInfo,
+  useClaimFees,
 } from '@ponderfinance/sdk'
 import { StakeInterface } from '@/src/app/modules/stake/components/PonderStaking'
+import { shortenNumber, formatNumber } from '@/src/app/utils/numbers'
+import Image from 'next/image'
 
 function PendingFeesCard({ feeInfo }: { feeInfo: any }) {
   return (
@@ -219,15 +223,6 @@ function FeeManagement() {
     }
   }
 
-  if (isLoadingInfo) {
-    return (
-      <View padding={16} align="center">
-        <Loader />
-        <Text>Loading fee information...</Text>
-      </View>
-    )
-  }
-
   const hasPendingFees =
     feeInfo?.pendingFees?.ponder ||
     0 > BigInt(0) ||
@@ -235,16 +230,16 @@ function FeeManagement() {
 
   return (
     <View gap={24} className="max-w-4xl mx-auto">
-      <PendingFeesCard feeInfo={feeInfo} />
+      {/*<PendingFeesCard feeInfo={feeInfo} />*/}
       {/*<MetricsCard feeInfo={feeInfo} feeMetrics={feeMetrics} />*/}
-      <ActionsCard
-        onCollect={handleCollectFees}
-        onDistribute={() => distributeFees()}
-        isCollecting={isCollecting}
-        isDistributing={isDistributing}
-        isLoadingPairs={isLoadingPairs}
-        hasPendingFees={!!hasPendingFees}
-      />
+      {/*<ActionsCard*/}
+      {/*  onCollect={handleCollectFees}*/}
+      {/*  onDistribute={() => distributeFees()}*/}
+      {/*  isCollecting={isCollecting}*/}
+      {/*  isDistributing={isDistributing}*/}
+      {/*  isLoadingPairs={isLoadingPairs}*/}
+      {/*  hasPendingFees={!!hasPendingFees}*/}
+      {/*/>*/}
       {/*<DistributionHistoryCard feeMetrics={feeMetrics} />*/}
     </View>
   )
@@ -252,9 +247,14 @@ function FeeManagement() {
 
 export default function FeesPage() {
   const { active, activate, deactivate } = useToggle(false)
+  const { address } = useAccount()
+  const { data: stakingInfo, isLoading: isLoadingInfo } = useStakingInfo(address)
+  const { mutate: claimFees, isPending: isClaimingFees } = useClaimFees()
+
+  if (!stakingInfo?.userShares) return null
 
   return (
-    <View gap={24} className="max-w-4xl mx-auto p-4">
+    <View gap={6} maxWidth={{ s: '100%', m: '1086px' }}>
       <View
         direction="column"
         gap={8}
@@ -263,20 +263,62 @@ export default function FeesPage() {
         paddingInline={8}
         borderRadius="large"
       >
-        <View gap={1}>
-          <View direction="row" justify="space-between">
+        <View
+          direction={{ s: 'column', m: 'row' }}
+          align="center"
+          justify="space-between"
+          gap={12}
+          divided
+        >
+          <View direction="row" align="center" gap={4}>
+            <View>
+              <Image height={128} width={128} src={'/xkoi-logo.png'} alt={'xKoi Coin'} />
+            </View>
             <Text variant="title-5" weight="regular">
               xKOI
             </Text>
           </View>
-
-          <Text variant="body-3">
-            xKOI (staked KOI) governs Ponder Finance, with protocol fees (0.05% from
-            swaps, 0.01%–0.05% from launch token swaps) distributed proportionally to
-            staked xKOI holders through immutable smart contracts.
-          </Text>
+          <View grow={true}>
+            <Text variant="body-3">
+              xKOI (staked KOI) governs Ponder Finance, with protocol fees (0.05% from
+              swaps, 0.01%–0.05% from launch token swaps) distributed proportionally to
+              staked xKOI holders through immutable smart contracts.
+            </Text>
+          </View>
         </View>
 
+        <View align="center" direction="row" gap={8}>
+          <View.Item columns={{ s: 12, m: 6 }}>
+            <Text variant="caption-1">Your Balance</Text>
+            <Text variant="featured-1">
+              {formatNumber(formatUnits(stakingInfo?.userShares, 18))}
+            </Text>
+          </View.Item>
+          <View.Item columns={{ s: 12, m: 6 }} gapBefore={2}>
+            <View direction="row" gap={2} align="center" wrap={true}></View>
+          </View.Item>
+        </View>
+
+        {/* Add this section */}
+        <View direction="row" justify="space-between">
+          <Text>Claimable Fees</Text>
+          <Text>
+            {formatNumber(formatUnits(stakingInfo?.pendingFees || BigInt(0), 18))} KOI
+          </Text>
+        </View>
+        {stakingInfo?.pendingFees > BigInt(0) && (
+          <Button
+            onClick={() => claimFees()}
+            disabled={isClaimingFees}
+            loading={isClaimingFees}
+            size="small"
+            fullWidth={true}
+            variant="outline"
+            color="primary"
+          >
+            {isClaimingFees ? 'Claiming...' : 'Claim Fees'}
+          </Button>
+        )}
         <View grow={false}>
           <Button
             onClick={activate}
