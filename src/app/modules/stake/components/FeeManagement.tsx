@@ -278,6 +278,7 @@ export default function FeesPage() {
               xKOI
             </Text>
           </View>
+
           <View grow={true}>
             <Text variant="body-3">
               xKOI (staked KOI) governs Ponder Finance, with protocol fees (0.05% from
@@ -286,65 +287,79 @@ export default function FeesPage() {
             </Text>
           </View>
         </View>
-
-        <View align="center" direction="row" gap={8}>
-          <View.Item columns={{ s: 12, m: 6 }}>
-            <Text variant="caption-1">Your Balance</Text>
-            <Text variant="featured-1">
-              {formatNumber(formatUnits(stakingInfo?.userShares, 18))}
-            </Text>
-          </View.Item>
-          <View.Item columns={{ s: 12, m: 6 }} gapBefore={2}>
-            <View direction="row" gap={2} align="center" wrap={true}></View>
-          </View.Item>
-        </View>
-
-        {/* Add this section */}
-        <View direction="row" justify="space-between">
-          <Text>Claimable Fees</Text>
-          <Text>
-            {formatNumber(formatUnits(stakingInfo?.pendingFees || BigInt(0), 18))} KOI
-          </Text>
-        </View>
-        {stakingInfo?.pendingFees > BigInt(0) && (
-          <Button
-            onClick={() => claimFees()}
-            disabled={isClaimingFees}
-            loading={isClaimingFees}
-            size="small"
-            fullWidth={true}
-            variant="outline"
-            color="primary"
-          >
-            {isClaimingFees ? 'Claiming...' : 'Claim Fees'}
-          </Button>
-        )}
-        <View grow={false}>
-          <Button
-            onClick={activate}
-            size="large"
-            fullWidth={false}
-            variant="solid"
-            color="primary"
-          >
-            <View paddingInline={6}>Stake</View>
-          </Button>
-
-          <Modal
-            active={active}
-            onClose={deactivate}
-            padding={8}
-            position={{ s: 'bottom', m: 'center' }}
-            size={{ s: '100%', m: '640px' }}
-          >
-            <View
-              maxHeight="80vh"
-              // attributes={{ style: { overflowY: 'scroll' } }}
-            >
-              <StakeInterface />
+        <View
+          direction={{ s: 'column', m: 'row' }}
+          justify="space-between"
+          align="center"
+        >
+          <View direction="column" gap={4} padding={5} borderRadius="medium">
+            <View gap={1}>
+              <Text variant="caption-1" color="neutral-faded">
+                Your Balance
+              </Text>
+              <Text variant="featured-1">
+                {formatNumber(formatUnits(stakingInfo?.userShares, 18))}
+              </Text>
             </View>
-          </Modal>
+
+            <View grow={false}>
+              <Button
+                onClick={activate}
+                size="medium"
+                fullWidth={false}
+                variant="solid"
+                color="primary"
+              >
+                <View paddingInline={6}>Stake</View>
+              </Button>
+            </View>
+          </View>
+          <View
+            direction="column"
+            gap={4}
+            backgroundColor="elevation-overlay"
+            padding={5}
+            borderRadius="medium"
+          >
+            <View gap={1}>
+              <Text variant="caption-1" color="neutral-faded">
+                Your Unclaimed Rewards
+              </Text>
+              <Text variant="featured-1">
+                {formatNumber(formatUnits(stakingInfo?.pendingFees || BigInt(0), 18))}
+              </Text>
+            </View>
+
+            <View grow={false}>
+              <Button
+                onClick={() => claimFees()}
+                disabled={isClaimingFees || stakingInfo?.pendingFees <= BigInt(0)}
+                loading={isClaimingFees}
+                size="medium"
+                fullWidth={true}
+                variant="solid"
+                color="primary"
+              >
+                <View paddingInline={6}>Claim</View>
+              </Button>
+            </View>
+          </View>
         </View>
+
+        <Modal
+          active={active}
+          onClose={deactivate}
+          padding={8}
+          position={{ s: 'bottom', m: 'center' }}
+          size={{ s: '100%', m: '640px' }}
+        >
+          <View
+            maxHeight="80vh"
+            // attributes={{ style: { overflowY: 'scroll' } }}
+          >
+            <StakeInterface />
+          </View>
+        </Modal>
       </View>
 
       <FeeManagement />

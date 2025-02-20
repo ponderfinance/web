@@ -97,7 +97,7 @@ export function StakeInterface() {
 
       <View gap={8}>
         <View gap={4}>
-          <Text variant="title-4">Stake PONDER</Text>
+          <Text variant="title-4">Stake KOI</Text>
           <View direction="row" gap={8}>
             <input
               value={stakeAmount}

@@ -161,7 +161,7 @@ export default function BoostInterface({ pid, boostMultiplier }: BoostInterfaceP
         <View gap={4}>
           <Text variant="title-3">Boost Your Rewards</Text>
           <Text>
-            Stake PONDER tokens to boost your farming rewards up to {boostMultiplier}x
+            Stake KOI tokens to boost your farming rewards up to {boostMultiplier}x
           </Text>
         </View>
 
