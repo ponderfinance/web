@@ -35,8 +35,8 @@ export const Header = () => {
                   <Button attributes={attributes} variant="ghost">
                     <View direction="row" gap={3} align="center" justify="center">
                       <Image
-                        src={'/koi-logo.png'}
-                        alt={'Koi Logo'}
+                        src={'/ponder-logo.png'}
+                        alt={'Ponder Logo'}
                         width={80}
                         height={23}
                       />
@@ -156,7 +156,7 @@ export const Header = () => {
         </View>
       </View>
 
-      <View direction="row" gap={2}>
+      <View direction="row" gap={2} align="center">
         <Image src={'/bitkub-logo.png'} alt={'Bitkub Logo'} width={40} height={40} />
 
         <XKOIButton />
