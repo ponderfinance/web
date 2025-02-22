@@ -157,7 +157,13 @@ export const Header = () => {
       </View>
 
       <View direction="row" gap={2} align="center">
-        <Image src={'/bitkub-logo.png'} alt={'Bitkub Logo'} width={40} height={40} />
+        <Button
+          variant="ghost"
+          size="small"
+          attributes={{ style: { borderRadius: 'medium' } }}
+        >
+          <Image src={'/bitkub-logo.png'} alt={'Bitkub Logo'} width={40} height={40} />
+        </Button>
 
         <XKOIButton />
 

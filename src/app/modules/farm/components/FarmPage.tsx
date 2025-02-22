@@ -1,9 +1,10 @@
 import { useState } from 'react'
-import { Text, View, Button } from 'reshaped'
+import { Text, View, Button, Modal, useToggle } from 'reshaped'
 import FarmList from './FarmList'
 import StakingInterface from '../../../components/StakingInterface'
 import BoostInterface from '../../../components/BoostInterface'
 import { Address } from 'viem'
+import CreateFarm from '@/src/app/modules/farm/components/CreateFarm'
 
 interface ManageFarmModalProps {
   pid: number
@@ -67,11 +68,13 @@ export default function FarmingPage() {
     setSelectedFarm(farm)
   }
 
+  const { active, activate, deactivate } = useToggle(false)
+
   return (
     <View gap={6} maxWidth={{ s: '100%', m: '1086px' }} width="100%">
       <View
         direction="column"
-        gap={8}
+        gap={4}
         borderColor="neutral-faded"
         padding={8}
         paddingInline={8}
@@ -85,6 +88,13 @@ export default function FarmingPage() {
           distribution rate.
         </Text>
         <FarmList />
+        <View position="absolute" insetTop={4} insetEnd={4}>
+          <Button onClick={activate}>Create Farm</Button>
+        </View>
+
+        <Modal active={active} onClose={deactivate}>
+          <CreateFarm />
+        </Modal>
       </View>
 
       {/* Modal overlay */}

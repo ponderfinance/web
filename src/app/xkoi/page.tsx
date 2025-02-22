@@ -8,7 +8,6 @@ export default function Farm() {
   return (
     <View direction="column">
       <View align="center" gap={6} paddingInline={4} paddingBottom={12} insetTop={28}>
-        {/*<CreateFarm />*/}
         <FeesPage />
         <FarmingPage />
       </View>
