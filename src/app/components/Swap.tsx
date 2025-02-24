@@ -18,6 +18,7 @@ import { ArrowDown } from '@phosphor-icons/react'
 import { usePrivy } from '@privy-io/react-auth'
 import { InterfaceTabs } from '@/src/app/modules/swap/components/InterfaceTabs'
 import { TokenBalanceDisplay } from '@/src/app/modules/swap/components/TokenBalanceDisplay'
+import TokenSelector from '@/src/app/components/TokenSelector'
 
 interface SwapInterfaceProps {
   defaultTokenIn?: Address
@@ -154,16 +155,16 @@ export function SwapInterface({
 
   const minimumReceived = useMemo(() => {
     // Log each value:
-    console.log("expectedOutput.raw:", expectedOutput?.raw?.toString())
-    console.log("slippage:", slippage)
-    console.log("slippageBps:", BigInt(Math.round(slippage * 100)).toString())
+    console.log('expectedOutput.raw:', expectedOutput?.raw?.toString())
+    console.log('slippage:', slippage)
+    console.log('slippageBps:', BigInt(Math.round(slippage * 100)).toString())
 
     if (!expectedOutput?.raw || !tokenOutInfo) return null
     const slippageBps = BigInt(Math.round(slippage * 100))
     const slippageAmount = (expectedOutput.raw * slippageBps) / BigInt(10000)
     const minAmount = expectedOutput.raw - slippageAmount
 
-    console.log("calculated minAmount:", minAmount.toString())
+    console.log('calculated minAmount:', minAmount.toString())
 
     return {
       raw: minAmount,
@@ -430,6 +431,7 @@ export function SwapInterface({
               paddingBottom={6}
               borderRadius="large"
               borderColor="neutral-faded"
+              align="start"
             >
               <Text color="neutral-faded" variant="body-3">
                 Sell
@@ -445,16 +447,7 @@ export function SwapInterface({
                   />
                 </View>
 
-                <Button
-                  onClick={() => {
-                    /* Token selector integration point */
-                  }}
-                  variant="outline"
-                  disabled={isProcessing}
-                  rounded={true}
-                >
-                  {tokenInInfo?.symbol || 'Select Token'}
-                </Button>
+                <TokenSelector onSelectToken={setTokenIn} tokenAddress={tokenIn} />
               </View>
               <View>
                 {tokenInBalance && tokenInInfo && (
@@ -525,6 +518,7 @@ export function SwapInterface({
               paddingBottom={6}
               borderRadius="large"
               backgroundColor="elevation-base"
+              align="start"
             >
               <Text color="neutral-faded" variant="body-3">
                 Buy
@@ -540,17 +534,7 @@ export function SwapInterface({
                   />
                 </View>
 
-                <Button
-                  onClick={() => {
-                    /* Token selector integration point */
-                  }}
-                  variant="outline"
-                  disabled={isProcessing}
-                  rounded={true}
-                  loading={isProcessing}
-                >
-                  {tokenOutInfo?.symbol || 'Select Token'}
-                </Button>
+                <TokenSelector onSelectToken={setTokenOut} tokenAddress={tokenOut} />
               </View>
               <View>
                 {tokenOutBalance && tokenOutInfo && (

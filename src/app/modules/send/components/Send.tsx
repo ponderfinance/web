@@ -20,6 +20,7 @@ import { usePrivy } from '@privy-io/react-auth'
 import { TokenBalanceDisplay } from '@/src/app/modules/swap/components/TokenBalanceDisplay'
 import { CURRENT_CHAIN } from '@/src/app/constants/chains'
 import { InterfaceTabs } from '@/src/app/modules/swap/components/InterfaceTabs'
+import TokenSelector from '@/src/app/components/TokenSelector'
 
 interface SendInterfaceProps {
   defaultTokenToSend?: Address
@@ -233,16 +234,10 @@ export function SendInterface({
                   />
                 </View>
 
-                <Button
-                  onClick={() => {
-                    /* Token selector integration point */
-                  }}
-                  variant="outline"
-                  disabled={isProcessing}
-                  rounded={true}
-                >
-                  {tokenInfo?.symbol || 'Select Token'}
-                </Button>
+                <TokenSelector
+                  onSelectToken={setTokenToSend}
+                  tokenAddress={tokenToSend}
+                />
               </View>
               <View>
                 {tokenBalance && tokenInfo && (
