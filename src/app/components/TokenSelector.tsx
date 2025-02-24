@@ -1,6 +1,9 @@
 import React, { useState } from 'react'
-import { Modal, Button, View, Text, TextField, Actionable } from 'reshaped'
+import { Modal, Button, View, Text, TextField, Actionable, Icon } from 'reshaped'
 import { useToggle } from 'reshaped'
+import Image from 'next/image'
+import { shortenAddress } from '@/src/app/utils/numbers'
+import { CaretDown } from '@phosphor-icons/react'
 
 interface Token {
   name: string
@@ -26,19 +29,19 @@ const tokenData: Token[] = [
     name: 'KOI',
     symbol: 'KOI',
     address: '0xe456B9B279e159842a91375e382804F7980e8Aa7',
-    icon: '🔷',
+    icon: '/tokens/xkoi.png',
   },
   // {
   //   name: 'Tether',
   //   symbol: 'USDT',
   //   address: '0x1f86F79F109060725b6f4146bAeE9b7aca41267d',
-  //   icon: '💲',
+  //   icon: '/tokens/usdt.png',
   // },
   {
-    name: 'Wrapped Bitkub Coin',
+    name: 'Wrapped Bitkub',
     symbol: 'KKUB',
     address: '0xBa71efd94be63bD47B78eF458DE982fE29f552f7',
-    icon: '🟢',
+    icon: '/tokens/bitkub.png',
   },
   // {
   //   name: 'Bitkub Coin',
@@ -101,7 +104,24 @@ const TokenSelector: React.FC<TokenSelectorProps> = ({
         rounded={true}
         loading={isProcessing}
       >
-        {selectedToken ? selectedToken.symbol : 'Select Token'}
+        <View direction="row" gap={2} align="center" paddingInline={1}>
+          <View insetStart={-2}>
+            {selectedToken?.icon && (
+              <Image
+                src={selectedToken.icon}
+                height={24}
+                width={24}
+                alt={'Selected Token Icon'}
+              />
+            )}
+          </View>
+          <View insetStart={-2}>
+            {selectedToken ? selectedToken.symbol : 'Select Token'}
+          </View>
+          <View>
+            <Icon svg={CaretDown} size={4} color="neutral-faded" />
+          </View>
+        </View>
       </Button>
 
       <Modal
@@ -172,21 +192,31 @@ const TokenItem: React.FC<TokenItemProps> = ({ token, onSelect }) => {
       align="center"
       padding={2}
       borderRadius="medium"
+      grow={true}
+      width="100%"
     >
-      <Actionable onClick={onSelect}>
-        <View direction="row" align="center" gap={2}>
-          <View padding={2} height="40px" width="40px" align="center" justify="center">
-            <Text>{token.icon}</Text>
+      <Button
+        variant="ghost"
+        onClick={onSelect}
+        fullWidth={true}
+        attributes={{ style: { width: '100%' } }}
+      >
+        <View direction="row" align="center" gap={4}>
+          <View height="40px" width="40px" align="center" justify="center">
+            <Image src={token.icon} height={40} width={40} alt={'Token Image'} />
           </View>
 
-          <View>
-            <Text weight="bold">{token.name}</Text>
-            <Text color="neutral-faded">{token.symbol}</Text>
+          <View align="start" grow={true}>
+            <Text variant="body-2">{token.name}</Text>
+            <View direction="row" gap={2} align="center">
+              <Text color="neutral">{token.symbol}</Text>
+              <Text color="neutral-faded" variant="body-3">
+                {shortenAddress(token.address)}
+              </Text>
+            </View>
           </View>
         </View>
-
-        {/*<Text color="neutral-faded">{token.address}</Text>*/}
-      </Actionable>
+      </Button>
     </View>
   )
 }
