@@ -161,8 +161,9 @@ export const Header = () => {
           variant="ghost"
           size="small"
           attributes={{ style: { borderRadius: 'medium' } }}
+          rounded={true}
         >
-          <Image src={'/bitkub-logo.png'} alt={'Bitkub Logo'} width={40} height={40} />
+          <Image src={'/bitkub-logo.png'} alt={'Bitkub Logo'} width={32} height={32} />
         </Button>
 
         <XKOIButton />

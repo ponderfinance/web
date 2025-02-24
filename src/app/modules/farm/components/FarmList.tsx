@@ -218,17 +218,14 @@ const PoolCard = ({ pid, address, position, onManage }: PoolCardProps) => {
   const handleUnboost = useCallback(async () => {
     if (!stakeInfo?.ponderStaked) return
 
-    console.log('ss', stakeInfo)
-
-    // try {
-    //   const result = await boostUnstake({
-    //     poolId: pid,
-    //     amount: stakeInfo.ponderStaked,
-    //   })
-    //   console.log('Unboost completed:', result)
-    // } catch (err) {
-    //   console.error('Failed to unboost:', err)
-    // }
+    try {
+      const result = await boostUnstake({
+        poolId: pid,
+        amount: stakeInfo.ponderStaked,
+      })
+    } catch (err) {
+      console.error('Failed to unboost:', err)
+    }
   }, [boostUnstake, pid, stakeInfo])
 
   if (isLoading) {
