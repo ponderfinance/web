@@ -547,6 +547,7 @@ export function SwapInterface({
                   variant="outline"
                   disabled={isProcessing}
                   rounded={true}
+                  loading={isProcessing}
                 >
                   {tokenOutInfo?.symbol || 'Select Token'}
                 </Button>

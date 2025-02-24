@@ -213,7 +213,7 @@ export default function FeesPage() {
 
           <View grow={true}>
             <Text variant="body-3">
-              xKOI (staked KOI) governs Ponder Finance, with protocol fees (0.05% from
+              xKOI (staked KOI) governs Ponder Finance, with 100% of protocol fees (0.05% from
               swaps, 0.01%–0.05% from launch token swaps) distributed proportionally to
               staked xKOI holders through immutable smart contracts.
             </Text>
