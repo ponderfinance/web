@@ -8,7 +8,7 @@ export default function Pool() {
       <View paddingInline={16} maxWidth={'1280px'}>
         {/*<CreatePair />*/}
         <AddLiquidityStepper
-          defaultTokenA="0xe456B9B279e159842a91375e382804F7980e8Aa7"
+          defaultTokenA="0x30E10c8DcdF21A97C8f95195FCFe52391025c773"
           defaultTokenB="0xBa71efd94be63bD47B78eF458DE982fE29f552f7"
         />
       </View>

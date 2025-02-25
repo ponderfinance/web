@@ -11,6 +11,7 @@ import {
   useAddLiquidity,
   useTokenApproval,
 } from '@ponderfinance/sdk'
+import TokenSelector from '@/src/app/components/TokenSelector'
 
 interface AddLiquidityStepperProps {
   defaultTokenA?: Address
@@ -299,7 +300,8 @@ const AddLiquidityStepper = ({
   const renderTokenSelect = () => (
     <View gap={4} className="mt-4">
       <View gap={4}>
-        <Text>Token A</Text>
+        <TokenSelector onSelectToken={setTokenA} tokenAddress={tokenA} />
+
         <View
           direction="row"
           gap={2}
@@ -320,7 +322,7 @@ const AddLiquidityStepper = ({
       </View>
 
       <View gap={4}>
-        <Text>Token B</Text>
+        <TokenSelector onSelectToken={setTokenB} tokenAddress={tokenB} />
         <View
           direction="row"
           gap={2}
@@ -357,7 +359,7 @@ const AddLiquidityStepper = ({
     <View gap={4} className="mt-4">
       <View gap={2}>
         <View direction="row" justify="space-between">
-          <Text>{tokenAInfo?.symbol || 'Token A'}</Text>
+          <TokenSelector onSelectToken={setTokenA} tokenAddress={tokenA} />
           {tokenABalance && tokenAInfo && (
             <Text>
               Balance: {formatUnits(tokenABalance, tokenAInfo.decimals)}{' '}
@@ -375,7 +377,7 @@ const AddLiquidityStepper = ({
 
       <View gap={2}>
         <View direction="row" justify="space-between">
-          <Text>{isKUBPair ? 'KUB' : tokenBInfo?.symbol || 'Token B'}</Text>
+          <TokenSelector onSelectToken={setTokenB} tokenAddress={tokenB} />
           {isKUBPair
             ? kubBalance && <Text>Balance: {formatUnits(kubBalance.value, 18)} KUB</Text>
             : tokenBBalance &&
@@ -471,50 +473,6 @@ const AddLiquidityStepper = ({
     </View>
   )
 
-  const TokenSelector = ({
-    open,
-    onClose,
-    onSelect,
-    excludeToken,
-  }: {
-    open: boolean
-    onClose: () => void
-    onSelect: (token: Address) => void
-    excludeToken?: Address
-  }) => {
-    const tokenList = [
-      { address: TOKENS.KKUB, symbol: 'KKUB', name: 'Wrapped KUB' },
-      { address: TOKENS.KUB, symbol: 'KUB', name: 'KUB' },
-    ].filter((token) => token.address !== excludeToken)
-
-    return (
-      <Modal active={open} onClose={onClose}>
-        <View gap={4} padding={4}>
-          <Text variant="title-3">Select a Token</Text>
-
-          <View gap={2} className="max-h-96 overflow-y-auto">
-            {tokenList.map((token) => (
-              <Button
-                key={token.address}
-                variant="outline"
-                fullWidth
-                onClick={() => {
-                  onSelect(token.address as Address)
-                  onClose()
-                }}
-              >
-                <View direction="row" justify="space-between" className="w-full">
-                  <Text>{token.symbol}</Text>
-                  <Text>{token.name}</Text>
-                </View>
-              </Button>
-            ))}
-          </View>
-        </View>
-      </Modal>
-    )
-  }
-
   return (
     <View className="w-full max-w-2xl mx-auto">
       <Card className="w-full p-6">
@@ -536,20 +494,6 @@ const AddLiquidityStepper = ({
           </Stepper>
         </View>
       </Card>
-
-      <TokenSelector
-        open={isSelectingTokenA}
-        onClose={() => setIsSelectingTokenA(false)}
-        onSelect={(token) => setTokenA(token)}
-        excludeToken={tokenB}
-      />
-
-      <TokenSelector
-        open={isSelectingTokenB}
-        onClose={() => setIsSelectingTokenB(false)}
-        onSelect={(token) => setTokenB(token)}
-        excludeToken={tokenA}
-      />
     </View>
   )
 }

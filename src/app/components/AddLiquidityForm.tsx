@@ -12,6 +12,7 @@ import {
   useAddLiquidity,
 } from '@ponderfinance/sdk'
 import { CURRENT_CHAIN } from '@/src/app/constants/chains'
+import TokenSelector from '@/src/app/components/TokenSelector'
 
 interface AddLiquidityFormProps {
   defaultTokenA?: Address
@@ -266,7 +267,7 @@ export default function AddLiquidityForm({
         {/* Token A Input */}
         <View gap={4}>
           <View direction="row" justify="space-between">
-            <Text>{tokenAInfo?.symbol || 'Token A'}</Text>
+            <TokenSelector onSelectToken={setTokenA} tokenAddress={tokenA} />
             {tokenABalance && tokenAInfo && (
               <Text>
                 Balance: {formatUnits(tokenABalance, tokenAInfo.decimals)}{' '}
@@ -286,7 +287,7 @@ export default function AddLiquidityForm({
         {/* Token B Input */}
         <View gap={4}>
           <View direction="row" justify="space-between">
-            <Text>{isKUBPair ? 'KUB' : tokenBInfo?.symbol || 'Token B'}</Text>
+            <TokenSelector onSelectToken={setTokenB} tokenAddress={tokenB} />
             {isKUBPair
               ? kubBalance && (
                   <Text>Balance: {formatUnits(kubBalance.value, 18)} KUB</Text>
