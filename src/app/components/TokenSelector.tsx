@@ -28,7 +28,7 @@ const tokenData: Token[] = [
   {
     name: 'KOI',
     symbol: 'KOI',
-    address: '0x53Fc2AD8F36BCeFE7a933E1237B45c7A70AD80a5',
+    address: '0xFB0b0CBFd8b2750e5a8db76aeCEA327DCc2687D6',
     icon: '/tokens/xkoi.png',
   },
   // {
@@ -43,6 +43,13 @@ const tokenData: Token[] = [
     address: '0xBa71efd94be63bD47B78eF458DE982fE29f552f7',
     icon: '/tokens/bitkub.png',
   },
+  {
+    name: 'Native Bitkub',
+    symbol: 'KUB',
+    address: '0x0000000000000000000000000000000000000000',
+    icon: '/tokens/bitkub.png',
+  },
+
   // {
   //   name: 'Bitkub Coin',
   //   symbol: 'KUB',
