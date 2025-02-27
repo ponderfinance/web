@@ -101,117 +101,130 @@ export default function LiquidityPositionsList() {
   }
 
   // Handle router-based removal using the SDK hook
-// Handle router-based removal using the SDK hook
+  // Handle router-based removal using the SDK hook
+  // Modified handleRemoveLiquidity function with clear ETH pair handling
   const handleRemoveLiquidity = async () => {
-    if (!selectedPosition || !sdk || !account.address) return;
+    if (!selectedPosition || !sdk || !account.address) return
 
     try {
-      setIsRemoving(true);
-      setError('');
-      console.log('Starting remove liquidity via router...');
+      setIsRemoving(true)
+      setError('')
+      console.log('Starting remove liquidity via router...')
 
       // Calculate liquidity amount based on percentage
-      const percent = parseFloat(percentToRemove) || 0;
-      const liquidityBigInt = selectedPosition.userLPBalance;
+      const percent = parseFloat(percentToRemove) || 0
       const liquidityToRemove =
-          (liquidityBigInt * BigInt(Math.floor(percent))) / BigInt(100);
+        (selectedPosition.userLPBalance * BigInt(Math.floor(percent))) / BigInt(100)
 
-      console.log('Removing liquidity:', formatEther(liquidityToRemove));
-      console.log('Is WETH pair:', selectedPosition.isWETHPair);
+      console.log('Removing liquidity:', formatEther(liquidityToRemove))
+      console.log('Is ETH pair:', selectedPosition.isWETHPair)
 
-      // Get token information
-      const pair = sdk.getPair(selectedPosition.pairAddress);
-      const [token0, token1] = await Promise.all([
-        pair.token0(),
-        pair.token1(),
-      ]);
+      // Calculate expected output with more precise calculations
+      // We need to calculate based on the reserves and the proportion of liquidity
+      const expectedToken0 =
+        (liquidityToRemove * selectedPosition.reserve0) / selectedPosition.totalSupply
+      const expectedToken1 =
+        (liquidityToRemove * selectedPosition.reserve1) / selectedPosition.totalSupply
 
-      // Calculate safer minimum output values with 95% slippage protection
-      const expectedToken0 = (liquidityToRemove * selectedPosition.reserve0) / selectedPosition.totalSupply;
-      const expectedToken1 = (liquidityToRemove * selectedPosition.reserve1) / selectedPosition.totalSupply;
-
-      // Apply 5% slippage tolerance
-      const safeMinToken0 = (expectedToken0 * BigInt(95)) / BigInt(100);
-      const safeMinToken1 = (expectedToken1 * BigInt(95)) / BigInt(100);
+      // Apply 5% slippage tolerance (multiply by 0.95)
+      const safeMinToken0 = (expectedToken0 * BigInt(95)) / BigInt(100)
+      const safeMinToken1 = (expectedToken1 * BigInt(95)) / BigInt(100)
 
       console.log('Expected output amounts:', {
         expectedToken0: expectedToken0.toString(),
         expectedToken1: expectedToken1.toString(),
         safeMinToken0: safeMinToken0.toString(),
-        safeMinToken1: safeMinToken1.toString()
-      });
+        safeMinToken1: safeMinToken1.toString(),
+      })
 
       if (selectedPosition.isWETHPair) {
-        console.log('Removing from ETH pair');
+        try {
+          const kkubAddress = await sdk.router.KKUB();
+          console.log('KKUB address:', kkubAddress);
 
-        // Get KKUB address
-        const kkubAddress = await sdk.router.KKUB();
+          // Determine which token is ETH
+          const isToken0KKUB =
+              selectedPosition.token0.address.toLowerCase() === kkubAddress.toLowerCase();
 
-        // Determine which token is ETH
-        const isToken0KKUB = token0.toLowerCase() === kkubAddress.toLowerCase();
-        const nonKKUBToken = isToken0KKUB ? token1 : token0;
-        const tokenMin = isToken0KKUB ? safeMinToken1 : safeMinToken0;
-        const ethMin = isToken0KKUB ? safeMinToken0 : safeMinToken1;
+          // Get the non-KKUB token address
+          const nonKKUBToken = isToken0KKUB
+              ? selectedPosition.token1.address
+              : selectedPosition.token0.address;
 
-        console.log('ETH pair details:', {
-          isToken0KKUB,
-          nonKKUBToken,
-          tokenMin: tokenMin.toString(),
-          ethMin: ethMin.toString()
-        });
+          // Debug logs
+          console.log('Token addresses:', {
+            token0: selectedPosition.token0.address,
+            token1: selectedPosition.token1.address,
+            isToken0KKUB,
+            nonKKUBToken
+          });
 
-        // For ETH pairs, use special ETH parameters
-        const result = await removeLiquidity.mutateAsync({
-          pairAddress: selectedPosition.pairAddress,
-          liquidity: liquidityToRemove,
-          token0Min: safeMinToken0,
-          token1Min: safeMinToken1,
-          isETHPair: true,
-          tokenAddress: nonKKUBToken,
-          amountTokenMin: tokenMin,
-          amountETHMin: ethMin,
-          deadline: BigInt(Math.floor(Date.now() / 1000) + 1200), // 20 minutes
-          toAddress: account.address,
-          // Enable if you know this is a fee-on-transfer token
-          supportsFeeOnTransfer: selectedPosition.isFeeOnTransfer || false,
-        });
+          // DEBUGGING: Use extremely low minimum values
+          const tokenMin = BigInt(1);  // 1 wei
+          const ethMin = BigInt(1);    // 1 wei
 
-        console.log('ETH pair liquidity removal result:', result);
+          console.log('Final parameters for removeLiquidityETH:', {
+            tokenAddress: nonKKUBToken,
+            liquidity: liquidityToRemove.toString(),
+            amountTokenMin: tokenMin.toString(),
+            amountETHMin: ethMin.toString(),
+            to: account.address,
+            deadline: BigInt(Math.floor(Date.now() / 1000) + 1200).toString()
+          });
+
+          // Try with minimal values first to see if the transaction will succeed
+          const result = await removeLiquidity.mutateAsync({
+            pairAddress: selectedPosition.pairAddress,
+            liquidity: liquidityToRemove,
+            token0Min: BigInt(0),  // These are not used directly for ETH pairs
+            token1Min: BigInt(0),  // These are not used directly for ETH pairs
+            isETHPair: true,
+            tokenAddress: nonKKUBToken,
+            amountTokenMin: tokenMin,  // Use minimal values for debugging
+            amountETHMin: ethMin,      // Use minimal values for debugging
+            deadline: BigInt(Math.floor(Date.now() / 1000) + 1200),
+            toAddress: account.address
+          });
+
+          console.log('ETH pair removal result:', result);
+        } catch (err) {
+          console.error('Error in ETH pair removal:', err);
+          throw err;
+        }
       } else {
-        console.log('Removing from standard token pair');
-        console.log('Token pair details:', {
-          token0,
-          token1,
+        // Standard token pair handling remains the same
+        console.log('Standard pair removal params:', {
+          token0: selectedPosition.token0.address,
+          token1: selectedPosition.token1.address,
           safeMinToken0: safeMinToken0.toString(),
-          safeMinToken1: safeMinToken1.toString()
-        });
+          safeMinToken1: safeMinToken1.toString(),
+        })
 
-        // Standard token pair removal
         const result = await removeLiquidity.mutateAsync({
           pairAddress: selectedPosition.pairAddress,
           liquidity: liquidityToRemove,
           token0Min: safeMinToken0,
           token1Min: safeMinToken1,
-          deadline: BigInt(Math.floor(Date.now() / 1000) + 1200), // 20 minutes
+          deadline: BigInt(Math.floor(Date.now() / 1000) + 1200),
           toAddress: account.address,
-        });
+        })
 
-        console.log('Standard pair liquidity removal result:', result);
+        console.log('Standard pair removal result:', result)
       }
 
-      await fetchPositions();
-      setIsModalActive(false);
+      await fetchPositions()
+      setIsModalActive(false)
     } catch (err) {
-      console.error('Error removing liquidity:', err);
+      console.error('Error removing liquidity:', err)
       if (err instanceof Error) {
-        setError(err.message);
+        setError(err.message)
       } else {
-        setError('Failed to remove liquidity. Check console for details.');
+        setError('Failed to remove liquidity. Check console for details.')
       }
     } finally {
-      setIsRemoving(false);
+      setIsRemoving(false)
     }
-  };
+  }
   // Fetch all user's liquidity positions
   const fetchPositions = async () => {
     if (!sdk || !account.address) return

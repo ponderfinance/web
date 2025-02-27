@@ -28,7 +28,7 @@ const tokenData: Token[] = [
   {
     name: 'KOI',
     symbol: 'KOI',
-    address: '0xFB0b0CBFd8b2750e5a8db76aeCEA327DCc2687D6',
+    address: '0x33C9B02596d7b1CB4066cC2CeEdd37f3A7c7Aa07',
     icon: '/tokens/xkoi.png',
   },
   // {
