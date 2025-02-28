@@ -20,7 +20,7 @@ import { usePrivy } from '@privy-io/react-auth'
 import { InterfaceTabs } from '@/src/app/modules/swap/components/InterfaceTabs'
 import { TokenBalanceDisplay } from '@/src/app/modules/swap/components/TokenBalanceDisplay'
 import TokenSelector from '@/src/app/components/TokenSelector'
-import { bitkubTestnetChain } from '@/src/app/constants/chains'
+import { CURRENT_CHAIN } from '@/src/app/constants/chains'
 
 interface SwapInterfaceProps {
   defaultTokenIn?: Address
@@ -500,7 +500,7 @@ export function SwapInterface({
             abi: wkubContract.abi,
             functionName: 'deposit',
             value: parsedAmountIn,
-            chain: bitkubTestnetChain,
+            chain: CURRENT_CHAIN,
             account,
           })
 
@@ -521,47 +521,150 @@ export function SwapInterface({
         }
       }
 
-      // Special case for WKUB -> KUB (use swapExactTokensForETH)
+      // Special case for WKUB -> KUB (try unwrapKKUB first, then fallback to router)
       if (
         tokenIn &&
         wkubAddress &&
         tokenIn.toLowerCase() === wkubAddress.toLowerCase() &&
         isNativeKUB(tokenOut)
       ) {
+        // Try with direct unwrapper first
         try {
-          console.log('Using swapExactTokensForETH for WKUB -> KUB')
+          console.log('Using direct unwrapKKUB for WKUB -> KUB')
 
-          const deadline = BigInt(
-            Math.floor(Date.now() / 1000) + DEFAULT_DEADLINE_MINUTES * 60
-          )
-
-          // For WKUB -> KUB, make sure to use swapExactTokensForETH with path=[WKUB]
-          const swapParams = {
-            type: 'exactTokensForETH' as const,
-            params: {
-              amountIn: parsedAmountIn,
-              amountOutMin: minimumReceived.raw,
-              path: [wkubAddress], // Just the WKUB token in the path
-              to: account,
-              deadline,
+          // Double check if we need approval for the unwrapper
+          const kubTokenAbi = [
+            {
+              name: 'allowance',
+              type: 'function',
+              inputs: [
+                { name: 'owner', type: 'address' },
+                { name: 'spender', type: 'address' },
+              ],
+              outputs: [{ name: '', type: 'uint256' }],
+              stateMutability: 'view',
             },
+            {
+              name: 'approve',
+              type: 'function',
+              inputs: [
+                { name: 'spender', type: 'address' },
+                { name: 'amount', type: 'uint256' },
+              ],
+              outputs: [{ name: '', type: 'bool' }],
+              stateMutability: 'nonpayable',
+            },
+          ] as const
+
+          // Check current allowance
+          const unwrapperAllowance = await sdk.publicClient.readContract({
+            address: wkubAddress,
+            abi: kubTokenAbi,
+            functionName: 'allowance',
+            args: [account, sdk.kkubUnwrapper.address],
+          })
+
+          console.log('Current unwrapper allowance:', unwrapperAllowance?.toString())
+          console.log('Required amount:', parsedAmountIn.toString())
+
+          // If allowance is insufficient, we need to approve
+          if (unwrapperAllowance < parsedAmountIn) {
+            console.log('Approving WKUB for unwrapper...')
+            setApprovalsPending((prev) => new Set(prev).add(wkubAddress))
+
+            // For WKUB -> KUB, approve directly without using the approval function
+            // This ensures we're setting the exact allowance needed
+            const approveHash = await sdk?.walletClient?.writeContract({
+              address: wkubAddress,
+              abi: kubTokenAbi,
+              functionName: 'approve',
+              args: [sdk.kkubUnwrapper.address, parsedAmountIn],
+              account,
+              chain: CURRENT_CHAIN,
+            })
+
+            // Wait for approval transaction to be confirmed
+            await sdk.publicClient.waitForTransactionReceipt({
+              hash: approveHash as `0x${string}`,
+              confirmations: 1,
+            })
+
+            // Verify the new allowance after approval
+            const newAllowance = await sdk.publicClient.readContract({
+              address: wkubAddress,
+              abi: kubTokenAbi,
+              functionName: 'allowance',
+              args: [account, sdk.kkubUnwrapper.address],
+            })
+
+            console.log('New allowance after approval:', newAllowance?.toString())
+
+            setApprovalsPending((prev) => {
+              const next = new Set(prev)
+              next.delete(wkubAddress)
+              return next
+            })
+
+            console.log('Approval confirmed')
+          } else {
+            console.log('Unwrapper already has sufficient allowance')
           }
 
-          const result = await swap(swapParams)
-          setTxHash(result.hash)
+          console.log('Now unwrapping WKUB...')
+
+          // Now call unwrapKKUB with the approved amount
+          const hash = await sdk.unwrapKKUB(parsedAmountIn, account)
+
+          setTxHash(hash)
           setAmountIn('')
 
           await sdk.publicClient.waitForTransactionReceipt({
-            hash: result.hash,
+            hash,
             confirmations: 1,
           })
 
           return
-        } catch (err: any) {
-          console.error('WKUB unwrap failed:', err)
-          setError(parseSwapError(err))
-          setIsProcessing(false)
-          return
+        } catch (unwrapErr: any) {
+          console.error('Direct WKUB unwrap failed, trying router:', unwrapErr)
+
+          // Fallback to router
+          try {
+            console.log('Falling back to router for WKUB -> KUB')
+
+            const deadline = BigInt(
+              Math.floor(Date.now() / 1000) + DEFAULT_DEADLINE_MINUTES * 60
+            )
+
+            // For WKUB -> KUB, use swapExactTokensForETH with path=[WKUB]
+            const swapParams = {
+              type: 'exactTokensForETH' as const,
+              params: {
+                amountIn: parsedAmountIn,
+                amountOutMin: minimumReceived.raw,
+                path: [wkubAddress], // Just the WKUB token in the path
+                to: account,
+                deadline,
+              },
+            }
+
+            const result = await swap(swapParams)
+            setTxHash(result.hash)
+            setAmountIn('')
+
+            await sdk.publicClient.waitForTransactionReceipt({
+              hash: result.hash,
+              confirmations: 1,
+            })
+
+            return
+          } catch (routerErr: any) {
+            console.error('Router WKUB unwrap also failed:', routerErr)
+            setError(
+              `WKUB unwrap failed with both methods: ${unwrapErr.message || 'Unknown unwrapper error'} | ${routerErr.message || 'Unknown router error'}`
+            )
+            setIsProcessing(false)
+            return
+          }
         }
       }
 
