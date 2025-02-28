@@ -10,6 +10,7 @@ interface Token {
   symbol: string
   address: `0x${string}`
   icon: string
+  isNative?: boolean
 }
 
 interface TokenSelectorProps {
@@ -17,6 +18,7 @@ interface TokenSelectorProps {
   disabled?: boolean
   isProcessing?: boolean
   tokenAddress?: `0x${string}`
+  otherSelectedToken?: `0x${string}` // Added to support token switching
 }
 
 interface TokenItemProps {
@@ -24,6 +26,7 @@ interface TokenItemProps {
   onSelect: () => void
 }
 
+// Updated token list to include Native KUB
 const tokenData: Token[] = [
   {
     name: 'KOI',
@@ -31,31 +34,19 @@ const tokenData: Token[] = [
     address: '0x33C9B02596d7b1CB4066cC2CeEdd37f3A7c7Aa07',
     icon: '/tokens/xkoi.png',
   },
-  // {
-  //   name: 'Tether',
-  //   symbol: 'USDT',
-  //   address: '0x1f86F79F109060725b6f4146bAeE9b7aca41267d',
-  //   icon: '/tokens/usdt.png',
-  // },
+  {
+    name: 'Native Bitkub',
+    symbol: 'KUB',
+    address: '0x0000000000000000000000000000000000000000',
+    icon: '/tokens/bitkub.png',
+    isNative: true,
+  },
   {
     name: 'Wrapped Bitkub',
     symbol: 'KKUB',
     address: '0xBa71efd94be63bD47B78eF458DE982fE29f552f7',
     icon: '/tokens/bitkub.png',
   },
-  // {
-  //   name: 'Native Bitkub',
-  //   symbol: 'KUB',
-  //   address: '0x0000000000000000000000000000000000000000',
-  //   icon: '/tokens/bitkub.png',
-  // },
-
-  // {
-  //   name: 'Bitkub Coin',
-  //   symbol: 'KUB',
-  //   address: '0x0000000000000000000000000000000000000000',
-  //   icon: '🟢',
-  // },
 ]
 
 // Function to find a token by address
@@ -76,6 +67,7 @@ const TokenSelector: React.FC<TokenSelectorProps> = ({
   disabled = false,
   isProcessing = false,
   tokenAddress,
+  otherSelectedToken,
 }) => {
   const { active, activate, deactivate } = useToggle(false)
   const [searchTerm, setSearchTerm] = useState<string>('')
@@ -83,8 +75,19 @@ const TokenSelector: React.FC<TokenSelectorProps> = ({
   // Find selected token based on address
   const selectedToken = findTokenByAddress(tokenAddress as `0x${string}`)
 
+  // Handler for token selection with Uniswap-like token switching
   const handleTokenSelect = (token: Token) => {
-    onSelectToken(token?.address as `0x${string}`)
+    // Check if the selected token is already selected in the other field
+    if (
+      otherSelectedToken &&
+      token.address.toLowerCase() === otherSelectedToken.toLowerCase()
+    ) {
+      // Perform token switch logic (will be handled by the parent component)
+      onSelectToken(token.address as `0x${string}`)
+    } else {
+      // Regular token selection
+      onSelectToken(token.address as `0x${string}`)
+    }
     deactivate()
   }
 
@@ -217,9 +220,11 @@ const TokenItem: React.FC<TokenItemProps> = ({ token, onSelect }) => {
             <Text variant="body-2">{token.name}</Text>
             <View direction="row" gap={2} align="center">
               <Text color="neutral">{token.symbol}</Text>
-              <Text color="neutral-faded" variant="body-3">
-                {shortenAddress(token.address)}
-              </Text>
+              {!token.isNative && (
+                <Text color="neutral-faded" variant="body-3">
+                  {shortenAddress(token.address)}
+                </Text>
+              )}
             </View>
           </View>
         </View>

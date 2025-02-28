@@ -1,7 +1,8 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { Text, Button, View, Actionable } from 'reshaped'
 import { type Address, formatUnits, parseUnits } from 'viem'
-import { useAccount } from 'wagmi'
+import { useAccount, useBalance } from 'wagmi'
+import { useQuery } from '@tanstack/react-query'
 import {
   useGasEstimate,
   useSwap,
@@ -19,6 +20,7 @@ import { usePrivy } from '@privy-io/react-auth'
 import { InterfaceTabs } from '@/src/app/modules/swap/components/InterfaceTabs'
 import { TokenBalanceDisplay } from '@/src/app/modules/swap/components/TokenBalanceDisplay'
 import TokenSelector from '@/src/app/components/TokenSelector'
+import { bitkubTestnetChain } from '@/src/app/constants/chains'
 
 interface SwapInterfaceProps {
   defaultTokenIn?: Address
@@ -116,61 +118,212 @@ export function SwapInterface({
   // Token information
   const { data: tokenInInfo } = useTokenInfo(tokenIn || ('' as Address))
   const { data: tokenOutInfo } = useTokenInfo(tokenOut || ('' as Address))
-  const { data: tokenInBalance } = useTokenBalance(tokenIn || ('' as Address), account)
-  const { data: tokenOutBalance } = useTokenBalance(tokenOut || ('' as Address), account)
-  const { data: tokenInAllowance, refetch: refetchAllowance } = useTokenAllowance(
-    tokenIn || ('' as Address),
-    sdk?.router.address,
-    account,
-    !!tokenIn && !!account && !!sdk?.router.address
+
+  // Handle both ERC20 and native KUB balances
+  const { data: tokenInBalance } = useTokenBalance(
+    tokenIn && tokenIn.toLowerCase() !== KUB_ADDRESS.toLowerCase()
+      ? tokenIn
+      : ('' as Address),
+    account
   )
 
+  const { data: tokenOutBalance } = useTokenBalance(
+    tokenOut && tokenOut.toLowerCase() !== KUB_ADDRESS.toLowerCase()
+      ? tokenOut
+      : ('' as Address),
+    account
+  )
+
+  // Fetch native KUB balance
+  const { data: nativeBalance } = useBalance({
+    address: account,
+  })
+
+  const { data: tokenInAllowance, refetch: refetchAllowance } = useTokenAllowance(
+    tokenIn && tokenIn.toLowerCase() !== KUB_ADDRESS.toLowerCase()
+      ? tokenIn
+      : ('' as Address),
+    sdk?.router.address,
+    account,
+    !!(
+      tokenIn &&
+      tokenIn.toLowerCase() !== KUB_ADDRESS.toLowerCase() &&
+      account &&
+      sdk?.router.address
+    )
+  )
+
+  // Get effective balances considering both ERC20 and native balances
+  const effectiveTokenInBalance = useMemo(() => {
+    if (!tokenIn) return undefined
+
+    if (tokenIn.toLowerCase() === KUB_ADDRESS.toLowerCase()) {
+      return nativeBalance?.value || undefined
+    }
+
+    return tokenInBalance
+  }, [tokenIn, tokenInBalance, nativeBalance])
+
+  const effectiveTokenOutBalance = useMemo(() => {
+    if (!tokenOut) return undefined
+
+    if (tokenOut.toLowerCase() === KUB_ADDRESS.toLowerCase()) {
+      return nativeBalance?.value || undefined
+    }
+
+    return tokenOutBalance
+  }, [tokenOut, tokenOutBalance, nativeBalance])
+
   const parsedAmountIn = useMemo(() => {
-    if (!tokenInInfo || !amountIn) return BigInt(0)
+    if (!tokenInInfo && !isNativeKUB(tokenIn)) return BigInt(0)
+    if (!amountIn) return BigInt(0)
+
     try {
-      return parseUnits(amountIn, tokenInInfo.decimals)
+      // For native KUB, use 18 decimals
+      const decimals = isNativeKUB(tokenIn) ? 18 : tokenInInfo!.decimals
+      return parseUnits(amountIn, decimals)
     } catch {
       return BigInt(0)
     }
-  }, [amountIn, tokenInInfo])
+  }, [amountIn, tokenInInfo, tokenIn])
 
-  const { data: route, isLoading: isRouteLoading } = useSwapRoute(
+  // Need to get WKUB address for path calculation
+  const { data: wkubAddress } = useQuery({
+    queryKey: ['ponder', 'router', 'wkub'],
+    queryFn: () => sdk.router.KKUB(),
+    enabled: !!sdk.router,
+  })
+
+  // Create adjusted tokenIn/tokenOut for routing that uses WKUB instead of zero address
+  // But handle special case for direct KUB/WKUB swaps
+  const routeTokenIn = useMemo(() => {
+    if (isNativeKUB(tokenIn) && wkubAddress) {
+      return wkubAddress
+    }
+    return tokenIn as Address
+  }, [tokenIn, wkubAddress])
+
+  const routeTokenOut = useMemo(() => {
+    if (isNativeKUB(tokenOut) && wkubAddress) {
+      return wkubAddress
+    }
+    return tokenOut as Address
+  }, [tokenOut, wkubAddress])
+
+  // Check if this is a direct KUB <-> WKUB swap
+  const isDirectKubWkubSwap = useMemo(() => {
+    if (!wkubAddress) return false
+
+    const isKubToWkub =
+      isNativeKUB(tokenIn) && tokenOut?.toLowerCase() === wkubAddress.toLowerCase()
+
+    const isWkubToKub =
+      tokenIn?.toLowerCase() === wkubAddress.toLowerCase() && isNativeKUB(tokenOut)
+
+    return isKubToWkub || isWkubToKub
+  }, [tokenIn, tokenOut, wkubAddress])
+
+  // For direct KUB <-> WKUB swaps, create a synthetic route
+  const syntheticDirectRoute = useMemo(() => {
+    if (
+      !isDirectKubWkubSwap ||
+      !tokenIn ||
+      !tokenOut ||
+      !parsedAmountIn ||
+      !wkubAddress
+    ) {
+      return null
+    }
+
+    // Create a synthetic 1:1 route for these special cases
+    return {
+      path: [routeTokenIn, routeTokenOut],
+      pairs: [wkubAddress],
+      amountIn: parsedAmountIn,
+      amountOut: parsedAmountIn, // 1:1 conversion
+      priceImpact: 0,
+      totalFee: BigInt(0),
+      hops: [
+        {
+          pair: wkubAddress,
+          tokenIn: routeTokenIn,
+          tokenOut: routeTokenOut,
+          amountIn: parsedAmountIn,
+          amountOut: parsedAmountIn, // 1:1 conversion
+          fee: BigInt(0),
+          priceImpact: 0,
+        },
+      ],
+    }
+  }, [
+    isDirectKubWkubSwap,
+    tokenIn,
+    tokenOut,
+    parsedAmountIn,
+    routeTokenIn,
+    routeTokenOut,
+    wkubAddress,
+  ])
+
+  // Use regular routing for non-direct swaps, synthetic route for direct KUB<->WKUB
+  const { data: normalRoute, isLoading: isRouteLoading } = useSwapRoute(
     {
-      tokenIn: tokenIn as Address,
-      tokenOut: tokenOut as Address,
+      tokenIn: routeTokenIn as Address,
+      tokenOut: routeTokenOut as Address,
       amountIn: parsedAmountIn,
       maxHops: 3,
     },
-    Boolean(tokenIn && tokenOut && parsedAmountIn > BigInt(0) && tokenInInfo)
+    Boolean(
+      tokenIn &&
+        tokenOut &&
+        parsedAmountIn > BigInt(0) &&
+        (tokenInInfo || isNativeKUB(tokenIn)) &&
+        wkubAddress &&
+        !isDirectKubWkubSwap
+    )
   )
+
+  // Combine normal route with synthetic route
+  const route = useMemo(() => {
+    if (isDirectKubWkubSwap) {
+      return syntheticDirectRoute
+    }
+    return normalRoute
+  }, [normalRoute, syntheticDirectRoute, isDirectKubWkubSwap])
 
   // Expected output calculations
   const expectedOutput = useMemo(() => {
-    if (!route?.amountOut || !tokenOutInfo) return null
+    if (!route?.amountOut) return null
+
+    // For native KUB, use 18 decimals
+    const decimals = isNativeKUB(tokenOut) ? 18 : tokenOutInfo?.decimals || 18
+
     return {
       raw: BigInt(route.amountOut),
-      formatted: formatUnits(BigInt(route.amountOut), tokenOutInfo.decimals),
+      formatted: formatUnits(BigInt(route.amountOut), decimals),
     }
-  }, [route?.amountOut, tokenOutInfo])
+  }, [route?.amountOut, tokenOutInfo, tokenOut])
 
   const minimumReceived = useMemo(() => {
-    // Log each value:
-    console.log('expectedOutput.raw:', expectedOutput?.raw?.toString())
-    console.log('slippage:', slippage)
-    console.log('slippageBps:', BigInt(Math.round(slippage * 100)).toString())
+    if (!expectedOutput?.raw) return null
 
-    if (!expectedOutput?.raw || !tokenOutInfo) return null
+    // For native KUB, use 18 decimals
+    const decimals = isNativeKUB(tokenOut) ? 18 : tokenOutInfo?.decimals || 18
+
     const slippageBps = BigInt(Math.round(slippage * 100))
     const slippageAmount = (expectedOutput.raw * slippageBps) / BigInt(10000)
     const minAmount = expectedOutput.raw - slippageAmount
 
-    console.log('calculated minAmount:', minAmount.toString())
-
     return {
       raw: minAmount,
-      formatted: formatUnits(minAmount, tokenOutInfo.decimals),
+      formatted: formatUnits(minAmount, decimals),
     }
-  }, [expectedOutput, slippage, tokenOutInfo])
+  }, [expectedOutput, slippage, tokenOutInfo, tokenOut])
+
+  // Helper function to check if token is native KUB
+  function isNativeKUB(tokenAddress?: Address): boolean {
+    return !!tokenAddress && tokenAddress.toLowerCase() === KUB_ADDRESS.toLowerCase()
+  }
 
   // Swap execution setup
   const { calldata: swapCalldata } = useSwapCallback({
@@ -180,9 +333,22 @@ export function SwapInterface({
     deadline: BigInt(Math.floor(Date.now() / 1000) + DEFAULT_DEADLINE_MINUTES * 60),
   })
 
+  // Create serialized version for gas estimation to avoid BigInt serialization errors
+  const serializedCallData = useMemo(() => {
+    if (!swapCalldata) return undefined
+
+    // Create a serialized version with BigInts converted to strings
+    return {
+      to: swapCalldata.to,
+      data: swapCalldata.data,
+      value: swapCalldata.value,
+      gasLimit: swapCalldata.gasLimit.toString(),
+    }
+  }, [swapCalldata])
+
   const { data: gasEstimate } = useGasEstimate(
-    swapCalldata ?? undefined,
-    Boolean(swapCalldata)
+    serializedCallData,
+    Boolean(serializedCallData)
   )
 
   // Contract interactions
@@ -193,40 +359,58 @@ export function SwapInterface({
 
   // Validation states
   const isApprovalRequired = useMemo(() => {
-    if (!route?.amountIn || !tokenInAllowance?.amount || !tokenIn) return false
+    if (!route?.amountIn || isNativeKUB(tokenIn) || !tokenInAllowance?.amount || !tokenIn)
+      return false
     return BigInt(route.amountIn) > BigInt(tokenInAllowance.amount)
   }, [route?.amountIn, tokenInAllowance?.amount, tokenIn])
 
   const isValidTrade = useMemo(() => {
-    if (!route?.amountIn || !tokenInBalance || !account) return false
+    if (!route?.amountIn || !effectiveTokenInBalance || !account) return false
 
     const amountInBigInt = BigInt(route.amountIn)
-    const balanceBigInt = BigInt(tokenInBalance)
+    const balanceBigInt = BigInt(effectiveTokenInBalance.toString())
+
+    // For native KUB, keep some for gas
+    if (isNativeKUB(tokenIn)) {
+      // Make sure gasBuffer is a BigInt
+      const gasBuffer = gasEstimate?.estimate
+        ? BigInt(gasEstimate.estimate.toString())
+        : parseUnits('0.01', 18) // 0.01 KUB as buffer if estimate not available
+
+      return (
+        amountInBigInt <= balanceBigInt - gasBuffer &&
+        amountInBigInt > BigInt(0) &&
+        BigInt(route.amountOut) > BigInt(0)
+      )
+    }
 
     return (
       amountInBigInt <= balanceBigInt &&
       amountInBigInt > BigInt(0) &&
       BigInt(route.amountOut) > BigInt(0)
     )
-  }, [route, tokenInBalance, account])
+  }, [route, effectiveTokenInBalance, account, tokenIn, gasEstimate])
 
   const showPriceImpactWarning = (route?.priceImpact || 0) > HIGH_PRICE_IMPACT_THRESHOLD
   const showCriticalPriceImpactWarning =
     (route?.priceImpact || 0) > CRITICAL_PRICE_IMPACT_THRESHOLD
 
   const handleAmountInput = (value: string) => {
-    if (!tokenInInfo) return
+    if (!tokenInInfo && !isNativeKUB(tokenIn)) return
     setError(null)
 
     // Validate numeric input with decimals
     if (!/^\d*\.?\d*$/.test(value)) return
 
+    // For native KUB, use 18 decimals
+    const decimals = isNativeKUB(tokenIn) ? 18 : tokenInInfo!.decimals
+
     const parts = value.split('.')
-    if (parts[1] && parts[1].length > tokenInInfo.decimals) return
+    if (parts[1] && parts[1].length > decimals) return
 
     // Validate maximum amount
     try {
-      const parsedAmount = parseUnits(value || '0', tokenInInfo.decimals)
+      const parsedAmount = parseUnits(value || '0', decimals)
       if (parsedAmount > MAX_UINT256) return
     } catch {
       return
@@ -236,7 +420,14 @@ export function SwapInterface({
   }
 
   const handleApproval = useCallback(async () => {
-    if (!route?.path[0] || !account || !route.amountIn || !tokenIn) return
+    if (
+      !route?.path[0] ||
+      !account ||
+      !route.amountIn ||
+      !tokenIn ||
+      isNativeKUB(tokenIn)
+    )
+      return
     setError(null)
 
     try {
@@ -271,7 +462,7 @@ export function SwapInterface({
       })
       throw err
     }
-  }, [route])
+  }, [route, account, tokenIn, approve, sdk, refetchAllowance])
 
   const handleSwap = async () => {
     if (!route || !account || !minimumReceived?.raw || !sdk) return
@@ -279,11 +470,106 @@ export function SwapInterface({
     setIsProcessing(true)
 
     try {
+      // Special case for KUB -> WKUB (direct deposit)
+      if (
+        isNativeKUB(tokenIn) &&
+        tokenOut &&
+        wkubAddress &&
+        tokenOut.toLowerCase() === wkubAddress.toLowerCase()
+      ) {
+        try {
+          console.log('Using direct deposit for KUB -> WKUB')
+
+          // Get WKUB contract instance
+          const wkubContract = {
+            address: wkubAddress,
+            abi: [
+              {
+                name: 'deposit',
+                type: 'function',
+                stateMutability: 'payable',
+                inputs: [],
+                outputs: [],
+              },
+            ],
+          }
+
+          // Execute deposit transaction
+          const hash = await sdk?.walletClient?.writeContract({
+            address: wkubAddress,
+            abi: wkubContract.abi,
+            functionName: 'deposit',
+            value: parsedAmountIn,
+            chain: bitkubTestnetChain,
+            account,
+          })
+
+          setTxHash(hash)
+          setAmountIn('')
+
+          await sdk.publicClient.waitForTransactionReceipt({
+            hash: hash as `0x${string}`,
+            confirmations: 1,
+          })
+
+          return
+        } catch (err: any) {
+          console.error('WKUB deposit failed:', err)
+          setError(`WKUB deposit failed: ${err.message || 'Unknown error'}`)
+          setIsProcessing(false)
+          return
+        }
+      }
+
+      // Special case for WKUB -> KUB (use swapExactTokensForETH)
+      if (
+        tokenIn &&
+        wkubAddress &&
+        tokenIn.toLowerCase() === wkubAddress.toLowerCase() &&
+        isNativeKUB(tokenOut)
+      ) {
+        try {
+          console.log('Using swapExactTokensForETH for WKUB -> KUB')
+
+          const deadline = BigInt(
+            Math.floor(Date.now() / 1000) + DEFAULT_DEADLINE_MINUTES * 60
+          )
+
+          // For WKUB -> KUB, make sure to use swapExactTokensForETH with path=[WKUB]
+          const swapParams = {
+            type: 'exactTokensForETH' as const,
+            params: {
+              amountIn: parsedAmountIn,
+              amountOutMin: minimumReceived.raw,
+              path: [wkubAddress], // Just the WKUB token in the path
+              to: account,
+              deadline,
+            },
+          }
+
+          const result = await swap(swapParams)
+          setTxHash(result.hash)
+          setAmountIn('')
+
+          await sdk.publicClient.waitForTransactionReceipt({
+            hash: result.hash,
+            confirmations: 1,
+          })
+
+          return
+        } catch (err: any) {
+          console.error('WKUB unwrap failed:', err)
+          setError(parseSwapError(err))
+          setIsProcessing(false)
+          return
+        }
+      }
+
       const deadline = BigInt(
         Math.floor(Date.now() / 1000) + DEFAULT_DEADLINE_MINUTES * 60
       )
-      const isETHIn = tokenIn?.toLowerCase() === KUB_ADDRESS?.toLowerCase()
-      const isETHOut = tokenOut?.toLowerCase() === KUB_ADDRESS?.toLowerCase()
+      const isETHIn = isNativeKUB(tokenIn)
+      const isETHOut = isNativeKUB(tokenOut)
 
       let swapParams: SwapParams
 
@@ -394,6 +680,23 @@ export function SwapInterface({
     return `Swap failed: ${message}`
   }
 
+  // Debugging KUB swaps
+  useEffect(() => {
+    // Log relevant information when routing with KUB
+    if (route && (isNativeKUB(tokenIn) || isNativeKUB(tokenOut)) && wkubAddress) {
+      console.log('KUB Swap Route:', {
+        originalTokenIn: tokenIn,
+        originalTokenOut: tokenOut,
+        routeTokenIn: routeTokenIn,
+        routeTokenOut: routeTokenOut,
+        wkubAddress,
+        path: route.path,
+        amountIn: route.amountIn.toString(),
+        amountOut: route.amountOut.toString(),
+      })
+    }
+  }, [route, tokenIn, tokenOut, routeTokenIn, routeTokenOut, wkubAddress])
+
   // Reset on successful transaction
   useEffect(() => {
     if (txStatus?.state === 'confirmed') {
@@ -405,17 +708,48 @@ export function SwapInterface({
 
   // Validate amounts on route changes
   useEffect(() => {
-    if (route && tokenInInfo && amountIn) {
+    if (route && (tokenInInfo || isNativeKUB(tokenIn)) && amountIn) {
       try {
-        const parsedAmount = parseUnits(amountIn, tokenInInfo.decimals)
+        const decimals = isNativeKUB(tokenIn) ? 18 : tokenInInfo!.decimals
+        const parsedAmount = parseUnits(amountIn, decimals)
         if (parsedAmount !== BigInt(route.amountIn)) {
-          setAmountIn(formatUnits(BigInt(route.amountIn), tokenInInfo.decimals))
+          setAmountIn(formatUnits(BigInt(route.amountIn), decimals))
         }
       } catch (err) {
         console.error('Amount validation failed:', err)
       }
     }
-  }, [route, tokenInInfo, amountIn])
+  }, [route, tokenInInfo, amountIn, tokenIn])
+
+  // Handle token selection with Uniswap-like swap behavior
+  const handleTokenSelect = (position: 'in' | 'out', address: Address) => {
+    if (position === 'in') {
+      // If selecting the same token that's already in the output
+      if (tokenOut && address.toLowerCase() === tokenOut.toLowerCase()) {
+        // Swap the tokens
+        setTokenIn(tokenOut)
+        setTokenOut(tokenIn)
+      } else {
+        // Regular selection
+        setTokenIn(address)
+      }
+    } else {
+      // position === 'out'
+      // If selecting the same token that's already in the input
+      if (tokenIn && address.toLowerCase() === tokenIn.toLowerCase()) {
+        // Swap the tokens
+        setTokenOut(tokenIn)
+        setTokenIn(tokenOut)
+      } else {
+        // Regular selection
+        setTokenOut(address)
+      }
+    }
+
+    // Reset input amount when tokens change
+    setAmountIn('')
+    setError(null)
+  }
 
   return (
     <View align="center" width="100%" className={className}>
@@ -447,20 +781,43 @@ export function SwapInterface({
                   />
                 </View>
 
-                <TokenSelector onSelectToken={setTokenIn} tokenAddress={tokenIn} />
+                <TokenSelector
+                  onSelectToken={(address) => handleTokenSelect('in', address)}
+                  tokenAddress={tokenIn}
+                  otherSelectedToken={tokenOut}
+                />
               </View>
               <View>
-                {tokenInBalance && tokenInInfo && (
+                {effectiveTokenInBalance && (tokenInInfo || isNativeKUB(tokenIn)) && (
                   <View direction="row" align="center" justify="end" gap={2}>
-                    <TokenBalanceDisplay
-                      tokenInBalance={tokenInBalance}
-                      tokenInInfo={tokenInInfo}
-                    />
-                    {tokenInBalance > BigInt(0) && (
+                    {/* Display balance based on whether it's native KUB or ERC20 */}
+                    {isNativeKUB(tokenIn) ? (
+                      <Text variant="caption-2" color="neutral">
+                        Balance: {formatUnits(effectiveTokenInBalance, 18)} KUB
+                      </Text>
+                    ) : (
+                      <TokenBalanceDisplay
+                        tokenInBalance={effectiveTokenInBalance}
+                        tokenInInfo={tokenInInfo!}
+                      />
+                    )}
+                    {effectiveTokenInBalance > BigInt(0) && (
                       <Actionable
                         onClick={() => {
-                          if (tokenInInfo && tokenInBalance) {
-                            setAmountIn(formatUnits(tokenInBalance, tokenInInfo.decimals))
+                          const decimals = isNativeKUB(tokenIn)
+                            ? 18
+                            : tokenInInfo!.decimals
+
+                          // If native KUB, leave some for gas
+                          if (isNativeKUB(tokenIn)) {
+                            const gasBuffer =
+                              gasEstimate?.estimate || parseUnits('0.01', 18)
+                            const maxAmount = effectiveTokenInBalance - gasBuffer
+                            if (maxAmount > BigInt(0)) {
+                              setAmountIn(formatUnits(maxAmount, decimals))
+                            }
+                          } else {
+                            setAmountIn(formatUnits(effectiveTokenInBalance, decimals))
                           }
                         }}
                       >
@@ -481,7 +838,6 @@ export function SwapInterface({
             </View>
 
             {/* Switch Tokens Button */}
-
             <View
               position="absolute"
               insetTop={32}
@@ -534,15 +890,26 @@ export function SwapInterface({
                   />
                 </View>
 
-                <TokenSelector onSelectToken={setTokenOut} tokenAddress={tokenOut} />
+                <TokenSelector
+                  onSelectToken={(address) => handleTokenSelect('out', address)}
+                  tokenAddress={tokenOut}
+                  otherSelectedToken={tokenIn}
+                />
               </View>
               <View>
-                {tokenOutBalance && tokenOutInfo && (
+                {effectiveTokenOutBalance && (tokenOutInfo || isNativeKUB(tokenOut)) && (
                   <View direction="row" align="center" justify="end" gap={2}>
-                    <TokenBalanceDisplay
-                      tokenInBalance={tokenOutBalance}
-                      tokenInInfo={tokenOutInfo}
-                    />
+                    {/* Display balance based on whether it's native KUB or ERC20 */}
+                    {isNativeKUB(tokenOut) ? (
+                      <Text variant="caption-2" color="neutral">
+                        Balance: {formatUnits(effectiveTokenOutBalance, 18)} KUB
+                      </Text>
+                    ) : (
+                      <TokenBalanceDisplay
+                        tokenInBalance={effectiveTokenOutBalance}
+                        tokenInInfo={tokenOutInfo!}
+                      />
+                    )}
                   </View>
                 )}
               </View>
@@ -568,7 +935,8 @@ export function SwapInterface({
                 <View direction="row" justify="space-between">
                   <Text>Minimum Received</Text>
                   <Text>
-                    {minimumReceived?.formatted} {tokenOutInfo?.symbol}
+                    {minimumReceived?.formatted}{' '}
+                    {isNativeKUB(tokenOut) ? 'KUB' : tokenOutInfo?.symbol}
                   </Text>
                 </View>
 
@@ -583,8 +951,11 @@ export function SwapInterface({
                   <View direction="row" justify="space-between">
                     <Text>Trading Fee</Text>
                     <Text>
-                      {formatUnits(route.totalFee, tokenInInfo?.decimals || 18)}{' '}
-                      {tokenInInfo?.symbol}
+                      {formatUnits(
+                        route.totalFee,
+                        isNativeKUB(tokenIn) ? 18 : tokenInInfo?.decimals || 18
+                      )}{' '}
+                      {isNativeKUB(tokenIn) ? 'KUB' : tokenInInfo?.symbol}
                     </Text>
                   </View>
                 )}
@@ -673,19 +1044,32 @@ export function SwapInterface({
                   <Text weight="medium" align="center">
                     Route
                   </Text>
-                  {route.hops.map((hop, index) => (
-                    <View key={index} direction="row" justify="center" gap={2}>
-                      <Text color="neutral">
-                        {index === 0 ? tokenInInfo?.symbol : `Token${index}`}
-                      </Text>
-                      <Text color="neutral">→</Text>
-                      <Text color="neutral">
-                        {index === route.hops.length - 1
-                          ? tokenOutInfo?.symbol
-                          : `Token${index + 1}`}
-                      </Text>
-                    </View>
-                  ))}
+                  {route.hops.map((hop, index) => {
+                    // Display adjusted tokens in the route to show KUB instead of WKUB where appropriate
+                    const displayTokenIn = index === 0 ? tokenIn : hop.tokenIn
+                    const displayTokenOut =
+                      index === route.hops.length - 1 ? tokenOut : hop.tokenOut
+
+                    return (
+                      <View key={index} direction="row" justify="center" gap={2}>
+                        <Text color="neutral">
+                          {index === 0
+                            ? isNativeKUB(tokenIn)
+                              ? 'KUB'
+                              : tokenInInfo?.symbol
+                            : `Token${index}`}
+                        </Text>
+                        <Text color="neutral">→</Text>
+                        <Text color="neutral">
+                          {index === route.hops.length - 1
+                            ? isNativeKUB(tokenOut)
+                              ? 'KUB'
+                              : tokenOutInfo?.symbol
+                            : `Token${index + 1}`}
+                        </Text>
+                      </View>
+                    )
+                  })}
                 </View>
               )}
             </View>
