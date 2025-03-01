@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react'
-import { Stepper, View, Text, Card, Button, Modal } from 'reshaped'
+import { Stepper, View, Text, Card, Button, Modal, Icon } from 'reshaped'
 import { Address, formatUnits, parseUnits, zeroAddress } from 'viem'
 import { useAccount, useBalance } from 'wagmi'
 import {
@@ -12,6 +12,7 @@ import {
   useTokenApproval,
 } from '@ponderfinance/sdk'
 import TokenSelector from '@/src/app/components/TokenSelector'
+import { GearSix } from '@phosphor-icons/react'
 
 interface AddLiquidityStepperProps {
   defaultTokenA?: Address
@@ -256,7 +257,6 @@ const AddLiquidityStepper = ({
   }
 
   const isApprovalNeeded = useMemo(() => {
-    console.log('to', tokenAInfo)
     if (!tokenAInfo || !amountA) return false
     try {
       const amountABigInt = parseUnits(amountA, tokenAInfo.decimals)
@@ -298,65 +298,42 @@ const AddLiquidityStepper = ({
   }
 
   const renderTokenSelect = () => (
-    <View gap={4} className="mt-4">
-      <View gap={4}>
-        <TokenSelector onSelectToken={setTokenA} tokenAddress={tokenA} />
-
-        <View
-          direction="row"
-          gap={2}
-          justify="space-between"
-          className="p-4 border rounded"
-        >
-          {tokenAInfo ? (
-            <View direction="row" justify="space-between" className="w-full">
-              <Text>{tokenAInfo.symbol}</Text>
-              {tokenABalance && (
-                <Text>Balance: {formatUnits(tokenABalance, tokenAInfo.decimals)}</Text>
-              )}
-            </View>
-          ) : (
-            <Button onClick={() => setIsSelectingTokenA(true)}>Select Token</Button>
-          )}
-        </View>
+    <View gap={4} padding={4} borderColor="neutral-faded" borderRadius="large">
+      <View>
+        <Text variant="body-1">Select Pair</Text>
+        <Text variant="body-3" color="neutral-faded">
+          Choose the tokens you want to provide liquidity for.
+        </Text>
       </View>
 
-      <View gap={4}>
-        <TokenSelector onSelectToken={setTokenB} tokenAddress={tokenB} />
-        <View
-          direction="row"
-          gap={2}
-          justify="space-between"
-          className="p-4 border rounded"
-        >
-          {isKUBPair ? (
-            <View direction="row" justify="space-between" className="w-full">
-              <Text>KUB</Text>
-              {kubBalance && (
-                <Text>Balance: {formatUnits(kubBalance.value, 18)} KUB</Text>
-              )}
-            </View>
-          ) : tokenBInfo ? (
-            <View direction="row" justify="space-between" className="w-full">
-              <Text>{tokenBInfo.symbol}</Text>
-              {tokenBBalance && tokenBInfo && (
-                <Text>Balance: {formatUnits(tokenBBalance, tokenBInfo.decimals)}</Text>
-              )}
-            </View>
-          ) : (
-            <Button onClick={() => setIsSelectingTokenB(true)}>Select Token</Button>
-          )}
-        </View>
+      <View direction="row" gap={4}>
+        <View.Item columns={{ s: 12, m: 6 }}>
+          <View gap={4}>
+            <TokenSelector onSelectToken={setTokenA} tokenAddress={tokenA} />
+          </View>
+        </View.Item>
+        <View.Item columns={{ s: 12, m: 6 }}>
+          <View gap={4}>
+            <TokenSelector onSelectToken={setTokenB} tokenAddress={tokenB} />
+          </View>
+        </View.Item>
       </View>
 
-      <Button fullWidth disabled={!tokenA || !tokenB} onClick={handleNext}>
-        Next
+      <Button
+        fullWidth
+        disabled={!tokenA || !tokenB}
+        onClick={handleNext}
+        color="primary"
+        size="large"
+        rounded={true}
+      >
+        Continue
       </Button>
     </View>
   )
 
   const renderAmountInputs = () => (
-    <View gap={4} className="mt-4">
+    <View borderColor="neutral-faded" borderRadius="large" padding={4}>
       <View gap={2}>
         <View direction="row" justify="space-between">
           <TokenSelector onSelectToken={setTokenA} tokenAddress={tokenA} />
@@ -474,26 +451,43 @@ const AddLiquidityStepper = ({
   )
 
   return (
-    <View className="w-full max-w-2xl mx-auto">
-      <Card className="w-full p-6">
-        <View gap={6}>
-          <Text variant="title-3">Add Liquidity</Text>
+    <View width={{ s: '100%', l: '980px' }} gap={8}>
+      <View direction="row" justify="space-between">
+        <Text variant="title-6" weight="regular">
+          New Position
+        </Text>
+        <Button variant="outline" attributes={{ style: { borderRadius: '12px' } }}>
+          <Icon size={5} svg={GearSix} />
+        </Button>
+      </View>
 
-          <Stepper activeId={activeStep} direction="column">
-            <Stepper.Item
-              title="Select Pair"
-              subtitle="Choose tokens to provide liquidity"
-              completed={activeStep > 0}
-            >
-              {activeStep === 0 && renderTokenSelect()}
-            </Stepper.Item>
+      <View direction="row" gap={16}>
+        <View.Item columns={{ s: 12, l: 5 }}>
+          <View gap={8}>
+            <View borderColor="neutral-faded" borderRadius="large" padding={4}>
+              <View gap={6}>
+                <Stepper
+                  activeId={activeStep}
+                  direction="column"
+                  attributes={{ style: { gap: 32 } }}
+                >
+                  <Stepper.Item
+                    title="Step 1"
+                    subtitle="Select token pair"
+                    completed={activeStep > 0}
+                  />
 
-            <Stepper.Item title="Add Liquidity" subtitle="Enter the amounts and confirm">
-              {activeStep === 1 && renderAmountInputs()}
-            </Stepper.Item>
-          </Stepper>
-        </View>
-      </Card>
+                  <Stepper.Item title="Step 2" subtitle="Enter deposit amounts" />
+                </Stepper>
+              </View>
+            </View>
+          </View>
+        </View.Item>
+        <View.Item columns={{ s: 12, l: 7 }}>
+          {activeStep === 0 && renderTokenSelect()}
+          {activeStep === 1 && renderAmountInputs()}
+        </View.Item>
+      </View>
     </View>
   )
 }

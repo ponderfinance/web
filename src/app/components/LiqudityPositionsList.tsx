@@ -151,14 +151,6 @@ export default function LiquidityPositionsList() {
               ? selectedPosition.token1.address
               : selectedPosition.token0.address;
 
-          // Debug logs
-          console.log('Token addresses:', {
-            token0: selectedPosition.token0.address,
-            token1: selectedPosition.token1.address,
-            isToken0KKUB,
-            nonKKUBToken
-          });
-
           // DEBUGGING: Use extremely low minimum values
           const tokenMin = BigInt(1);  // 1 wei
           const ethMin = BigInt(1);    // 1 wei
