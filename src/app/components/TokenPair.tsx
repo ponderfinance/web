@@ -67,42 +67,53 @@ export const TokenPair: React.FC<TokenPairProps> = ({ tokenAddressA, tokenAddres
   return (
     <View>
       <View direction="row" align="center" gap={2}>
-        <View position="relative" width={12} height={8}>
-          <View
-            position="absolute"
-            insetTop={0}
-            insetStart={0}
-            attributes={{ style: { zIndex: 2 } }}
-            overflow="hidden"
-            borderRadius="circular"
-          >
-            <Image
-              src={firstTokenDisplay.icon}
-              height={32}
-              width={32}
-              alt={firstTokenDisplay.symbol}
-            />
+        <View position="relative">
+          <View height={8} width={8} overflow="hidden" insetStart={-4.25}>
+            <View
+              position="absolute"
+              insetTop={0}
+              insetEnd={-4}
+              attributes={{ style: { zIndex: 2 } }}
+              overflow="hidden"
+              borderRadius="circular"
+              height={8}
+              width={8}
+            >
+              <Image
+                src={firstTokenDisplay.icon}
+                height={32}
+                width={32}
+                alt={firstTokenDisplay.symbol}
+              />
+            </View>
           </View>
-
-          {/* Second token (overlapping to the right) */}
           <View
-            position="absolute"
-            insetTop={0}
-            insetStart={6}
+            height={8}
+            width={8}
             overflow="hidden"
-            borderRadius="circular"
-            attributes={{
-              style: {
-                zIndex: 1,
-              },
-            }}
+            insetEnd={-4.25}
+            insetTop={0}
+            position="absolute"
           >
-            <Image
-              src={secondTokenDisplay.icon}
-              height={32}
-              width={32}
-              alt={secondTokenDisplay.symbol}
-            />
+            <View
+              position="absolute"
+              insetTop={0}
+              insetStart={-4}
+              overflow="hidden"
+              borderRadius="circular"
+              attributes={{
+                style: {
+                  zIndex: 1,
+                },
+              }}
+            >
+              <Image
+                src={secondTokenDisplay.icon}
+                height={32}
+                width={32}
+                alt={secondTokenDisplay.symbol}
+              />
+            </View>
           </View>
         </View>
         <Text variant="body-1">
