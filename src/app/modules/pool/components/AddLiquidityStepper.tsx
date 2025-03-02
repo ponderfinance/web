@@ -443,7 +443,7 @@ const AddLiquidityStepper = ({
   )
 
   return (
-    <View width={{ s: '100%', l: '980px' }} gap={8}>
+    <View width="100%" maxWidth="980px" gap={8}>
       <View direction="row" justify="space-between">
         <Text variant="title-6" weight="regular">
           New Position
