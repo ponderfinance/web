@@ -5,7 +5,7 @@ import AddLiquidityStepper from '@/src/app/modules/pool/components/AddLiquidityS
 export default function Pool() {
   return (
     <View direction="column">
-      <View paddingInline={16} maxWidth={'1280px'}>
+      <View padding={2} maxWidth={'1032px'}>
         {/*<CreatePair />*/}
         <AddLiquidityStepper
           defaultTokenA="0x33C9B02596d7b1CB4066cC2CeEdd37f3A7c7Aa07"

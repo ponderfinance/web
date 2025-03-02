@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
-import { Text, Button, View, Actionable } from 'reshaped'
+import { Text, Button, View, Actionable, Icon } from 'reshaped'
 import { type Address, formatUnits, parseUnits } from 'viem'
 import { useAccount, useBalance } from 'wagmi'
 import { useQuery } from '@tanstack/react-query'
@@ -15,12 +15,36 @@ import {
   useTransaction,
   usePonderSDK,
 } from '@ponderfinance/sdk'
-import { ArrowDown } from '@phosphor-icons/react'
+import { ArrowDown, GasPump } from '@phosphor-icons/react'
 import { usePrivy } from '@privy-io/react-auth'
 import { InterfaceTabs } from '@/src/app/modules/swap/components/InterfaceTabs'
 import { TokenBalanceDisplay } from '@/src/app/modules/swap/components/TokenBalanceDisplay'
 import TokenSelector from '@/src/app/components/TokenSelector'
 import { CURRENT_CHAIN } from '@/src/app/constants/chains'
+import { formatNumber, roundDecimal } from '@/src/app/utils/numbers'
+
+const kubTokenAbi = [
+  {
+    name: 'allowance',
+    type: 'function',
+    inputs: [
+      { name: 'owner', type: 'address' },
+      { name: 'spender', type: 'address' },
+    ],
+    outputs: [{ name: '', type: 'uint256' }],
+    stateMutability: 'view',
+  },
+  {
+    name: 'approve',
+    type: 'function',
+    inputs: [
+      { name: 'spender', type: 'address' },
+      { name: 'amount', type: 'uint256' },
+    ],
+    outputs: [{ name: '', type: 'bool' }],
+    stateMutability: 'nonpayable',
+  },
+] as const
 
 interface SwapInterfaceProps {
   defaultTokenIn?: Address
@@ -153,7 +177,6 @@ export function SwapInterface({
     )
   )
 
-  // Get effective balances considering both ERC20 and native balances
   const effectiveTokenInBalance = useMemo(() => {
     if (!tokenIn) return undefined
 
@@ -187,15 +210,12 @@ export function SwapInterface({
     }
   }, [amountIn, tokenInInfo, tokenIn])
 
-  // Need to get WKUB address for path calculation
   const { data: wkubAddress } = useQuery({
     queryKey: ['ponder', 'router', 'wkub'],
     queryFn: () => sdk.router.KKUB(),
     enabled: !!sdk.router,
   })
 
-  // Create adjusted tokenIn/tokenOut for routing that uses WKUB instead of zero address
-  // But handle special case for direct KUB/WKUB swaps
   const routeTokenIn = useMemo(() => {
     if (isNativeKUB(tokenIn) && wkubAddress) {
       return wkubAddress
@@ -210,7 +230,6 @@ export function SwapInterface({
     return tokenOut as Address
   }, [tokenOut, wkubAddress])
 
-  // Check if this is a direct KUB <-> WKUB swap
   const isDirectKubWkubSwap = useMemo(() => {
     if (!wkubAddress) return false
 
@@ -223,7 +242,6 @@ export function SwapInterface({
     return isKubToWkub || isWkubToKub
   }, [tokenIn, tokenOut, wkubAddress])
 
-  // For direct KUB <-> WKUB swaps, create a synthetic route
   const syntheticDirectRoute = useMemo(() => {
     if (
       !isDirectKubWkubSwap ||
@@ -350,6 +368,8 @@ export function SwapInterface({
     serializedCallData,
     Boolean(serializedCallData)
   )
+
+  console.log('GAS', gasEstimate)
 
   // Contract interactions
   const { mutateAsync: approve } = useSwapApproval()
@@ -532,30 +552,6 @@ export function SwapInterface({
         try {
           console.log('Using direct unwrapKKUB for WKUB -> KUB')
 
-          // Double check if we need approval for the unwrapper
-          const kubTokenAbi = [
-            {
-              name: 'allowance',
-              type: 'function',
-              inputs: [
-                { name: 'owner', type: 'address' },
-                { name: 'spender', type: 'address' },
-              ],
-              outputs: [{ name: '', type: 'uint256' }],
-              stateMutability: 'view',
-            },
-            {
-              name: 'approve',
-              type: 'function',
-              inputs: [
-                { name: 'spender', type: 'address' },
-                { name: 'amount', type: 'uint256' },
-              ],
-              outputs: [{ name: '', type: 'bool' }],
-              stateMutability: 'nonpayable',
-            },
-          ] as const
-
           // Check current allowance
           const unwrapperAllowance = await sdk.publicClient.readContract({
             address: wkubAddress,
@@ -563,9 +559,6 @@ export function SwapInterface({
             functionName: 'allowance',
             args: [account, sdk.kkubUnwrapper.address],
           })
-
-          console.log('Current unwrapper allowance:', unwrapperAllowance?.toString())
-          console.log('Required amount:', parsedAmountIn.toString())
 
           // If allowance is insufficient, we need to approve
           if (unwrapperAllowance < parsedAmountIn) {
@@ -604,13 +597,7 @@ export function SwapInterface({
               next.delete(wkubAddress)
               return next
             })
-
-            console.log('Approval confirmed')
-          } else {
-            console.log('Unwrapper already has sufficient allowance')
           }
-
-          console.log('Now unwrapping WKUB...')
 
           // Now call unwrapKKUB with the approved amount
           const hash = await sdk.unwrapKKUB(parsedAmountIn, account)
@@ -626,45 +613,6 @@ export function SwapInterface({
           return
         } catch (unwrapErr: any) {
           console.error('Direct WKUB unwrap failed, trying router:', unwrapErr)
-
-          // Fallback to router
-          try {
-            console.log('Falling back to router for WKUB -> KUB')
-
-            const deadline = BigInt(
-              Math.floor(Date.now() / 1000) + DEFAULT_DEADLINE_MINUTES * 60
-            )
-
-            // For WKUB -> KUB, use swapExactTokensForETH with path=[WKUB]
-            const swapParams = {
-              type: 'exactTokensForETH' as const,
-              params: {
-                amountIn: parsedAmountIn,
-                amountOutMin: minimumReceived.raw,
-                path: [wkubAddress], // Just the WKUB token in the path
-                to: account,
-                deadline,
-              },
-            }
-
-            const result = await swap(swapParams)
-            setTxHash(result.hash)
-            setAmountIn('')
-
-            await sdk.publicClient.waitForTransactionReceipt({
-              hash: result.hash,
-              confirmations: 1,
-            })
-
-            return
-          } catch (routerErr: any) {
-            console.error('Router WKUB unwrap also failed:', routerErr)
-            setError(
-              `WKUB unwrap failed with both methods: ${unwrapErr.message || 'Unknown unwrapper error'} | ${routerErr.message || 'Unknown router error'}`
-            )
-            setIsProcessing(false)
-            return
-          }
         }
       }
 
@@ -783,23 +731,6 @@ export function SwapInterface({
     return `Swap failed: ${message}`
   }
 
-  // Debugging KUB swaps
-  useEffect(() => {
-    // Log relevant information when routing with KUB
-    if (route && (isNativeKUB(tokenIn) || isNativeKUB(tokenOut)) && wkubAddress) {
-      console.log('KUB Swap Route:', {
-        originalTokenIn: tokenIn,
-        originalTokenOut: tokenOut,
-        routeTokenIn: routeTokenIn,
-        routeTokenOut: routeTokenOut,
-        wkubAddress,
-        path: route.path,
-        amountIn: route.amountIn.toString(),
-        amountOut: route.amountOut.toString(),
-      })
-    }
-  }, [route, tokenIn, tokenOut, routeTokenIn, routeTokenOut, wkubAddress])
-
   // Reset on successful transaction
   useEffect(() => {
     if (txStatus?.state === 'confirmed') {
@@ -895,8 +826,11 @@ export function SwapInterface({
                   <View direction="row" align="center" justify="end" gap={2}>
                     {/* Display balance based on whether it's native KUB or ERC20 */}
                     {isNativeKUB(tokenIn) ? (
-                      <Text variant="caption-2" color="neutral">
-                        Balance: {formatUnits(effectiveTokenInBalance, 18)} KUB
+                      <Text color="neutral-faded" variant="body-3" maxLines={1}>
+                        {formatNumber(
+                          roundDecimal(formatUnits(effectiveTokenInBalance, 18), 2)
+                        )}{' '}
+                        KUB
                       </Text>
                     ) : (
                       <TokenBalanceDisplay
@@ -940,35 +874,6 @@ export function SwapInterface({
               </View>
             </View>
 
-            {/* Switch Tokens Button */}
-            <View
-              position="absolute"
-              insetTop={32}
-              align="center"
-              backgroundColor="elevation-overlay"
-              borderColor="neutral-faded"
-              borderRadius="large"
-              attributes={{ style: { left: '50%', marginLeft: '-22px' } }}
-              zIndex={2}
-            >
-              <Actionable
-                onClick={() => {
-                  if (!isProcessing) {
-                    setTokenIn(tokenOut)
-                    setTokenOut(tokenIn)
-                    setAmountIn('')
-                    setError(null)
-                  }
-                }}
-                disabled={isProcessing}
-                fullWidth={true}
-              >
-                <View padding={2}>
-                  <ArrowDown size={28} />
-                </View>
-              </Actionable>
-            </View>
-
             {/* Output Token Section */}
             <View
               gap={2}
@@ -978,7 +883,44 @@ export function SwapInterface({
               borderRadius="large"
               backgroundColor="elevation-base"
               align="start"
+              position="relative"
             >
+              <View
+                position="absolute"
+                insetTop={-7}
+                align="center"
+                backgroundColor="elevation-overlay"
+                borderColor="neutral-faded"
+                borderRadius="large"
+                attributes={{
+                  style: {
+                    left: '50%',
+                    marginLeft: '-22px',
+                    borderWidth: '4px',
+                    borderColor: 'var(--rs-color-background-page)',
+                  },
+                }}
+                zIndex={2}
+              >
+                <Button
+                  onClick={() => {
+                    if (!isProcessing) {
+                      setTokenIn(tokenOut)
+                      setTokenOut(tokenIn)
+                      setAmountIn('')
+                      setError(null)
+                    }
+                  }}
+                  disabled={isProcessing}
+                  variant="ghost"
+                  size="small"
+                  attributes={{ style: { paddingInline: 4 } }}
+                >
+                  <View padding={2}>
+                    <ArrowDown size={24} />
+                  </View>
+                </Button>
+              </View>
               <Text color="neutral-faded" variant="body-3">
                 Buy
               </Text>
@@ -1004,8 +946,11 @@ export function SwapInterface({
                   <View direction="row" align="center" justify="end" gap={2}>
                     {/* Display balance based on whether it's native KUB or ERC20 */}
                     {isNativeKUB(tokenOut) ? (
-                      <Text variant="caption-2" color="neutral">
-                        Balance: {formatUnits(effectiveTokenOutBalance, 18)} KUB
+                      <Text color="neutral-faded" variant="body-3" maxLines={1}>
+                        {formatNumber(
+                          roundDecimal(formatUnits(effectiveTokenOutBalance, 18))
+                        )}{' '}
+                        KUB
                       </Text>
                     ) : (
                       <TokenBalanceDisplay
@@ -1018,52 +963,52 @@ export function SwapInterface({
               </View>
             </View>
             {/* Trade Details */}
-            {route && (
-              <View gap={4} className="bg-gray-50 p-4 rounded mt-4">
-                <View direction="row" justify="space-between">
-                  <Text>Price Impact</Text>
-                  <Text
-                    color={
-                      showCriticalPriceImpactWarning
-                        ? 'critical'
-                        : showPriceImpactWarning
-                          ? 'warning'
-                          : 'neutral'
-                    }
-                  >
-                    {route.priceImpact.toFixed(2)}%
-                  </Text>
-                </View>
+            {/*{route && (*/}
+            {/*  <View gap={4} className="bg-gray-50 p-4 rounded mt-4">*/}
+            {/*    <View direction="row" justify="space-between">*/}
+            {/*      <Text>Price Impact</Text>*/}
+            {/*      <Text*/}
+            {/*        color={*/}
+            {/*          showCriticalPriceImpactWarning*/}
+            {/*            ? 'critical'*/}
+            {/*            : showPriceImpactWarning*/}
+            {/*              ? 'warning'*/}
+            {/*              : 'neutral'*/}
+            {/*        }*/}
+            {/*      >*/}
+            {/*        {route.priceImpact.toFixed(2)}%*/}
+            {/*      </Text>*/}
+            {/*    </View>*/}
 
-                <View direction="row" justify="space-between">
-                  <Text>Minimum Received</Text>
-                  <Text>
-                    {minimumReceived?.formatted}{' '}
-                    {isNativeKUB(tokenOut) ? 'KUB' : tokenOutInfo?.symbol}
-                  </Text>
-                </View>
+            {/*    <View direction="row" justify="space-between">*/}
+            {/*      <Text>Minimum Received</Text>*/}
+            {/*      <Text>*/}
+            {/*        {minimumReceived?.formatted}{' '}*/}
+            {/*        {isNativeKUB(tokenOut) ? 'KUB' : tokenOutInfo?.symbol}*/}
+            {/*      </Text>*/}
+            {/*    </View>*/}
 
-                {gasEstimate && (
-                  <View direction="row" justify="space-between">
-                    <Text>Network Fee</Text>
-                    <Text>{gasEstimate.estimateInKUB} KUB</Text>
-                  </View>
-                )}
+            {/*    {gasEstimate && (*/}
+            {/*      <View direction="row" justify="space-between">*/}
+            {/*        <Text>Network Fee</Text>*/}
+            {/*        <Text>{gasEstimate.estimateInKUB} KUB</Text>*/}
+            {/*      </View>*/}
+            {/*    )}*/}
 
-                {route.totalFee > BigInt(0) && (
-                  <View direction="row" justify="space-between">
-                    <Text>Trading Fee</Text>
-                    <Text>
-                      {formatUnits(
-                        route.totalFee,
-                        isNativeKUB(tokenIn) ? 18 : tokenInInfo?.decimals || 18
-                      )}{' '}
-                      {isNativeKUB(tokenIn) ? 'KUB' : tokenInInfo?.symbol}
-                    </Text>
-                  </View>
-                )}
-              </View>
-            )}
+            {/*    {route.totalFee > BigInt(0) && (*/}
+            {/*      <View direction="row" justify="space-between">*/}
+            {/*        <Text>Trading Fee</Text>*/}
+            {/*        <Text>*/}
+            {/*          {formatUnits(*/}
+            {/*            route.totalFee,*/}
+            {/*            isNativeKUB(tokenIn) ? 18 : tokenInInfo?.decimals || 18*/}
+            {/*          )}{' '}*/}
+            {/*          {isNativeKUB(tokenIn) ? 'KUB' : tokenInInfo?.symbol}*/}
+            {/*        </Text>*/}
+            {/*      </View>*/}
+            {/*    )}*/}
+            {/*  </View>*/}
+            {/*)}*/}
 
             {/* Error Display */}
             {error && (
@@ -1116,14 +1061,26 @@ export function SwapInterface({
                 <Button
                   fullWidth
                   size="large"
-                  disabled={!isValidTrade || !route || isProcessing}
+                  disabled={!isValidTrade || !route || isProcessing || isRouteLoading}
+                  loading={isRouteLoading || isProcessing}
                   onClick={handleSwap}
                   variant="solid"
                   color="primary"
+                  attributes={{ style: { borderRadius: 'var(--rs-radius-large)' } }}
                 >
-                  Swap
+                  {isRouteLoading ? 'Finalizing Quote ' : 'Swap'}
                 </Button>
               )}
+              <View>
+                {gasEstimate && (
+                  <View direction="row" gap={1}>
+                    <Icon svg={GasPump} size={4} color="neutral-faded" />
+                    <Text variant="caption-2" weight="regular">
+                      {gasEstimate.estimateInKUB} KUB
+                    </Text>
+                  </View>
+                )}
+              </View>
 
               {/* Price Impact Warning */}
               {showPriceImpactWarning && (
@@ -1139,41 +1096,6 @@ export function SwapInterface({
                         2
                       )}% loss). Consider reducing your trade size.`}
                 </Text>
-              )}
-
-              {/* Route Information */}
-              {route && route.hops.length > 0 && (
-                <View gap={2} className="mt-2">
-                  <Text weight="medium" align="center">
-                    Route
-                  </Text>
-                  {route.hops.map((hop, index) => {
-                    // Display adjusted tokens in the route to show KUB instead of WKUB where appropriate
-                    const displayTokenIn = index === 0 ? tokenIn : hop.tokenIn
-                    const displayTokenOut =
-                      index === route.hops.length - 1 ? tokenOut : hop.tokenOut
-
-                    return (
-                      <View key={index} direction="row" justify="center" gap={2}>
-                        <Text color="neutral">
-                          {index === 0
-                            ? isNativeKUB(tokenIn)
-                              ? 'KUB'
-                              : tokenInInfo?.symbol
-                            : `Token${index}`}
-                        </Text>
-                        <Text color="neutral">→</Text>
-                        <Text color="neutral">
-                          {index === route.hops.length - 1
-                            ? isNativeKUB(tokenOut)
-                              ? 'KUB'
-                              : tokenOutInfo?.symbol
-                            : `Token${index + 1}`}
-                        </Text>
-                      </View>
-                    )
-                  })}
-                </View>
               )}
             </View>
           </View>

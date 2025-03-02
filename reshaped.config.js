@@ -7,9 +7,10 @@ const config = {
         backgroundPage: { hex: '#1E1E1E' },
         backgroundPrimary: { hex: '#94E0FE' },
         backgroundDisabled: { hex: '#2d4954' },
-        backgroundElevationBase: { hex: '#202629' },
+        backgroundElevationBase: { hex: '#212528' },
         backgroundElevationOverlay: { hex: '#212121' },
         backgroundNeutral: { hex: '#2a2c30' },
+        backgroundNeutralFaded: { hex: '#272829' },
       },
       radius: {
         small: { px: 8 },

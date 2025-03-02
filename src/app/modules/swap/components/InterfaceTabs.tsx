@@ -66,7 +66,7 @@ export const InterfaceTabs = ({
     <View direction="row" gap={1} justify="space-between" align="center">
       <View direction="row" gap={1}>
         <Button
-          variant={pathname === '/swap' ? 'outline' : 'ghost'}
+          variant={pathname === '/swap' ? 'faded' : 'ghost'}
           size="small"
           rounded={true}
         >
@@ -79,7 +79,7 @@ export const InterfaceTabs = ({
           </Link>
         </Button>
         <Button
-          variant={pathname === '/send' ? 'outline' : 'ghost'}
+          variant={pathname === '/send' ? 'faded' : 'ghost'}
           size="small"
           rounded={true}
         >
