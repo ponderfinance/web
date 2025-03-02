@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react'
-import { Stepper, View, Text, Card, Button, Modal, Icon } from 'reshaped'
+import { Stepper, View, Text, Card, Button, Modal, Icon, DropdownMenu } from 'reshaped'
 import { Address, formatUnits, parseUnits, zeroAddress } from 'viem'
 import { useAccount, useBalance } from 'wagmi'
 import {
@@ -12,7 +12,8 @@ import {
   useTokenApproval,
 } from '@ponderfinance/sdk'
 import TokenSelector from '@/src/app/components/TokenSelector'
-import { GearSix } from '@phosphor-icons/react'
+import { GearSix, NotePencil } from '@phosphor-icons/react'
+import { TokenPair } from '@/src/app/components/TokenPair'
 
 interface AddLiquidityStepperProps {
   defaultTokenA?: Address
@@ -298,14 +299,13 @@ const AddLiquidityStepper = ({
   }
 
   const renderTokenSelect = () => (
-    <View gap={4} padding={4} borderColor="neutral-faded" borderRadius="large">
+    <View gap={4} padding={6} borderColor="neutral-faded" borderRadius="large">
       <View>
         <Text variant="body-1">Select Pair</Text>
         <Text variant="body-3" color="neutral-faded">
           Choose the tokens you want to provide liquidity for.
         </Text>
       </View>
-
       <View direction="row" gap={4}>
         <View.Item columns={{ s: 12, m: 6 }}>
           <View gap={4}>
@@ -318,7 +318,6 @@ const AddLiquidityStepper = ({
           </View>
         </View.Item>
       </View>
-
       <Button
         fullWidth
         disabled={!tokenA || !tokenB}
@@ -333,92 +332,82 @@ const AddLiquidityStepper = ({
   )
 
   const renderAmountInputs = () => (
-    <View borderColor="neutral-faded" borderRadius="large" padding={4}>
-      <View gap={2}>
-        <View direction="row" justify="space-between">
-          <TokenSelector onSelectToken={setTokenA} tokenAddress={tokenA} />
-          {tokenABalance && tokenAInfo && (
-            <Text>
-              Balance: {formatUnits(tokenABalance, tokenAInfo.decimals)}{' '}
-              {tokenAInfo.symbol}
-            </Text>
-          )}
+    <View direction="column" gap={16}>
+      <View
+        direction="row"
+        justify="space-between"
+        borderColor="neutral-faded"
+        borderRadius="large"
+        padding={6}
+        gap={4}
+      >
+        <View>
+          <TokenPair tokenAddressA={tokenA} tokenAddressB={tokenB} />
         </View>
-        <input
-          value={amountA}
-          onChange={(e) => handleAmountAInput(e.target.value)}
-          placeholder="0.0"
-          className="w-full p-2 border rounded"
-        />
-      </View>
-
-      <View gap={2}>
-        <View direction="row" justify="space-between">
-          <TokenSelector onSelectToken={setTokenB} tokenAddress={tokenB} />
-          {isKUBPair
-            ? kubBalance && <Text>Balance: {formatUnits(kubBalance.value, 18)} KUB</Text>
-            : tokenBBalance &&
-              tokenBInfo && (
-                <Text>
-                  Balance: {formatUnits(tokenBBalance, tokenBInfo.decimals)}{' '}
-                  {tokenBInfo.symbol}
-                </Text>
-              )}
+        <View>
+          <Button onClick={handleBack}>
+            <Icon svg={NotePencil} size={5} />
+            Edit
+          </Button>
         </View>
-        <input
-          value={amountB}
-          onChange={(e) => handleAmountBInput(e.target.value)}
-          placeholder="0.0"
-          className="w-full p-2 border rounded"
-        />
       </View>
-
-      {pairInfo && !pairExists?.canCreate && (
+      <View borderColor="neutral-faded" borderRadius="large" padding={6} gap={4}>
+        <View>
+          <Text variant="body-1">Deposit Tokens</Text>
+          <Text variant="body-3" color="neutral-faded">
+            Specify the token amounts for your liquidity contribution.
+          </Text>
+        </View>
         <View gap={2}>
-          <Text>Current Pool Ratio</Text>
-          {/*<Text>*/}
-          {/*  1 {tokenAInfo?.symbol} ={' '}*/}
-          {/*  {formatUnits(*/}
-          {/*    (BigInt(pairInfo.reserve1) * BigInt(10 ** (tokenAInfo?.decimals || 18))) /*/}
-          {/*      BigInt(pairInfo.reserve0),*/}
-          {/*    isKUBPair ? 18 : tokenBInfo?.decimals || 18*/}
-          {/*  )}{' '}*/}
-          {/*  {isKUBPair ? 'KUB' : tokenBInfo?.symbol}*/}
-          {/*</Text>*/}
+          <View direction="row" justify="space-between">
+            <TokenSelector onSelectToken={setTokenA} tokenAddress={tokenA} />
+            {tokenABalance && tokenAInfo && (
+              <Text>
+                Balance: {formatUnits(tokenABalance, tokenAInfo.decimals)}{' '}
+                {tokenAInfo.symbol}
+              </Text>
+            )}
+          </View>
+          <input
+            value={amountA}
+            onChange={(e) => handleAmountAInput(e.target.value)}
+            placeholder="0.0"
+            className="w-full p-2 border rounded"
+          />
         </View>
-      )}
-
-      {pairExists?.canCreate && (
-        <Text variant="caption-1" color="neutral-faded">
-          You are creating a new liquidity pool
-        </Text>
-      )}
-
-      {error && (
-        <Text color="critical" className="p-2 bg-red-50 rounded">
-          {error}
-        </Text>
-      )}
-
-      <View gap={2}>
-        <Text>Slippage Tolerance</Text>
-        <View direction="row" gap={2}>
-          {[0.1, 0.5, 1.0].map((value) => (
-            <Button
-              key={value}
-              variant={slippage === value ? 'outline' : 'ghost'}
-              onClick={() => setSlippage(value)}
-            >
-              {value}%
-            </Button>
-          ))}
+        <View gap={2}>
+          <View direction="row" justify="space-between">
+            <TokenSelector onSelectToken={setTokenB} tokenAddress={tokenB} />
+            {isKUBPair
+              ? kubBalance && (
+                  <Text>Balance: {formatUnits(kubBalance.value, 18)} KUB</Text>
+                )
+              : tokenBBalance &&
+                tokenBInfo && (
+                  <Text>
+                    Balance: {formatUnits(tokenBBalance, tokenBInfo.decimals)}{' '}
+                    {tokenBInfo.symbol}
+                  </Text>
+                )}
+          </View>
+          <input
+            value={amountB}
+            onChange={(e) => handleAmountBInput(e.target.value)}
+            placeholder="0.0"
+            className="w-full p-2 border rounded"
+          />
         </View>
-      </View>
+        {pairExists?.canCreate && (
+          <Text variant="caption-1" color="neutral-faded">
+            You are creating a new liquidity pool
+          </Text>
+        )}
 
-      <View direction="row" gap={2} className="mt-4">
-        <Button variant="outline" onClick={handleBack}>
-          Back
-        </Button>
+        {error && (
+          <Text color="critical" className="p-2 bg-red-50 rounded">
+            {error}
+          </Text>
+        )}
 
         {!account ? (
           <Button fullWidth>Connect Wallet</Button>
@@ -438,12 +427,15 @@ const AddLiquidityStepper = ({
           )
         ) : (
           <Button
-            fullWidth
+            fullWidth={true}
             disabled={!isValid || isAddingLiquidity}
             loading={isAddingLiquidity}
             onClick={handleAddLiquidity}
+            color="primary"
+            size="large"
+            rounded={true}
           >
-            {pairExists?.canCreate ? 'Create Pool & Supply' : 'Supply'}
+            Create
           </Button>
         )}
       </View>
@@ -456,15 +448,40 @@ const AddLiquidityStepper = ({
         <Text variant="title-6" weight="regular">
           New Position
         </Text>
-        <Button variant="outline" attributes={{ style: { borderRadius: '12px' } }}>
-          <Icon size={5} svg={GearSix} />
-        </Button>
+        <DropdownMenu>
+          <DropdownMenu.Trigger>
+            {(attributes) => (
+              <Button
+                variant="outline"
+                attributes={{ ...attributes, style: { borderRadius: '12px' } }}
+              >
+                <Icon size={5} svg={GearSix} />
+              </Button>
+            )}
+          </DropdownMenu.Trigger>
+          <DropdownMenu.Content>
+            <View gap={2}>
+              <Text>Slippage Tolerance</Text>
+              <View direction="row" gap={2}>
+                {[0.1, 0.5, 1.0].map((value) => (
+                  <Button
+                    key={value}
+                    variant={slippage === value ? 'outline' : 'ghost'}
+                    onClick={() => setSlippage(value)}
+                  >
+                    {value}%
+                  </Button>
+                ))}
+              </View>
+            </View>
+          </DropdownMenu.Content>
+        </DropdownMenu>
       </View>
 
       <View direction="row" gap={16}>
         <View.Item columns={{ s: 12, l: 5 }}>
           <View gap={8}>
-            <View borderColor="neutral-faded" borderRadius="large" padding={4}>
+            <View borderColor="neutral-faded" borderRadius="large" padding={6}>
               <View gap={6}>
                 <Stepper
                   activeId={activeStep}

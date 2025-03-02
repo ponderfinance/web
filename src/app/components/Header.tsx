@@ -5,13 +5,14 @@ import Image from 'next/image'
 import { Button, Popover, Skeleton, Text, View } from 'reshaped'
 import Link from 'next/link'
 import { PaperPlaneTilt, Path, Triangle } from '@phosphor-icons/react'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import { Footer } from '@/src/app/components/Footer'
 import { XKOIButton } from '@/src/app/components/xKOIButton'
 
 export const Header = () => {
   const { authenticated, login, logout } = usePrivy()
   const pathname = usePathname()
+  const router = useRouter()
 
   return (
     <View
@@ -70,32 +71,26 @@ export const Header = () => {
             </Popover.Trigger>
             <Popover.Content>
               <View direction="column" gap={1}>
-                <Link href={'/swap'}>
-                  <View
-                    direction="row"
-                    gap={2}
-                    align="center"
-                    padding={3}
-                    backgroundColor="elevation-base"
-                    borderRadius="medium"
-                  >
-                    <Path size={16} />
-                    <Text variant="body-2">Swap</Text>
-                  </View>
-                </Link>
-                <Link href={'/send'}>
-                  <View
-                    direction="row"
-                    gap={2}
-                    align="center"
-                    padding={3}
-                    backgroundColor="elevation-base"
-                    borderRadius="medium"
-                  >
-                    <PaperPlaneTilt size={16} />
-                    <Text variant="body-2">Send</Text>
-                  </View>
-                </Link>
+                <Button
+                  color="neutral"
+                  onClick={() => router.push('/swap')}
+                  attributes={{
+                    style: { justifyContent: 'start', paddingTop: 12, paddingBottom: 12 },
+                  }}
+                >
+                  <Path size={16} />
+                  <Text variant="body-2">Swap</Text>
+                </Button>
+                <Button
+                  color="neutral"
+                  onClick={() => router.push('/send')}
+                  attributes={{
+                    style: { justifyContent: 'start', paddingTop: 12, paddingBottom: 12 },
+                  }}
+                >
+                  <PaperPlaneTilt size={16} />
+                  <Text variant="body-2">Send</Text>
+                </Button>
               </View>
             </Popover.Content>
           </Popover>
@@ -115,30 +110,24 @@ export const Header = () => {
             </Popover.Trigger>
             <Popover.Content>
               <View direction="column" gap={1}>
-                <Link href={'/positions'}>
-                  <View
-                    direction="row"
-                    gap={2}
-                    align="center"
-                    padding={3}
-                    backgroundColor="elevation-base"
-                    borderRadius="medium"
-                  >
-                    <Text variant="body-2">View positions</Text>
-                  </View>
-                </Link>
-                <Link href={'/positions/create'}>
-                  <View
-                    direction="row"
-                    gap={2}
-                    align="center"
-                    padding={3}
-                    backgroundColor="elevation-base"
-                    borderRadius="medium"
-                  >
-                    <Text variant="body-2">Create position</Text>
-                  </View>
-                </Link>
+                <Button
+                  color="neutral"
+                  onClick={() => router.push('/positions')}
+                  attributes={{
+                    style: { justifyContent: 'start', paddingTop: 12, paddingBottom: 12 },
+                  }}
+                >
+                  <Text variant="body-2">View positions</Text>
+                </Button>
+                <Button
+                  color="neutral"
+                  onClick={() => router.push('/positions/create')}
+                  attributes={{
+                    style: { justifyContent: 'start', paddingTop: 12, paddingBottom: 12 },
+                  }}
+                >
+                  <Text variant="body-2">Create position</Text>
+                </Button>
               </View>
             </Popover.Content>
           </Popover>

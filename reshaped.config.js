@@ -9,6 +9,12 @@ const config = {
         backgroundDisabled: { hex: '#2d4954' },
         backgroundElevationBase: { hex: '#202629' },
         backgroundElevationOverlay: { hex: '#212121' },
+        backgroundNeutral: { hex: '#2a2c30' },
+      },
+      radius: {
+        small: { px: 8 },
+        medium: { px: 12 },
+        large: { px: 16 },
       },
       viewport: {
         m: { minPx: 660 },
