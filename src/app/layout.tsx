@@ -8,6 +8,7 @@ import { Analytics } from '@vercel/analytics/react'
 
 import './globals.css'
 import { Pathway_Extreme } from 'next/font/google'
+import { View } from 'reshaped'
 
 // Pathway Extreme font configuration
 const pathwayExtreme = Pathway_Extreme({
@@ -51,8 +52,14 @@ export default function RootLayout({
       <body>
         <Providers>
           <Header />
-          {children}
-          {/*<Footer />*/}
+          <View
+            maxWidth={{ s: '100%', m: '1032px' }}
+            attributes={{ style: { margin: '0 auto' } }}
+            insetTop={{ s: 16, m: 24 }}
+            padding={4}
+          >
+            {children}
+          </View>
         </Providers>
         <Analytics />
       </body>

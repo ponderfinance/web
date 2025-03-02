@@ -2,7 +2,7 @@
 
 import { usePrivy } from '@privy-io/react-auth'
 import Image from 'next/image'
-import { Button, Popover, Skeleton, Text, View } from 'reshaped'
+import { Button, Hidden, Popover, Skeleton, Text, View } from 'reshaped'
 import Link from 'next/link'
 import { PaperPlaneTilt, Path, Triangle } from '@phosphor-icons/react'
 import { usePathname, useRouter } from 'next/navigation'
@@ -19,9 +19,9 @@ export const Header = () => {
       direction="row"
       justify="space-between"
       align="center"
-      paddingInline={4}
-      paddingTop={4}
-      paddingBottom={4}
+      paddingInline={{ s: 1, m: 4 }}
+      paddingTop={{ s: 1, m: 4 }}
+      paddingBottom={{ s: 1, m: 4 }}
       backgroundColor="page"
       position="fixed"
       width="100%"
@@ -30,7 +30,7 @@ export const Header = () => {
       <View direction="row" gap={4} align="center">
         <Link href="/">
           <View align="center" direction="row" justify="center">
-            <Popover triggerType="hover" padding={1}>
+            <Popover triggerType="hover">
               <Popover.Trigger>
                 {(attributes) => (
                   <Button attributes={attributes} variant="ghost">
@@ -55,112 +55,136 @@ export const Header = () => {
           </View>
         </Link>
 
-        <View direction="row" gap={2}>
-          <Popover triggerType="hover" padding={1}>
-            <Popover.Trigger>
-              {(attributes) => (
-                <Button attributes={attributes} variant="ghost">
-                  <Text
-                    variant="body-1"
-                    color={pathname === '/swap' ? 'neutral' : 'neutral-faded'}
+        <Hidden hide={{ s: true, m: false }}>
+          <View direction="row" gap={2}>
+            <Popover triggerType="hover" padding={1}>
+              <Popover.Trigger>
+                {(attributes) => (
+                  <Button attributes={attributes} variant="ghost">
+                    <Text
+                      variant="body-1"
+                      color={pathname === '/swap' ? 'neutral' : 'neutral-faded'}
+                    >
+                      <Link href={'/swap'}>Trade</Link>
+                    </Text>
+                  </Button>
+                )}
+              </Popover.Trigger>
+              <Popover.Content>
+                <View direction="column" gap={1}>
+                  <Button
+                    color="neutral"
+                    onClick={() => router.push('/swap')}
+                    attributes={{
+                      style: {
+                        justifyContent: 'start',
+                        paddingTop: 12,
+                        paddingBottom: 12,
+                      },
+                    }}
                   >
-                    <Link href={'/swap'}>Trade</Link>
-                  </Text>
-                </Button>
-              )}
-            </Popover.Trigger>
-            <Popover.Content>
-              <View direction="column" gap={1}>
-                <Button
-                  color="neutral"
-                  onClick={() => router.push('/swap')}
-                  attributes={{
-                    style: { justifyContent: 'start', paddingTop: 12, paddingBottom: 12 },
-                  }}
-                >
-                  <Path size={16} />
-                  <Text variant="body-2">Swap</Text>
-                </Button>
-                <Button
-                  color="neutral"
-                  onClick={() => router.push('/send')}
-                  attributes={{
-                    style: { justifyContent: 'start', paddingTop: 12, paddingBottom: 12 },
-                  }}
-                >
-                  <PaperPlaneTilt size={16} />
-                  <Text variant="body-2">Send</Text>
-                </Button>
-              </View>
-            </Popover.Content>
-          </Popover>
-
-          <Popover triggerType="hover" padding={1}>
-            <Popover.Trigger>
-              {(attributes) => (
-                <Button attributes={attributes} variant="ghost">
-                  <Text
-                    variant="body-1"
-                    color={pathname === '/pool' ? 'neutral' : 'neutral-faded'}
+                    <Path size={16} />
+                    <Text variant="body-2">Swap</Text>
+                  </Button>
+                  <Button
+                    color="neutral"
+                    onClick={() => router.push('/send')}
+                    attributes={{
+                      style: {
+                        justifyContent: 'start',
+                        paddingTop: 12,
+                        paddingBottom: 12,
+                      },
+                    }}
                   >
-                    <Link href="/positions">Pool </Link>
-                  </Text>
-                </Button>
-              )}
-            </Popover.Trigger>
-            <Popover.Content>
-              <View direction="column" gap={1}>
-                <Button
-                  color="neutral"
-                  onClick={() => router.push('/positions')}
-                  attributes={{
-                    style: { justifyContent: 'start', paddingTop: 12, paddingBottom: 12 },
-                  }}
-                >
-                  <Text variant="body-2">View positions</Text>
-                </Button>
-                <Button
-                  color="neutral"
-                  onClick={() => router.push('/positions/create')}
-                  attributes={{
-                    style: { justifyContent: 'start', paddingTop: 12, paddingBottom: 12 },
-                  }}
-                >
-                  <Text variant="body-2">Create position</Text>
-                </Button>
-              </View>
-            </Popover.Content>
-          </Popover>
+                    <PaperPlaneTilt size={16} />
+                    <Text variant="body-2">Send</Text>
+                  </Button>
+                </View>
+              </Popover.Content>
+            </Popover>
 
-          {/*<Link href="/launch">*/}
-          {/*  <Button variant="ghost">*/}
-          {/*    <Text*/}
-          {/*      variant="body-1"*/}
-          {/*      color={pathname === '/launch' ? 'neutral' : 'neutral-faded'}*/}
-          {/*    >*/}
-          {/*      Launch*/}
-          {/*    </Text>*/}
-          {/*  </Button>*/}
-          {/*</Link>*/}
+            <Popover triggerType="hover" padding={1}>
+              <Popover.Trigger>
+                {(attributes) => (
+                  <Button attributes={attributes} variant="ghost">
+                    <Text
+                      variant="body-1"
+                      color={pathname === '/pool' ? 'neutral' : 'neutral-faded'}
+                    >
+                      <Link href="/positions">Pool </Link>
+                    </Text>
+                  </Button>
+                )}
+              </Popover.Trigger>
+              <Popover.Content>
+                <View direction="column" gap={1}>
+                  <Button
+                    color="neutral"
+                    onClick={() => router.push('/positions')}
+                    attributes={{
+                      style: {
+                        justifyContent: 'start',
+                        paddingTop: 12,
+                        paddingBottom: 12,
+                      },
+                    }}
+                  >
+                    <Text variant="body-2">View positions</Text>
+                  </Button>
+                  <Button
+                    color="neutral"
+                    onClick={() => router.push('/positions/create')}
+                    attributes={{
+                      style: {
+                        justifyContent: 'start',
+                        paddingTop: 12,
+                        paddingBottom: 12,
+                      },
+                    }}
+                  >
+                    <Text variant="body-2">Create position</Text>
+                  </Button>
+                </View>
+              </Popover.Content>
+            </Popover>
+
+            {/*<Link href="/launch">*/}
+            {/*  <Button variant="ghost">*/}
+            {/*    <Text*/}
+            {/*      variant="body-1"*/}
+            {/*      color={pathname === '/launch' ? 'neutral' : 'neutral-faded'}*/}
+            {/*    >*/}
+            {/*      Launch*/}
+            {/*    </Text>*/}
+            {/*  </Button>*/}
+            {/*</Link>*/}
+          </View>
+        </Hidden>
+      </View>
+
+      <Hidden hide={{ s: true, m: false }}>
+        <View direction="row" gap={2} align="center">
+          <Button
+            variant="ghost"
+            size="small"
+            attributes={{ style: { borderRadius: 'medium' } }}
+            rounded={true}
+          >
+            <Image src={'/bitkub-logo.png'} alt={'Bitkub Logo'} width={32} height={32} />
+          </Button>
+
+          <XKOIButton />
+
+          <Button
+            onClick={!authenticated ? login : logout}
+            variant="faded"
+            color="neutral"
+          >
+            {authenticated ? 'Logout' : 'Login'}
+          </Button>
         </View>
-      </View>
-
-      <View direction="row" gap={2} align="center">
-        <Button
-          variant="ghost"
-          size="small"
-          attributes={{ style: { borderRadius: 'medium' } }}
-          rounded={true}
-        >
-          <Image src={'/bitkub-logo.png'} alt={'Bitkub Logo'} width={32} height={32} />
-        </Button>
-
-        <XKOIButton />
-
-        <Button onClick={!authenticated ? login : logout} variant="faded" color="neutral">
-          {authenticated ? 'Logout' : 'Login'}
-        </Button>
-      </View>
+      </Hidden>
     </View>
   )
 }

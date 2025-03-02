@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react'
-import { Text, Card, View, Button, Skeleton, Modal } from 'reshaped'
+import { Text, View, Button, Skeleton, Modal } from 'reshaped'
 import { usePonderSDK, useRemoveLiquidity } from '@ponderfinance/sdk'
 import { useAccount } from 'wagmi'
 import { Address, formatUnits, formatEther } from 'viem'
 import { erc20Abi } from 'viem'
+import LiquidityPositionItem from './LiquidityPositionItem'
 
 interface Position {
   pairAddress: Address
@@ -101,8 +102,6 @@ export default function LiquidityPositionsList() {
   }
 
   // Handle router-based removal using the SDK hook
-  // Handle router-based removal using the SDK hook
-  // Modified handleRemoveLiquidity function with clear ETH pair handling
   const handleRemoveLiquidity = async () => {
     if (!selectedPosition || !sdk || !account.address) return
 
@@ -139,21 +138,21 @@ export default function LiquidityPositionsList() {
 
       if (selectedPosition.isWETHPair) {
         try {
-          const kkubAddress = await sdk.router.KKUB();
-          console.log('KKUB address:', kkubAddress);
+          const kkubAddress = await sdk.router.KKUB()
+          console.log('KKUB address:', kkubAddress)
 
           // Determine which token is ETH
           const isToken0KKUB =
-              selectedPosition.token0.address.toLowerCase() === kkubAddress.toLowerCase();
+            selectedPosition.token0.address.toLowerCase() === kkubAddress.toLowerCase()
 
           // Get the non-KKUB token address
           const nonKKUBToken = isToken0KKUB
-              ? selectedPosition.token1.address
-              : selectedPosition.token0.address;
+            ? selectedPosition.token1.address
+            : selectedPosition.token0.address
 
           // DEBUGGING: Use extremely low minimum values
-          const tokenMin = BigInt(1);  // 1 wei
-          const ethMin = BigInt(1);    // 1 wei
+          const tokenMin = BigInt(1) // 1 wei
+          const ethMin = BigInt(1) // 1 wei
 
           console.log('Final parameters for removeLiquidityETH:', {
             tokenAddress: nonKKUBToken,
@@ -161,27 +160,27 @@ export default function LiquidityPositionsList() {
             amountTokenMin: tokenMin.toString(),
             amountETHMin: ethMin.toString(),
             to: account.address,
-            deadline: BigInt(Math.floor(Date.now() / 1000) + 1200).toString()
-          });
+            deadline: BigInt(Math.floor(Date.now() / 1000) + 1200).toString(),
+          })
 
           // Try with minimal values first to see if the transaction will succeed
           const result = await removeLiquidity.mutateAsync({
             pairAddress: selectedPosition.pairAddress,
             liquidity: liquidityToRemove,
-            token0Min: BigInt(0),  // These are not used directly for ETH pairs
-            token1Min: BigInt(0),  // These are not used directly for ETH pairs
+            token0Min: BigInt(0), // These are not used directly for ETH pairs
+            token1Min: BigInt(0), // These are not used directly for ETH pairs
             isETHPair: true,
             tokenAddress: nonKKUBToken,
-            amountTokenMin: tokenMin,  // Use minimal values for debugging
-            amountETHMin: ethMin,      // Use minimal values for debugging
+            amountTokenMin: tokenMin, // Use minimal values for debugging
+            amountETHMin: ethMin, // Use minimal values for debugging
             deadline: BigInt(Math.floor(Date.now() / 1000) + 1200),
-            toAddress: account.address
-          });
+            toAddress: account.address,
+          })
 
-          console.log('ETH pair removal result:', result);
+          console.log('ETH pair removal result:', result)
         } catch (err) {
-          console.error('Error in ETH pair removal:', err);
-          throw err;
+          console.error('Error in ETH pair removal:', err)
+          throw err
         }
       } else {
         // Standard token pair handling remains the same
@@ -217,6 +216,7 @@ export default function LiquidityPositionsList() {
       setIsRemoving(false)
     }
   }
+
   // Fetch all user's liquidity positions
   const fetchPositions = async () => {
     if (!sdk || !account.address) return
@@ -376,70 +376,23 @@ export default function LiquidityPositionsList() {
 
   return (
     <View gap={16}>
-      {isLoading && (
+      {isLoading && !positions && (
         <View direction="column" gap={4}>
-          <Skeleton height={20} width="100%" />
-          <Skeleton height={20} width="100%" />
+          <Skeleton height={20} width="100%" borderRadius="large" />
+          <Skeleton height={20} width="100%" borderRadius="large" />
         </View>
       )}
-
-      {error && <Text>{error}</Text>}
 
       {positions.length === 0 && !isLoading && (
         <Text align="center">No liquidity positions found.</Text>
       )}
 
       {positions.map((position) => (
-        <Card key={position.pairAddress}>
-          <View direction="column" gap={16}>
-            <View gap={4}>
-              <Text variant="featured-1">
-                {position.token0.symbol}/{position.token1.symbol}
-                {position.isWETHPair && ' (ETH Pair)'}
-              </Text>
-              <Text variant="body-3">Pair: {position.pairAddress}</Text>
-            </View>
-
-            <View gap={8} direction="column">
-              <View direction="row" justify="space-between">
-                <Text>Your Pool Share:</Text>
-                <Text>{position.poolShare}%</Text>
-              </View>
-
-              <View direction="row" justify="space-between">
-                <Text>Your Position:</Text>
-                <View gap={2} direction="column" align="end">
-                  <Text>
-                    {position.token0Amount} {position.token0.symbol}
-                  </Text>
-                  <Text>
-                    {position.token1Amount} {position.token1.symbol}
-                  </Text>
-                </View>
-              </View>
-
-              <View direction="row" justify="space-between">
-                <Text>LP Tokens:</Text>
-                <View gap={2} direction="column" align="end">
-                  <Text>{formatEther(position.userLPBalance)}</Text>
-                  {position.stakedInFarm && <Text color="positive">Farming Active</Text>}
-                </View>
-              </View>
-
-              <Button
-                disabled={position.stakedInFarm}
-                color={position.stakedInFarm ? 'neutral' : 'primary'}
-                onClick={() => {
-                  if (!position.stakedInFarm) {
-                    openRemoveModal(position)
-                  }
-                }}
-              >
-                {position.stakedInFarm ? 'Unstake from Farm First' : 'Remove Liquidity'}
-              </Button>
-            </View>
-          </View>
-        </Card>
+        <LiquidityPositionItem
+          key={position.pairAddress}
+          position={position}
+          onRemoveLiquidity={openRemoveModal}
+        />
       ))}
 
       {/* Remove Liquidity Modal */}

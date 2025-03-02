@@ -6,7 +6,7 @@ import Link from 'next/link'
 
 export default function Pool() {
   return (
-    <View direction="column" padding={2}>
+    <View direction="column">
       <View gap={12}>
         <View gap={4}>
           <Text variant="featured-2">Your Positions</Text>

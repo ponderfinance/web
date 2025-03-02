@@ -209,7 +209,7 @@ export function SendInterface({
   return (
     <View align="center" width="100%" className={className}>
       <View width={{ s: '100%', m: '480px' }}>
-        <View padding={2} gap={2} borderRadius="large">
+        <View gap={2} borderRadius="large">
           <InterfaceTabs />
           <View maxHeight="600px" overflow="auto" gap={1}>
             <View
