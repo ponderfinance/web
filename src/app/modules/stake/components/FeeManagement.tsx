@@ -165,14 +165,14 @@ function FeeManagement() {
   return (
     <View gap={6}>
       <PendingFeesCard feeInfo={feeInfo} />
-      <ActionsCard
-        onCollect={handleCollectFees}
-        onDistribute={() => distributeFees()}
-        isCollecting={isCollecting}
-        isDistributing={isDistributing}
-        isLoadingPairs={isLoadingPairs}
-        hasPendingFees={!!hasPendingFees}
-      />
+      {/*<ActionsCard*/}
+      {/*  onCollect={handleCollectFees}*/}
+      {/*  onDistribute={() => distributeFees()}*/}
+      {/*  isCollecting={isCollecting}*/}
+      {/*  isDistributing={isDistributing}*/}
+      {/*  isLoadingPairs={isLoadingPairs}*/}
+      {/*  hasPendingFees={!!hasPendingFees}*/}
+      {/*/>*/}
     </View>
   )
 }
@@ -182,8 +182,6 @@ export default function FeesPage() {
   const { address } = useAccount()
   const { data: stakingInfo, isLoading: isLoadingInfo } = useStakingInfo(address)
   const { mutate: claimFees, isPending: isClaimingFees } = useClaimFees()
-
-  if (!stakingInfo?.userShares) return null
 
   return (
     <View gap={6} maxWidth={{ s: '100%', m: '1086px' }}>
@@ -213,9 +211,9 @@ export default function FeesPage() {
 
           <View grow={true}>
             <Text variant="body-3">
-              xKOI (staked KOI) governs Ponder Finance, with 100% of protocol fees (0.05% from
-              swaps, 0.01%–0.05% from launch token swaps) distributed proportionally to
-              staked xKOI holders through immutable smart contracts.
+              xKOI (staked KOI) governs Ponder Finance, with 100% of protocol fees (0.05%
+              from swaps, 0.01%–0.05% from launch token swaps) distributed proportionally
+              to staked xKOI holders through immutable smart contracts.
             </Text>
           </View>
         </View>
@@ -236,7 +234,9 @@ export default function FeesPage() {
                 Your Staked Balance
               </Text>
               <Text variant="featured-1">
-                {formatNumber(formatUnits(stakingInfo?.userShares, 18))}
+                {stakingInfo?.userShares
+                  ? formatNumber(formatUnits(stakingInfo?.userShares, 18))
+                  : 0}
               </Text>
             </View>
 
@@ -271,7 +271,10 @@ export default function FeesPage() {
             <View grow={false}>
               <Button
                 onClick={() => claimFees()}
-                disabled={isClaimingFees || stakingInfo?.pendingFees <= BigInt(0)}
+                disabled={
+                  isClaimingFees ||
+                  (stakingInfo?.pendingFees ? stakingInfo?.userShares : 0) <= BigInt(0)
+                }
                 loading={isClaimingFees}
                 size="medium"
                 fullWidth={true}

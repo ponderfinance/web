@@ -133,21 +133,21 @@ interface FarmMetricsProps {
   }
 }
 
-const FarmMetrics = ({ metrics }: FarmMetricsProps) => (
-  <View direction="row" wrap gap={4}>
-    <MetricsCard
-      title="Total Value Locked"
-      value={`$${formatEther(metrics.totalValueLocked)}`}
-    />
-    <MetricsCard
-      title="Daily Rewards"
-      value={formatEther(metrics.rewardsPerDay)}
-      subtitle="KOI"
-    />
-    <MetricsCard title="Average APR" value={`${metrics.averageApr}%`} />
-    <MetricsCard title="Active Farms" value={metrics.activePools.toString()} />
-  </View>
-)
+// const FarmMetrics = ({ metrics }: FarmMetricsProps) => (
+//   <View direction="row" wrap gap={4}>
+//     <MetricsCard
+//       title="Total Value Locked"
+//       value={`$${formatEther(metrics.totalValueLocked)}`}
+//     />
+//     <MetricsCard
+//       title="Daily Rewards"
+//       value={formatEther(metrics.rewardsPerDay)}
+//       subtitle="KOI"
+//     />
+//     <MetricsCard title="Average APR" value={`${metrics.averageApr}%`} />
+//     <MetricsCard title="Active Farms" value={metrics.activePools.toString()} />
+//   </View>
+// )
 
 interface PoolCardProps {
   pid: number
@@ -491,7 +491,7 @@ export default function FarmList() {
 
   return (
     <View gap={4}>
-      {metrics && <FarmMetrics metrics={metrics} />}
+      {/*{metrics && <FarmMetrics metrics={metrics} />}*/}
 
       <View gap={4}>
         {Array.from({ length: poolLength }, (_, pid) => (

@@ -81,7 +81,7 @@ export default function FarmingPage() {
         borderRadius="large"
       >
         <Text variant="title-5" weight="regular">
-          KOI Emissions
+          KOI Pond
         </Text>
         <Text>
           Provide liquidity and stake LP tokens to receive KOI. Lock KOI to amplify your
@@ -92,9 +92,9 @@ export default function FarmingPage() {
           <Button onClick={activate}>Create Farm</Button>
         </View>
 
-        <Modal active={active} onClose={deactivate}>
-          <CreateFarm />
-        </Modal>
+        {/*<Modal active={active} onClose={deactivate}>*/}
+        {/*  <CreateFarm />*/}
+        {/*</Modal>*/}
       </View>
 
       {/* Modal overlay */}
