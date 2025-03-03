@@ -15,6 +15,7 @@ interface Token {
 interface TokenPairProps {
   tokenAddressA?: `0x${string}`
   tokenAddressB?: `0x${string}`
+  size?: 'small' | 'large'
 }
 
 // Token data from your original code
@@ -48,7 +49,11 @@ const findTokenByAddress = (address?: `0x${string}`): Token | null => {
 const DEFAULT_TOKEN_A = '0x33C9B02596d7b1CB4066cC2CeEdd37f3A7c7Aa07' as `0x${string}` // KOI
 const DEFAULT_TOKEN_B = '0xBa71efd94be63bD47B78eF458DE982fE29f552f7' as `0x${string}` // Native KUB
 
-export const TokenPair: React.FC<TokenPairProps> = ({ tokenAddressA, tokenAddressB }) => {
+export const TokenPair: React.FC<TokenPairProps> = ({
+  tokenAddressA,
+  tokenAddressB,
+  size = 'small',
+}) => {
   // Find tokens by address
   const firstToken = findTokenByAddress(tokenAddressA || DEFAULT_TOKEN_A)
   const secondToken = findTokenByAddress(tokenAddressB || DEFAULT_TOKEN_B)
@@ -66,39 +71,44 @@ export const TokenPair: React.FC<TokenPairProps> = ({ tokenAddressA, tokenAddres
 
   return (
     <View>
-      <View direction="row" align="center" gap={2}>
+      <View direction="row" align="center" gap={size === 'small' ? 2 : 4}>
         <View position="relative">
-          <View height={8} width={8} overflow="hidden" insetStart={-4.25}>
+          <View
+            height={size === 'small' ? 8 : 11}
+            width={size === 'small' ? 8 : 11}
+            overflow="hidden"
+            insetStart={size === 'small' ? -4.25 : -5.5}
+          >
             <View
               position="absolute"
               insetTop={0}
-              insetEnd={-4}
+              insetEnd={size === 'small' ? -4 : -5.25}
               attributes={{ style: { zIndex: 2 } }}
               overflow="hidden"
               borderRadius="circular"
-              height={8}
-              width={8}
+              height={size === 'small' ? 8 : 11}
+              width={size === 'small' ? 8 : 11}
             >
               <Image
                 src={firstTokenDisplay.icon}
-                height={32}
-                width={32}
+                height={size === 'small' ? 32 : 44}
+                width={size === 'small' ? 32 : 44}
                 alt={firstTokenDisplay.symbol}
               />
             </View>
           </View>
           <View
-            height={8}
-            width={8}
+            height={size === 'small' ? 8 : 11}
+            width={size === 'small' ? 8 : 11}
             overflow="hidden"
-            insetEnd={-4.25}
+            insetEnd={size === 'small' ? -4.25 : -6}
             insetTop={0}
             position="absolute"
           >
             <View
               position="absolute"
               insetTop={0}
-              insetStart={-4}
+              insetStart={size === 'small' ? -4 : -5.25}
               overflow="hidden"
               borderRadius="circular"
               attributes={{
@@ -109,8 +119,8 @@ export const TokenPair: React.FC<TokenPairProps> = ({ tokenAddressA, tokenAddres
             >
               <Image
                 src={secondTokenDisplay.icon}
-                height={32}
-                width={32}
+                height={size === 'small' ? 32 : 44}
+                width={size === 'small' ? 32 : 44}
                 alt={secondTokenDisplay.symbol}
               />
             </View>

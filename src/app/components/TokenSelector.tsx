@@ -128,9 +128,11 @@ const TokenSelector: React.FC<TokenSelectorProps> = ({
           <View insetStart={-2}>
             {selectedToken ? selectedToken.symbol : 'Select Token'}
           </View>
-          <View>
-            <Icon svg={CaretDown} size={4} color="neutral-faded" />
-          </View>
+          {!disabled && (
+            <View>
+              <Icon svg={CaretDown} size={4} color="neutral-faded" />
+            </View>
+          )}
         </View>
       </Button>
 

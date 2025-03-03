@@ -2,9 +2,19 @@
 
 import { usePrivy } from '@privy-io/react-auth'
 import Image from 'next/image'
-import { Button, Hidden, Popover, Skeleton, Text, View } from 'reshaped'
+import {
+  Button,
+  Hidden,
+  Icon,
+  Modal,
+  Popover,
+  Skeleton,
+  Text,
+  useToggle,
+  View,
+} from 'reshaped'
 import Link from 'next/link'
-import { PaperPlaneTilt, Path, Triangle } from '@phosphor-icons/react'
+import { List, PaperPlaneTilt, Path, Triangle } from '@phosphor-icons/react'
 import { usePathname, useRouter } from 'next/navigation'
 import { Footer } from '@/src/app/components/Footer'
 import { XKOIButton } from '@/src/app/components/xKOIButton'
@@ -13,6 +23,7 @@ export const Header = () => {
   const { authenticated, login, logout } = usePrivy()
   const pathname = usePathname()
   const router = useRouter()
+  const { active, activate, deactivate } = useToggle(false)
 
   return (
     <View
@@ -178,13 +189,57 @@ export const Header = () => {
 
           <Button
             onClick={!authenticated ? login : logout}
-            variant="faded"
-            color="neutral"
+            variant="ghost"
           >
             {authenticated ? 'Logout' : 'Login'}
           </Button>
         </View>
       </Hidden>
+      <Hidden hide={{ s: false, m: true }}>
+        <Button variant="ghost" onClick={activate}>
+          <Icon svg={List} size={6} />
+        </Button>
+      </Hidden>
+      <Modal position="bottom" active={active} onClose={deactivate}>
+        <View direction="column" gap={2} align="start">
+          <Button
+            variant="ghost"
+            onClick={() => {
+              router.push('/swap')
+              deactivate()
+            }}
+          >
+            <Text variant="body-1">Swap</Text>
+          </Button>
+          <Button
+            variant="ghost"
+            onClick={() => {
+              router.push('/send')
+              deactivate()
+            }}
+          >
+            <Text variant="body-1">Send</Text>
+          </Button>
+          <Button
+            variant="ghost"
+            onClick={() => {
+              router.push('/positions/creat')
+              deactivate()
+            }}
+          >
+            <Text variant="body-1">Create position</Text>
+          </Button>
+          <Button
+            variant="ghost"
+            onClick={() => {
+              router.push('/positions')
+              deactivate()
+            }}
+          >
+            <Text variant="body-1">View positions</Text>
+          </Button>
+        </View>
+      </Modal>
     </View>
   )
 }

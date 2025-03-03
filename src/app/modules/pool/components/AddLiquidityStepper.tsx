@@ -4,10 +4,10 @@ import {
   View,
   Text,
   Button,
-  Modal,
   Icon,
   DropdownMenu,
   Actionable,
+  useToast,
 } from 'reshaped'
 import { Address, formatUnits, parseUnits, zeroAddress } from 'viem'
 import { useAccount, useBalance } from 'wagmi'
@@ -21,7 +21,7 @@ import {
   useTokenApproval,
 } from '@ponderfinance/sdk'
 import TokenSelector from '@/src/app/components/TokenSelector'
-import { GearSix, NotePencil } from '@phosphor-icons/react'
+import { GearSix, NotePencil, X } from '@phosphor-icons/react'
 import { TokenPair } from '@/src/app/components/TokenPair'
 import { formatNumber, roundDecimal } from '@/src/app/utils/numbers'
 import { useQuery } from '@tanstack/react-query'
@@ -48,8 +48,6 @@ const AddLiquidityStepper = ({
   // Token selection state
   const [tokenA, setTokenA] = useState<Address | undefined>(defaultTokenA)
   const [tokenB, setTokenB] = useState<Address | undefined>(defaultTokenB)
-  const [isSelectingTokenA, setIsSelectingTokenA] = useState(false)
-  const [isSelectingTokenB, setIsSelectingTokenB] = useState(false)
 
   // Form state
   const [amountA, setAmountA] = useState('')
@@ -57,18 +55,45 @@ const AddLiquidityStepper = ({
   const [slippage, setSlippage] = useState(1.0) // 1% default
   const [error, setError] = useState<string>('')
   const [isProcessing, setIsProcessing] = useState(false)
+  const toast = useToast()
+
+  useEffect(() => {
+    if (error) {
+      if (error.toString().includes('User rejected the request')) {
+        return
+      }
+
+      const id = toast.show({
+        color: 'critical',
+        title: '',
+        text: error,
+        actionsSlot: (
+          <Button onClick={() => toast.hide(id)} variant="ghost">
+            <Icon svg={X} />
+          </Button>
+        ),
+      })
+    }
+  }, [error])
 
   // Determine if we're dealing with native KUB
-  const isKUBPair = tokenB === zeroAddress
+  const isNativeKUBPair = useMemo(() => {
+    return tokenA === zeroAddress || tokenB === zeroAddress
+  }, [tokenA, tokenB])
 
   // SDK Hooks for tokens
-  const { data: tokenAInfo } = useTokenInfo(tokenA as Address)
-  const { data: tokenBInfo } = useTokenInfo(
-    isKUBPair ? (null as unknown as Address) : (tokenB as Address)
+  const { data: tokenAInfo } = useTokenInfo(
+    tokenA === zeroAddress ? (null as unknown as Address) : (tokenA as Address)
   )
-  const { data: tokenABalance } = useTokenBalance(tokenA as Address, account as Address)
+  const { data: tokenBInfo } = useTokenInfo(
+    tokenB === zeroAddress ? (null as unknown as Address) : (tokenB as Address)
+  )
+  const { data: tokenABalance } = useTokenBalance(
+    tokenA === zeroAddress ? (null as unknown as Address) : (tokenA as Address),
+    account as Address
+  )
   const { data: tokenBBalance } = useTokenBalance(
-    isKUBPair ? (null as unknown as Address) : (tokenB as Address),
+    tokenB === zeroAddress ? (null as unknown as Address) : (tokenB as Address),
     account as Address
   )
 
@@ -77,7 +102,19 @@ const AddLiquidityStepper = ({
     allowance: allowanceA,
     approve: approveA,
     isApproved: isApprovedA,
-  } = useTokenApproval(tokenA, sdk?.router?.address)
+  } = useTokenApproval(
+    tokenA === zeroAddress ? (null as unknown as Address) : (tokenA as Address),
+    sdk?.router?.address
+  )
+
+  const {
+    allowance: allowanceB,
+    approve: approveB,
+    isApproved: isApprovedB,
+  } = useTokenApproval(
+    tokenB === zeroAddress ? (null as unknown as Address) : (tokenB as Address),
+    sdk?.router?.address
+  )
 
   // Get native KUB balance if needed
   const { data: kubBalance } = useBalance({
@@ -85,8 +122,9 @@ const AddLiquidityStepper = ({
   })
 
   // For pair existence check, we need to use KKUB address if it's a native pair
-  const pairTokenB = isKUBPair ? TOKENS.KKUB : (tokenB as Address)
-  const { data: pairExists } = usePairExists(tokenA as Address, pairTokenB)
+  const pairTokenA = tokenA === zeroAddress ? TOKENS.KKUB : (tokenA as Address)
+  const pairTokenB = tokenB === zeroAddress ? TOKENS.KKUB : (tokenB as Address)
+  const { data: pairExists } = usePairExists(pairTokenA, pairTokenB)
   const { data: pairInfo } = usePairInfo(pairExists?.pairAddress as Address)
 
   // Get WETH (KKUB) address for comparison
@@ -97,19 +135,11 @@ const AddLiquidityStepper = ({
   })
 
   // Add liquidity mutation
-  const { mutateAsync: addLiquidity, isPending: isAddingLiquidity } = useAddLiquidity()
-
-  // Determine if we're using KKUB directly (not native KUB)
-  const isKKUBPair = useMemo(() => {
-    if (!wethAddress || !tokenA || !tokenB) return false
-
-    return (
-      (tokenA.toLowerCase() === wethAddress.toLowerCase() &&
-        tokenB.toLowerCase() !== zeroAddress.toLowerCase()) ||
-      (tokenB.toLowerCase() === wethAddress.toLowerCase() &&
-        tokenA.toLowerCase() !== zeroAddress.toLowerCase())
-    )
-  }, [tokenA, tokenB, wethAddress])
+  const {
+    mutateAsync: addLiquidity,
+    isPending: isAddingLiquidity,
+    status,
+  } = useAddLiquidity()
 
   const validateAmounts = (amountADesired: bigint, amountBDesired: bigint) => {
     if (amountADesired <= BigInt(0) || amountBDesired <= BigInt(0)) {
@@ -133,32 +163,63 @@ const AddLiquidityStepper = ({
 
   // Handle token approval
   const handleApproval = async () => {
-    if (!account || !tokenA || !sdk?.router?.address || !tokenAInfo) return
+    if (!account || !sdk?.router?.address) return
 
     try {
       setError('')
-      const amountADesired = parseUnits(amountA, tokenAInfo.decimals)
+      setIsProcessing(true)
 
-      await approveA.mutateAsync({
-        token: tokenA,
-        spender: sdk.router.address,
-        amount: amountADesired,
-      })
+      // Approve tokenA if it's an ERC20 and needs approval
+      if (tokenA !== zeroAddress && tokenAInfo && amountA) {
+        const amountADesired = parseUnits(amountA, tokenAInfo.decimals)
+
+        if (!isApprovedA(amountADesired)) {
+          console.log(
+            `Approving ${tokenAInfo.symbol} (${tokenA}) for amount ${amountADesired}`
+          )
+
+          await approveA.mutateAsync({
+            token: tokenA as Address,
+            spender: sdk.router.address,
+            amount: amountADesired,
+          })
+        }
+      }
+
+      // Approve tokenB if it's an ERC20 and needs approval
+      if (tokenB !== zeroAddress && tokenBInfo && amountB) {
+        const amountBDesired = parseUnits(amountB, tokenBInfo.decimals)
+
+        if (!isApprovedB(amountBDesired)) {
+          console.log(
+            `Approving ${tokenBInfo.symbol} (${tokenB}) for amount ${amountBDesired}`
+          )
+
+          await approveB.mutateAsync({
+            token: tokenB as Address,
+            spender: sdk.router.address,
+            amount: amountBDesired,
+          })
+        }
+      }
     } catch (err: any) {
-      console.error('Approval error:', err)
+      // console.error('Approval error:', err)
       setError(err.message || 'Failed to approve token')
+    } finally {
+      setIsProcessing(false)
     }
   }
 
   // Auto-calculate amount B based on amount A and reserves
   useEffect(() => {
-    if (!amountA || !tokenAInfo || !pairInfo) {
+    if (!amountA || (!tokenAInfo && tokenA !== zeroAddress) || !pairInfo) {
       setAmountB('')
       return
     }
 
     try {
-      const amountABigInt = parseUnits(amountA, tokenAInfo.decimals)
+      const tokenADecimals = tokenA === zeroAddress ? 18 : tokenAInfo!.decimals
+      const amountABigInt = parseUnits(amountA, tokenADecimals)
 
       if (
         BigInt(pairInfo.reserve0) === BigInt(0) &&
@@ -168,44 +229,42 @@ const AddLiquidityStepper = ({
         return
       }
 
-      const isToken0 = tokenA?.toLowerCase() === pairInfo.token0.toLowerCase()
+      const isToken0 = pairTokenA.toLowerCase() === pairInfo.token0.toLowerCase()
       const reserveIn = isToken0 ? BigInt(pairInfo.reserve0) : BigInt(pairInfo.reserve1)
       const reserveOut = isToken0 ? BigInt(pairInfo.reserve1) : BigInt(pairInfo.reserve0)
 
       const amountBBigInt = (amountABigInt * reserveOut) / reserveIn
-      const tokenBDecimals = isKUBPair ? 18 : tokenBInfo?.decimals || 18
+      const tokenBDecimals = tokenB === zeroAddress ? 18 : tokenBInfo?.decimals || 18
       const formattedAmount = formatUnits(amountBBigInt, tokenBDecimals)
 
       setAmountB(formattedAmount)
     } catch (err) {
-      console.error('Error calculating amount B:', err)
+      // console.error('Error calculating amount B:', err)
       setAmountB('')
     }
-  }, [amountA, tokenA, tokenB, pairInfo, tokenAInfo, tokenBInfo, isKUBPair])
+  }, [amountA, tokenA, tokenB, pairTokenA, pairInfo, tokenAInfo, tokenBInfo])
 
   const handleAmountAInput = (value: string) => {
     if (!/^\d*\.?\d*$/.test(value)) return
 
+    const decimals = tokenA === zeroAddress ? 18 : tokenAInfo?.decimals || 18
     const parts = value.split('.')
-    if (parts.length > 1) {
-      const decimals = tokenAInfo?.decimals || 18
-      if (parts[1].length > decimals) return
-    }
+    if (parts.length > 1 && parts[1].length > decimals) return
 
     try {
       if (value !== '') {
-        parseUnits(value, tokenAInfo?.decimals || 18)
+        parseUnits(value, decimals)
       }
       setAmountA(value)
     } catch (err) {
-      console.error('Invalid amount:', err)
+      // console.error('Invalid amount:', err)
     }
   }
 
   const handleAmountBInput = (value: string) => {
     if (!/^\d*\.?\d*$/.test(value)) return
 
-    const decimals = isKUBPair ? 18 : tokenBInfo?.decimals || 18
+    const decimals = tokenB === zeroAddress ? 18 : tokenBInfo?.decimals || 18
     const parts = value.split('.')
     if (parts.length > 1 && parts[1].length > decimals) return
 
@@ -215,19 +274,20 @@ const AddLiquidityStepper = ({
       }
       setAmountB(value)
     } catch (err) {
-      console.error('Invalid amount:', err)
+      // console.error('Invalid amount:', err)
     }
   }
 
   const handleAddLiquidity = async () => {
-    if (!account || !tokenAInfo || !tokenA || !tokenB) return
+    if (!account || !tokenA || !tokenB) return
 
     try {
       setError('')
       setIsProcessing(true)
 
-      const tokenADecimals = tokenAInfo.decimals
-      const tokenBDecimals = isKUBPair ? 18 : tokenBInfo?.decimals || 18
+      // Parse amounts with appropriate decimals
+      const tokenADecimals = tokenA === zeroAddress ? 18 : tokenAInfo?.decimals || 18
+      const tokenBDecimals = tokenB === zeroAddress ? 18 : tokenBInfo?.decimals || 18
 
       const amountADesired = parseUnits(amountA, tokenADecimals)
       const amountBDesired = parseUnits(amountB, tokenBDecimals)
@@ -237,99 +297,217 @@ const AddLiquidityStepper = ({
         return
       }
 
+      // Calculate minimum amounts with slippage
       const slippageBps = BigInt(Math.round(slippage * 100))
       const slippageMultiplier = BigInt(10000) - slippageBps
-
       const amountAMin = (amountADesired * slippageMultiplier) / BigInt(10000)
       const amountBMin = (amountBDesired * slippageMultiplier) / BigInt(10000)
 
-      // Check if approval is needed before proceeding
-      if (!isApprovedA(amountADesired)) {
-        setError('Token approval required before adding liquidity')
+      // Check ERC20 token approvals
+      if (tokenA !== zeroAddress && !isApprovedA(amountADesired)) {
+        setError(`${tokenAInfo?.symbol || 'Token A'} approval required`)
         setIsProcessing(false)
         return
       }
 
-      // IMPORTANT: Fixed UX issue - use addLiquidity for KKUB pairs instead of addLiquidityETH
-      // Only use addLiquidityETH for native KUB (zero address)
-      if (isKUBPair && !isKKUBPair) {
-        // For native KUB, we still use addLiquidityETH
-        await addLiquidity({
-          tokenA: tokenA,
-          tokenB: TOKENS.KKUB,
-          amountADesired: amountADesired,
-          amountBDesired: amountBDesired,
-          amountAMin: amountAMin,
-          amountBMin: amountBMin,
-          to: account,
-          deadline: BigInt(Math.floor(Date.now() / 1000) + 1200),
+      if (tokenB !== zeroAddress && !isApprovedB(amountBDesired)) {
+        setError(`${tokenBInfo?.symbol || 'Token B'} approval required`)
+        setIsProcessing(false)
+        return
+      }
+
+      // IMPORTANT: Handle native KUB pairs
+      if (isNativeKUBPair) {
+        console.log('Using addLiquidityETH for native KUB pair:', {
+          tokenA: tokenA === zeroAddress ? 'Native KUB' : tokenA,
+          tokenB: tokenB === zeroAddress ? 'Native KUB' : tokenB,
         })
+
+        if (tokenA === zeroAddress) {
+          // Case: tokenA is native KUB, tokenB is ERC20
+          await sdk.publicClient
+            .simulateContract({
+              address: sdk.router.address,
+              abi: [
+                {
+                  name: 'addLiquidityETH',
+                  type: 'function',
+                  stateMutability: 'payable',
+                  inputs: [
+                    { name: 'token', type: 'address' },
+                    { name: 'amountTokenDesired', type: 'uint256' },
+                    { name: 'amountTokenMin', type: 'uint256' },
+                    { name: 'amountETHMin', type: 'uint256' },
+                    { name: 'to', type: 'address' },
+                    { name: 'deadline', type: 'uint256' },
+                  ],
+                  outputs: [
+                    { name: 'amountToken', type: 'uint256' },
+                    { name: 'amountETH', type: 'uint256' },
+                    { name: 'liquidity', type: 'uint256' },
+                  ],
+                },
+              ],
+              functionName: 'addLiquidityETH',
+              args: [
+                tokenB as Address, // ERC20 token
+                amountBDesired, // Token amount
+                amountBMin, // Min token
+                amountAMin, // Min ETH
+                account,
+                BigInt(Math.floor(Date.now() / 1000) + 1200),
+              ],
+              account,
+              value: amountADesired, // ETH value
+            })
+            .then(({ request }) => {
+              return sdk?.walletClient?.writeContract(request)
+            })
+        } else {
+          // Case: tokenB is native KUB, tokenA is ERC20
+          await sdk.publicClient
+            .simulateContract({
+              address: sdk.router.address,
+              abi: [
+                {
+                  name: 'addLiquidityETH',
+                  type: 'function',
+                  stateMutability: 'payable',
+                  inputs: [
+                    { name: 'token', type: 'address' },
+                    { name: 'amountTokenDesired', type: 'uint256' },
+                    { name: 'amountTokenMin', type: 'uint256' },
+                    { name: 'amountETHMin', type: 'uint256' },
+                    { name: 'to', type: 'address' },
+                    { name: 'deadline', type: 'uint256' },
+                  ],
+                  outputs: [
+                    { name: 'amountToken', type: 'uint256' },
+                    { name: 'amountETH', type: 'uint256' },
+                    { name: 'liquidity', type: 'uint256' },
+                  ],
+                },
+              ],
+              functionName: 'addLiquidityETH',
+              args: [
+                tokenA as Address, // ERC20 token
+                amountADesired, // Token amount
+                amountAMin, // Min token
+                amountBMin, // Min ETH
+                account,
+                BigInt(Math.floor(Date.now() / 1000) + 1200),
+              ],
+              account,
+              value: amountBDesired, // ETH value
+            })
+            .then(({ request }) => {
+              return sdk?.walletClient?.writeContract(request)
+            })
+        }
       } else {
-        // For all ERC20 pairs (including KKUB), use standard addLiquidity
-        await addLiquidity({
-          tokenA,
-          tokenB: tokenB as Address,
-          amountADesired,
-          amountBDesired,
-          amountAMin,
-          amountBMin,
-          to: account,
-          deadline: BigInt(Math.floor(Date.now() / 1000) + 1200),
-        })
+        await addLiquidity(
+          {
+            tokenA: tokenA,
+            tokenB: tokenB,
+            amountADesired,
+            amountBDesired,
+            amountAMin,
+            amountBMin,
+            to: account,
+            deadline: BigInt(Math.floor(Date.now() / 1000) + 1200),
+          },
+          {
+            onSuccess: () => {
+              const id = toast.show({
+                color: 'positive',
+                title: 'Position created',
+                text: 'You have succesfully added liquidity.',
+                actionsSlot: (
+                  <Button onClick={() => toast.hide(id)} variant="ghost">
+                    <Icon svg={X} />
+                  </Button>
+                ),
+              })
+            },
+          }
+        )
       }
 
       setAmountA('')
       setAmountB('')
       setActiveStep(0)
     } catch (err: any) {
-      console.error('Add liquidity error:', err)
-      setError(err.message || 'Failed to add liquidity')
+      // console.error('Add liquidity error:', err.message)
+      setError('Failed to add liquidity')
     } finally {
       setIsProcessing(false)
     }
   }
 
   const isApprovalNeeded = useMemo(() => {
-    if (!tokenAInfo || !amountA) return false
+    // Check if either token needs approval
+    if (!amountA || !amountB) return false
+
     try {
-      const amountABigInt = parseUnits(amountA, tokenAInfo.decimals)
-      return !isApprovedA(amountABigInt)
+      let needsApproval = false
+
+      // Check first token if it's not native KUB
+      if (tokenA !== zeroAddress && tokenAInfo) {
+        const amountABigInt = parseUnits(amountA, tokenAInfo.decimals)
+        if (!isApprovedA(amountABigInt)) {
+          needsApproval = true
+        }
+      }
+
+      // Check second token if it's not native KUB
+      if (tokenB !== zeroAddress && tokenBInfo && !needsApproval) {
+        const amountBBigInt = parseUnits(amountB, tokenBInfo.decimals)
+        if (!isApprovedB(amountBBigInt)) {
+          needsApproval = true
+        }
+      }
+
+      return needsApproval
     } catch (err) {
+      // console.error('Error checking approval status:', err)
       return false
     }
-  }, [tokenAInfo, amountA, isApprovedA])
+  }, [tokenA, tokenB, tokenAInfo, tokenBInfo, amountA, amountB, isApprovedA, isApprovedB])
 
   const isValid = useMemo(() => {
-    if (!tokenAInfo || !amountA || !amountB) return false
+    if (!amountA || !amountB || !tokenA || !tokenB) return false
 
     try {
-      const amountABigInt = parseUnits(amountA, tokenAInfo.decimals)
-      const tokenBDecimals = isKUBPair ? 18 : tokenBInfo?.decimals || 18
+      const tokenADecimals = tokenA === zeroAddress ? 18 : tokenAInfo?.decimals || 18
+      const tokenBDecimals = tokenB === zeroAddress ? 18 : tokenBInfo?.decimals || 18
+
+      const amountABigInt = parseUnits(amountA, tokenADecimals)
       const amountBBigInt = parseUnits(amountB, tokenBDecimals)
 
-      if (isKUBPair) {
-        return (
-          amountABigInt <= (tokenABalance || BigInt(0)) &&
-          amountBBigInt <= (kubBalance?.value || BigInt(0))
-        )
-      } else {
-        return (
-          amountABigInt <= (tokenABalance || BigInt(0)) &&
-          amountBBigInt <= (tokenBBalance || BigInt(0))
-        )
-      }
+      const hasEnoughTokenA =
+        tokenA === zeroAddress
+          ? amountABigInt <= (kubBalance?.value || BigInt(0))
+          : amountABigInt <= (tokenABalance || BigInt(0))
+
+      const hasEnoughTokenB =
+        tokenB === zeroAddress
+          ? amountBBigInt <= (kubBalance?.value || BigInt(0))
+          : amountBBigInt <= (tokenBBalance || BigInt(0))
+
+      return hasEnoughTokenA && hasEnoughTokenB
     } catch (err) {
       return false
     }
   }, [
-    tokenAInfo,
-    tokenBInfo,
+    tokenA,
+    tokenB,
     amountA,
     amountB,
+    tokenAInfo,
+    tokenBInfo,
     tokenABalance,
     tokenBBalance,
     kubBalance,
-    isKUBPair,
   ])
 
   const handleNext = () => {
@@ -338,50 +516,6 @@ const AddLiquidityStepper = ({
 
   const handleBack = () => {
     setActiveStep((prev) => Math.max(0, prev - 1))
-  }
-
-  const getEffectiveBalance = (token: Address | undefined, isNative: boolean) => {
-    if (!token) return undefined
-
-    if (isNative) {
-      return kubBalance?.value
-    }
-
-    // If token is KKUB
-    if (wethAddress && token.toLowerCase() === wethAddress.toLowerCase()) {
-      return tokenBBalance
-    }
-
-    // Regular token
-    return token === tokenA ? tokenABalance : tokenBBalance
-  }
-
-  const getTokenSymbol = (
-    token: Address | undefined,
-    isNative: boolean,
-    tokenInfo: any
-  ) => {
-    if (!token) return ''
-
-    if (isNative) {
-      return 'KUB'
-    }
-
-    return tokenInfo?.symbol || ''
-  }
-
-  const getTokenDecimals = (
-    token: Address | undefined,
-    isNative: boolean,
-    tokenInfo: any
-  ) => {
-    if (!token) return 18
-
-    if (isNative) {
-      return 18
-    }
-
-    return tokenInfo?.decimals || 18
   }
 
   const renderTokenSelect = () => (
@@ -466,38 +600,74 @@ const AddLiquidityStepper = ({
                 />
               </View>
 
-              <TokenSelector onSelectToken={setTokenA} tokenAddress={tokenA} />
+              <TokenSelector
+                onSelectToken={setTokenA}
+                tokenAddress={tokenA}
+                disabled={true}
+              />
             </View>
             <View>
-              {tokenABalance && tokenAInfo && (
-                <View direction="row" align="center" justify="end" gap={2}>
-                  <Text color="neutral-faded" variant="body-3" maxLines={1}>
-                    {formatNumber(
-                      roundDecimal(formatUnits(tokenABalance, tokenAInfo.decimals), 6)
-                    )}{' '}
-                    {tokenAInfo.symbol}
-                  </Text>
-                  {tokenABalance > BigInt(0) && (
-                    <Actionable
-                      onClick={() => {
-                        if (tokenAInfo) {
-                          setAmountA(formatUnits(tokenABalance, tokenAInfo.decimals))
-                        }
-                      }}
-                    >
-                      <View
-                        backgroundColor="primary-faded"
-                        padding={1}
-                        borderRadius="circular"
-                      >
-                        <Text variant="caption-2" color="primary" weight="bold">
-                          MAX
-                        </Text>
-                      </View>
-                    </Actionable>
+              {tokenA === zeroAddress
+                ? kubBalance && (
+                    <View direction="row" align="center" justify="end" gap={2}>
+                      <Text color="neutral-faded" variant="body-3" maxLines={1}>
+                        {formatNumber(roundDecimal(formatUnits(kubBalance.value, 18), 6))}{' '}
+                        KUB
+                      </Text>
+                      {kubBalance.value > BigInt(0) && (
+                        <Actionable
+                          onClick={() => {
+                            // Leave some for gas
+                            const gasBuffer = parseUnits('0.01', 18)
+                            if (kubBalance.value > gasBuffer) {
+                              const maxAmount = kubBalance.value - gasBuffer
+                              setAmountA(formatUnits(maxAmount, 18))
+                            }
+                          }}
+                        >
+                          <View
+                            backgroundColor="primary-faded"
+                            padding={1}
+                            borderRadius="circular"
+                          >
+                            <Text variant="caption-2" color="primary" weight="bold">
+                              MAX
+                            </Text>
+                          </View>
+                        </Actionable>
+                      )}
+                    </View>
+                  )
+                : tokenABalance &&
+                  tokenAInfo && (
+                    <View direction="row" align="center" justify="end" gap={2}>
+                      <Text color="neutral-faded" variant="body-3" maxLines={1}>
+                        {formatNumber(
+                          roundDecimal(formatUnits(tokenABalance, tokenAInfo.decimals), 6)
+                        )}{' '}
+                        {tokenAInfo.symbol}
+                      </Text>
+                      {tokenABalance > BigInt(0) && (
+                        <Actionable
+                          onClick={() => {
+                            if (tokenAInfo) {
+                              setAmountA(formatUnits(tokenABalance, tokenAInfo.decimals))
+                            }
+                          }}
+                        >
+                          <View
+                            backgroundColor="primary-faded"
+                            padding={1}
+                            borderRadius="circular"
+                          >
+                            <Text variant="caption-2" color="primary" weight="bold">
+                              MAX
+                            </Text>
+                          </View>
+                        </Actionable>
+                      )}
+                    </View>
                   )}
-                </View>
-              )}
             </View>
           </View>
           <View
@@ -519,10 +689,14 @@ const AddLiquidityStepper = ({
                 />
               </View>
 
-              <TokenSelector onSelectToken={setTokenB} tokenAddress={tokenB} />
+              <TokenSelector
+                onSelectToken={setTokenB}
+                tokenAddress={tokenB}
+                disabled={true}
+              />
             </View>
             <View>
-              {isKUBPair
+              {tokenB === zeroAddress
                 ? kubBalance && (
                     <View direction="row" align="center" justify="end" gap={2}>
                       <Text color="neutral-faded" variant="body-3" maxLines={1}>
@@ -594,12 +768,6 @@ const AddLiquidityStepper = ({
         </Text>
       )}
 
-      {error && (
-        <Text color="critical" className="p-2 bg-red-50 rounded">
-          {error}
-        </Text>
-      )}
-
       {!account ? (
         <Button fullWidth color="primary" size="large" rounded={true}>
           Connect Wallet
@@ -609,9 +777,9 @@ const AddLiquidityStepper = ({
           {!amountA || !amountB ? 'Enter Amounts' : 'Insufficient Balance'}
         </Button>
       ) : isApprovalNeeded ? (
-        approveA.isPending ? (
+        isProcessing || approveA.isPending || approveB.isPending ? (
           <Button fullWidth loading color="primary" size="large" rounded={true}>
-            Approving {tokenAInfo?.symbol}...
+            Approving Tokens...
           </Button>
         ) : (
           <Button
@@ -621,7 +789,7 @@ const AddLiquidityStepper = ({
             size="large"
             rounded={true}
           >
-            Approve {tokenAInfo?.symbol}
+            Approve Tokens
           </Button>
         )
       ) : (
