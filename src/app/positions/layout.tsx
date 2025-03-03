@@ -25,14 +25,5 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode
 }>) {
-  return (
-    <View
-      maxWidth={{ s: '100%', m: '1032px' }}
-      attributes={{ style: { margin: '0 auto' } }}
-      insetTop={{ s: 16, m: 24 }}
-      padding={4}
-    >
-      {children}
-    </View>
-  )
+  return <View>{children}</View>
 }

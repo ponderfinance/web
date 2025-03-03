@@ -9,7 +9,6 @@ export default function Farm() {
         align="center"
         gap={6}
         paddingBottom={12}
-        insetTop={{ s: 16, m: 28 }}
       >
         <FeesPage />
         <FarmingPage />

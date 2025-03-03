@@ -8,7 +8,6 @@ export default function Home() {
   return (
     <View direction="column">
       <View
-        insetTop={{ s: 16, m: 28 }}
         paddingBottom={16}
         textAlign="center"
         align="center"
