@@ -57,5 +57,5 @@ export function isSupportedChain(chainId: number): chainId is SupportedChainId {
 }
 
 // Dynamic environment selection
-export const CHAIN_ENV = process.env.REACT_APP_CHAIN_ENV || 'testnet';
+export const CHAIN_ENV = process.env.NEXT_PUBLIC_CHAIN_ENV || 'testnet';
 export const CURRENT_CHAIN = CHAIN_ENV === 'mainnet' ? bitkubChain : bitkubTestnetChain;
