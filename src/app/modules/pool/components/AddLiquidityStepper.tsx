@@ -33,7 +33,7 @@ interface AddLiquidityStepperProps {
 
 // Hardcoded token list
 const TOKENS = {
-  KKUB: '0xBa71efd94be63bD47B78eF458DE982fE29f552f7' as Address,
+  KKUB: '0x67eBD850304c70d983B2d1b93ea79c7CD6c3F6b5' as Address,
   KUB: zeroAddress as Address,
 }
 

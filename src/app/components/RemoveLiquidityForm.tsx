@@ -5,7 +5,7 @@ import { useForm } from 'react-hook-form'
 import { Address, formatUnits, parseUnits } from 'viem'
 import { z } from 'zod'
 import { erc20Abi } from 'viem'
-import { bitkubTestnetChain, CURRENT_CHAIN } from '@/src/app/constants/chains'
+import { CURRENT_CHAIN } from '@/src/app/constants/chains'
 import { useAccount } from 'wagmi'
 
 const removeLiquiditySchema = z.object({

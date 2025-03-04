@@ -7,7 +7,7 @@ import { useMemo, useState } from 'react'
 import { WagmiProvider, usePublicClient, useWalletClient, http } from 'wagmi'
 import { PonderProvider, PonderSDK } from '@ponderfinance/sdk'
 import { createPublicClient, createWalletClient, custom, type PublicClient } from 'viem'
-import { bitkubTestnetChain } from '@/src/app/constants/chains'
+import { CURRENT_CHAIN } from '@/src/app/constants/chains'
 import { useAccount } from 'wagmi'
 import { Reshaped } from 'reshaped'
 
@@ -26,23 +26,23 @@ function WalletProvider({
     if (!publicClient) return undefined
 
     const fallbackPublicClient = createPublicClient({
-      chain: bitkubTestnetChain,
-      transport: http(bitkubTestnetChain.rpcUrls.default.http[0]),
+      chain: CURRENT_CHAIN,
+      transport: http(CURRENT_CHAIN.rpcUrls.default.http[0]),
     })
 
     const transport =
       typeof window !== 'undefined' && window.ethereum
         ? custom(window.ethereum)
-        : http(bitkubTestnetChain.rpcUrls.default.http[0])
+        : http(CURRENT_CHAIN.rpcUrls.default.http[0])
 
     const viemWalletClient = createWalletClient({
-      chain: bitkubTestnetChain,
+      chain: CURRENT_CHAIN,
       transport,
       account: (address as `0x${string}`) || undefined,
     })
 
     return new PonderSDK({
-      chainId: bitkubTestnetChain.id,
+      chainId: CURRENT_CHAIN.id,
       publicClient: (publicClient || fallbackPublicClient) as PublicClient,
       walletClient: viemWalletClient,
     })

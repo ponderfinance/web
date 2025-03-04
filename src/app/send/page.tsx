@@ -5,7 +5,7 @@ import Send from '@/src/app/modules/send/components/Send'
 export default function Swap() {
   return (
     <View direction="column">
-      <Send defaultTokenToSend="0x33C9B02596d7b1CB4066cC2CeEdd37f3A7c7Aa07" />
+      <Send defaultTokenToSend="0xe0432224871917fb5a137f4a153a51ecf9f74f57" />
     </View>
   )
 }

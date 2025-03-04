@@ -5,7 +5,7 @@ export default function Swap() {
   return (
     <View direction="column">
       <SwapInterface
-        defaultTokenIn="0x33C9B02596d7b1CB4066cC2CeEdd37f3A7c7Aa07"
+        defaultTokenIn="0xe0432224871917fb5a137f4a153a51ecf9f74f57"
         defaultTokenOut="0x0000000000000000000000000000000000000000"
       />
     </View>

@@ -4,7 +4,7 @@ import { usePonderSDK } from '@ponderfinance/sdk'
 import { useAccount } from 'wagmi'
 import { formatEther, parseUnits } from 'viem'
 import { erc20Abi } from 'viem'
-import { bitkubTestnetChain, CURRENT_CHAIN } from '@/src/app/constants/chains'
+import { CURRENT_CHAIN } from '@/src/app/constants/chains'
 
 interface BoostInterfaceProps {
   pid: number

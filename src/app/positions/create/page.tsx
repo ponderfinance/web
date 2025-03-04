@@ -5,8 +5,8 @@ import AddLiquidityStepper from '@/src/app/modules/pool/components/AddLiquidityS
 export default function Pool() {
   return (
     <AddLiquidityStepper
-      defaultTokenA="0x33C9B02596d7b1CB4066cC2CeEdd37f3A7c7Aa07"
-      defaultTokenB="0xBa71efd94be63bD47B78eF458DE982fE29f552f7"
+      defaultTokenA="0xe0432224871917fb5a137f4a153a51ecf9f74f57"
+      defaultTokenB="0x67eBD850304c70d983B2d1b93ea79c7CD6c3F6b5"
     />
   )
 }

@@ -3,7 +3,7 @@ import { Text, Card, Button, View } from 'reshaped'
 import { useAccount } from 'wagmi'
 import { Address, formatUnits, formatEther, parseUnits } from 'viem'
 import { erc20Abi } from 'viem'
-import { bitkubTestnetChain, CURRENT_CHAIN } from '@/src/app/constants/chains'
+import { CURRENT_CHAIN } from '@/src/app/constants/chains'
 import { usePonderSDK } from '@ponderfinance/sdk'
 
 interface StakingInterfaceProps {

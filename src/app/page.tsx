@@ -20,8 +20,8 @@ export default function Home() {
         </View>
 
         <SwapInterface
-          defaultTokenIn="0x33C9B02596d7b1CB4066cC2CeEdd37f3A7c7Aa07"
-          defaultTokenOut="0xBa71efd94be63bD47B78eF458DE982fE29f552f7"
+          defaultTokenIn="0xe0432224871917fb5a137f4a153a51ecf9f74f57"
+          defaultTokenOut="0x67eBD850304c70d983B2d1b93ea79c7CD6c3F6b5"
         />
         <View
           direction="row"
@@ -46,7 +46,7 @@ export default function Home() {
       </View>
       {/*<PonderPriceChart*/}
       {/*  pairAddress={'0x8999DB2fD18Bd364D98f15bbA5014f792b243BCE'}*/}
-      {/*  tokenIn="0xBa71efd94be63bD47B78eF458DE982fE29f552f7"*/}
+      {/*  tokenIn="0x67eBD850304c70d983B2d1b93ea79c7CD6c3F6b5"*/}
       {/*/>*/}
 
       {/*<PairStatsCard pairAddress={'0xED64948DEE99eC4B38c93177B928B46edD778d1B'} />*/}

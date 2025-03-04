@@ -38,7 +38,7 @@ export default function AddLiquidityForm({
 
   // Get KKUB address for current chain
   //TODO: make dependent on chain
-  const kkubAddress = '0xBa71efd94be63bD47B78eF458DE982fE29f552f7'
+  const kkubAddress = '0x67eBD850304c70d983B2d1b93ea79c7CD6c3F6b5'
 
   // Check if we're dealing with a native KUB pair
   const isKUBPair = tokenB === zeroAddress
