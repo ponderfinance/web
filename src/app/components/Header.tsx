@@ -187,7 +187,8 @@ export const Header = () => {
 
           <XKOIButton />
 
-          <Button onClick={!authenticated ? () => login : () => logout} variant="ghost">
+          {/*//@ts-ignore*/}
+          <Button onClick={!authenticated ? login : logout} variant="ghost">
             {authenticated ? 'Logout' : 'Login'}
           </Button>
         </View>

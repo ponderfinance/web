@@ -317,7 +317,7 @@ export function SendInterface({
                   size="large"
                   variant="solid"
                   color="primary"
-                  onClick={() => login()}
+                  onClick={() => login}
                 >
                   Connect Wallet
                 </Button>
