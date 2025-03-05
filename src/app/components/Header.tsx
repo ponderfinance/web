@@ -18,8 +18,6 @@ export const Header = () => {
   const { active, activate, deactivate } = useToggle(false)
   const account = useAccount()
 
-  console.log('ac', account?.address)
-
   return (
     <View
       direction="row"

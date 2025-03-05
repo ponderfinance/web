@@ -25,6 +25,8 @@ import { GearSix, NotePencil, X } from '@phosphor-icons/react'
 import { TokenPair } from '@/src/app/components/TokenPair'
 import { formatNumber, roundDecimal } from '@/src/app/utils/numbers'
 import { useQuery } from '@tanstack/react-query'
+import { KKUB_ADDRESS } from '@/src/app/constants/addresses'
+import { CURRENT_CHAIN } from '@/src/app/constants/chains'
 
 interface AddLiquidityStepperProps {
   defaultTokenA?: Address
@@ -33,7 +35,7 @@ interface AddLiquidityStepperProps {
 
 // Hardcoded token list
 const TOKENS = {
-  KKUB: '0x67eBD850304c70d983B2d1b93ea79c7CD6c3F6b5' as Address,
+  KKUB: KKUB_ADDRESS[CURRENT_CHAIN.id] as Address,
   KUB: zeroAddress as Address,
 }
 

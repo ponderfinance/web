@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { Modal, Button, View, Text, TextField, Actionable, Icon } from 'reshaped'
 import { useToggle } from 'reshaped'
 import Image from 'next/image'
@@ -6,6 +6,8 @@ import { shortenAddress } from '@/src/app/utils/numbers'
 import { CaretDown } from '@phosphor-icons/react'
 import { CURRENT_CHAIN } from '@/src/app/constants/chains'
 import { KKUB_ADDRESS, KOI_ADDRESS } from '@/src/app/constants/addresses'
+import { Address, isAddress } from 'viem'
+import { useTokenInfo } from '@ponderfinance/sdk'
 
 interface Token {
   name: string
@@ -13,6 +15,7 @@ interface Token {
   address: `0x${string}`
   icon: string
   isNative?: boolean
+  isCustom?: boolean
 }
 
 interface TokenSelectorProps {
@@ -29,7 +32,7 @@ interface TokenItemProps {
 }
 
 // Updated token list to include Native KUB
-const tokenData: Token[] = [
+const predefinedTokens: Token[] = [
   {
     name: 'KOI',
     symbol: 'KOI',
@@ -52,12 +55,18 @@ const tokenData: Token[] = [
 ]
 
 // Function to find a token by address
-const findTokenByAddress = (address?: `0x${string}`): Token | null => {
+const findTokenByAddress = (
+  address?: `0x${string}`,
+  customTokens: Token[] = []
+): Token | null => {
   if (!address) return null
 
   // Normalize addresses for comparison (case-insensitive)
   const normalizedAddress = address.toLowerCase()
-  const token = tokenData.find(
+
+  // Search in both predefined and custom tokens
+  const allTokens = [...predefinedTokens, ...customTokens]
+  const token = allTokens.find(
     (token) => token.address.toLowerCase() === normalizedAddress
   )
 
@@ -73,9 +82,51 @@ const TokenSelector: React.FC<TokenSelectorProps> = ({
 }) => {
   const { active, activate, deactivate } = useToggle(false)
   const [searchTerm, setSearchTerm] = useState<string>('')
+  const [customTokens, setCustomTokens] = useState<Token[]>([])
+  const [isSearchingToken, setIsSearchingToken] = useState<boolean>(false)
 
   // Find selected token based on address
-  const selectedToken = findTokenByAddress(tokenAddress as `0x${string}`)
+  const selectedToken = findTokenByAddress(tokenAddress as `0x${string}`, customTokens)
+
+  // Get token info when search term is a valid address
+  const isValidAddress = isAddress(searchTerm as Address)
+  const { data: tokenInfo, isLoading: isTokenInfoLoading } = useTokenInfo(
+    isValidAddress
+      ? (searchTerm as Address)
+      : ('0x0000000000000000000000000000000000000000' as Address),
+    isValidAddress
+  )
+
+  // Effect to add custom token when found
+  useEffect(() => {
+    if (tokenInfo && isValidAddress && searchTerm) {
+      const existingToken = findTokenByAddress(searchTerm as `0x${string}`, customTokens)
+
+      if (!existingToken) {
+        const newCustomToken: Token = {
+          name: tokenInfo.name || 'Unknown Token',
+          symbol: tokenInfo.symbol || '???',
+          address: searchTerm as `0x${string}`,
+          icon: '/tokens/coin.svg', // Default icon
+          isCustom: true,
+        }
+
+        setCustomTokens((prev) => {
+          // Check for duplicates before adding
+          if (
+            !prev.some(
+              (token) => token.address.toLowerCase() === searchTerm.toLowerCase()
+            )
+          ) {
+            return [...prev, newCustomToken]
+          }
+          return prev
+        })
+      }
+
+      setIsSearchingToken(false)
+    }
+  }, [tokenInfo, isValidAddress, searchTerm, customTokens])
 
   // Handler for token selection with Uniswap-like token switching
   const handleTokenSelect = (token: Token) => {
@@ -95,17 +146,22 @@ const TokenSelector: React.FC<TokenSelectorProps> = ({
 
   const handleSearchChange = (event: { value: string }) => {
     setSearchTerm(event.value)
+
+    // If it's a valid address, set the searching state
+    if (isAddress(event.value as Address)) {
+      setIsSearchingToken(true)
+    }
   }
 
   // Filter tokens based on search term
   const filteredTokens = searchTerm
-    ? tokenData.filter(
+    ? [...predefinedTokens, ...customTokens].filter(
         (token) =>
           token.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
           token.symbol.toLowerCase().includes(searchTerm.toLowerCase()) ||
           token.address.toLowerCase().includes(searchTerm.toLowerCase())
       )
-    : tokenData
+    : [...predefinedTokens, ...customTokens]
 
   return (
     <>
@@ -163,12 +219,11 @@ const TokenSelector: React.FC<TokenSelectorProps> = ({
           <View borderRadius="medium">
             <TextField
               name="tokenSearch"
-              placeholder="Search tokens"
+              placeholder="Search tokens or paste address"
               onChange={handleSearchChange}
               value={searchTerm}
               inputAttributes={{
                 'aria-label': 'Search for tokens',
-                // style: { backgroundColor: 'transparent' },
               }}
               size="large"
               attributes={{
@@ -178,7 +233,67 @@ const TokenSelector: React.FC<TokenSelectorProps> = ({
             />
           </View>
 
-          {/* Single token list */}
+          {/* Show loading state when searching for a token */}
+          {isSearchingToken && isTokenInfoLoading && (
+            <View align="center" padding={4}>
+              <Text color="neutral">Loading token info...</Text>
+            </View>
+          )}
+
+          {/* Show "Add Custom Token" button when a valid address is entered but not found */}
+          {isValidAddress &&
+            !isTokenInfoLoading &&
+            tokenInfo &&
+            !findTokenByAddress(searchTerm as `0x${string}`, customTokens) && (
+              <View
+                direction="row"
+                justify="space-between"
+                align="center"
+                borderRadius="medium"
+                padding={2}
+                backgroundColor="positive-faded"
+              >
+                <View>
+                  <Text>
+                    {tokenInfo.name || 'Unknown Token'} ({tokenInfo.symbol})
+                  </Text>
+                  <Text variant="body-3">
+                    {shortenAddress(searchTerm as `0x${string}`)}
+                  </Text>
+                </View>
+                <Button
+                  variant="ghost"
+                  color="positive"
+                  onClick={() => {
+                    const newToken: Token = {
+                      name: tokenInfo.name || 'Unknown Token',
+                      symbol: tokenInfo.symbol || '???',
+                      address: searchTerm as `0x${string}`,
+                      icon: '/tokens/coin.svg',
+                      isCustom: true,
+                    }
+                    setCustomTokens((prev) => [...prev, newToken])
+                    handleTokenSelect(newToken)
+                  }}
+                >
+                  Add
+                </Button>
+              </View>
+            )}
+
+          {/* Error message for invalid address */}
+          {searchTerm && isValidAddress && !isTokenInfoLoading && !tokenInfo && (
+            <View
+              align="center"
+              padding={2}
+              backgroundColor="critical-faded"
+              borderRadius="medium"
+            >
+              <Text color="critical">Invalid token address</Text>
+            </View>
+          )}
+
+          {/* Token list */}
           <View gap={2} maxHeight={'400px'} width="100%">
             {filteredTokens.length > 0 ? (
               filteredTokens.map((token) => (
