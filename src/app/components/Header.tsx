@@ -35,16 +35,24 @@ export const Header = () => {
               <Popover.Trigger>
                 {(attributes) => (
                   <Button attributes={attributes} variant="ghost">
-                    <View direction="row" gap={3} align="center" justify="center">
+                    <View direction="row" gap={1} align="center" justify="center">
                       <Image
                         src={'/ponder-logo.png'}
                         alt={'Ponder Logo'}
-                        width={80}
+                        width={60}
                         height={23}
                       />
-                      <View attributes={{ style: { transform: 'rotate(180deg)' } }}>
-                        <Triangle size={10} />
-                      </View>
+                      <Text
+                        attributes={{ style: { fontFamily: 'var(--font-pirata-one)' } }}
+                        variant="body-1"
+                        weight="regular"
+                        color="primary"
+                      >
+                        ponder finance
+                      </Text>
+                      {/*<View attributes={{ style: { transform: 'rotate(180deg)' } }}>*/}
+                      {/*  <Triangle size={10} />*/}
+                      {/*</View>*/}
                     </View>
                   </Button>
                 )}
@@ -57,7 +65,7 @@ export const Header = () => {
         </Link>
 
         <Hidden hide={{ s: true, m: false }}>
-          <View direction="row" gap={2}>
+          <View direction="row" gap={1}>
             <Popover triggerType="hover" padding={1}>
               <Popover.Trigger>
                 {(attributes) => (

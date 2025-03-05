@@ -88,6 +88,7 @@
 --rs-color-foreground-primary: #94E0FE;
 --rs-color-background-neutral: #2a2c30;
 --rs-color-background-neutral-faded: #272829;
+--rs-color-foreground-neutral-faded: #6e787d;
 --rs-color-background-disabled: #2d4954;
 --rs-color-background-elevation-base: #212528;
 --rs-color-background-elevation-overlay: #212121;
@@ -146,7 +147,6 @@
 --rs-color-border-neutral: #0000001f;
 --rs-color-border-neutral-faded: #00000014;
 --rs-color-foreground-neutral: #14181f;
---rs-color-foreground-neutral-faded: #5b667e;
 --rs-color-background-disabled-faded: #f5f6f9;
 --rs-color-border-disabled: #dfe2ea;
 --rs-color-foreground-disabled: #c6ccda;
@@ -186,7 +186,6 @@
 --rs-color-border-neutral: #ffffff24;
 --rs-color-border-neutral-faded: #ffffff14;
 --rs-color-foreground-neutral: #eff1f5;
---rs-color-foreground-neutral-faded: #c0c6d6;
 --rs-color-background-disabled-faded: #171921;
 --rs-color-border-disabled: #262a34;
 --rs-color-foreground-disabled: #434959;

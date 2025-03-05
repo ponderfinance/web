@@ -7,7 +7,7 @@ import '@/src/themes/ponder/theme.css'
 import { Analytics } from '@vercel/analytics/react'
 
 import './globals.css'
-import { Pathway_Extreme } from 'next/font/google'
+import { Pathway_Extreme, Pirata_One } from 'next/font/google'
 import { View } from 'reshaped'
 
 // Pathway Extreme font configuration
@@ -15,6 +15,13 @@ const pathwayExtreme = Pathway_Extreme({
   subsets: ['latin'],
   weight: ['400', '500', '700'],
   display: 'swap',
+})
+
+const pirataOne = Pirata_One({
+  subsets: ['latin'],
+  weight: ['400'],
+  display: 'swap',
+  variable: '--font-pirata-one',
 })
 
 export const metadata: Metadata = {
@@ -47,7 +54,7 @@ export default function RootLayout({
       lang="en"
       data-rs-theme="ponder"
       data-rs-color-mode="dark"
-      className={pathwayExtreme.className}
+      className={`${pathwayExtreme.className} ${pirataOne.variable}`}
     >
       <body>
         <Providers>
