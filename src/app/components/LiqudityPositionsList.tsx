@@ -49,9 +49,6 @@ export default function LiquidityPositionsList() {
     if (!selectedPosition || !sdk || !account.address) return true
 
     try {
-      console.log('Checking approval for pair:', selectedPosition.pairAddress)
-      console.log('Router address:', sdk.router.address)
-
       const pair = sdk.getPair(selectedPosition.pairAddress)
 
       // Check router approval
@@ -60,11 +57,7 @@ export default function LiquidityPositionsList() {
         sdk.router.address
       )
 
-      console.log('Router allowance:', formatEther(routerAllowance))
-      console.log('LP balance:', formatEther(selectedPosition.userLPBalance))
-
       const needsApproval = routerAllowance < selectedPosition.userLPBalance
-      console.log('Needs approval:', needsApproval)
 
       return needsApproval
     } catch (err) {
@@ -84,7 +77,6 @@ export default function LiquidityPositionsList() {
       const pair = sdk.getPair(selectedPosition.pairAddress)
 
       // Only approve router
-      console.log('Approving router...')
       const routerTx = await pair.approve(
         sdk.router.address,
         selectedPosition.userLPBalance
@@ -108,15 +100,11 @@ export default function LiquidityPositionsList() {
     try {
       setIsRemoving(true)
       setError('')
-      console.log('Starting remove liquidity via router...')
 
       // Calculate liquidity amount based on percentage
       const percent = parseFloat(percentToRemove) || 0
       const liquidityToRemove =
         (selectedPosition.userLPBalance * BigInt(Math.floor(percent))) / BigInt(100)
-
-      console.log('Removing liquidity:', formatEther(liquidityToRemove))
-      console.log('Is ETH pair:', selectedPosition.isWETHPair)
 
       // Calculate expected output with more precise calculations
       // We need to calculate based on the reserves and the proportion of liquidity

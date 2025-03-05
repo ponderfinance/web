@@ -196,7 +196,6 @@ const PoolCard = ({ pid, address, position, onManage }: PoolCardProps) => {
         poolId: pid,
         amount: stakeInfo.boost.ponderRequired,
       })
-      console.log('Boost completed:', result)
     } catch (err) {
       if (err instanceof Error && err.message === 'Already approved') {
         // If already approved, proceed with boost
@@ -205,7 +204,6 @@ const PoolCard = ({ pid, address, position, onManage }: PoolCardProps) => {
             poolId: pid,
             amount: stakeInfo.boost.ponderRequired,
           })
-          console.log('Boost completed:', result)
         } catch (boostErr) {
           console.error('Failed to boost:', boostErr)
         }
