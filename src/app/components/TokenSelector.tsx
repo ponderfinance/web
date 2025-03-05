@@ -37,14 +37,14 @@ const tokenData: Token[] = [
     icon: '/tokens/xkoi.png',
   },
   {
-    name: 'Native Bitkub',
+    name: 'Bitkub Coin',
     symbol: 'KUB',
     address: '0x0000000000000000000000000000000000000000',
     icon: '/tokens/bitkub.png',
     isNative: true,
   },
   {
-    name: 'Wrapped Bitkub',
+    name: 'Wrapped Bitkub Coin',
     symbol: 'KKUB',
     address: KKUB_ADDRESS[CURRENT_CHAIN.id],
     icon: '/tokens/bitkub.png',
@@ -145,7 +145,7 @@ const TokenSelector: React.FC<TokenSelectorProps> = ({
         position={{ s: 'bottom', l: 'center' }}
         padding={2}
       >
-        <View gap={3} paddingInline={2} paddingTop={1} height={'80vh'}>
+        <View gap={3} paddingInline={2} paddingTop={2} height={'80vh'}>
           <View direction="row" justify="space-between" align="center">
             <Modal.Title>
               <Text variant="body-1" weight="regular">
@@ -168,15 +168,18 @@ const TokenSelector: React.FC<TokenSelectorProps> = ({
               value={searchTerm}
               inputAttributes={{
                 'aria-label': 'Search for tokens',
-                style: { backgroundColor: 'transparent' },
+                // style: { backgroundColor: 'transparent' },
               }}
               size="large"
+              attributes={{
+                style: { backgroundColor: 'var(--rs-color-background-neutral-faded)' },
+              }}
               rounded
             />
           </View>
 
           {/* Single token list */}
-          <View gap={1} maxHeight={'400px'}>
+          <View gap={2} maxHeight={'400px'} width="100%">
             {filteredTokens.length > 0 ? (
               filteredTokens.map((token) => (
                 <TokenItem
@@ -204,7 +207,6 @@ const TokenItem: React.FC<TokenItemProps> = ({ token, onSelect }) => {
       direction="row"
       justify="space-between"
       align="center"
-      padding={2}
       borderRadius="medium"
       grow={true}
       width="100%"
@@ -215,7 +217,7 @@ const TokenItem: React.FC<TokenItemProps> = ({ token, onSelect }) => {
         fullWidth={true}
         attributes={{ style: { width: '100%' } }}
       >
-        <View direction="row" align="center" gap={4}>
+        <View direction="row" align="center" gap={4} width="100%">
           <View height="40px" width="40px" align="center" justify="center">
             <Image src={token.icon} height={40} width={40} alt={'Token Image'} />
           </View>
