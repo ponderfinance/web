@@ -2,17 +2,7 @@
 
 import { usePrivy } from '@privy-io/react-auth'
 import Image from 'next/image'
-import {
-  Button,
-  Hidden,
-  Icon,
-  Modal,
-  Popover,
-  Skeleton,
-  Text,
-  useToggle,
-  View,
-} from 'reshaped'
+import { Button, Hidden, Icon, Modal, Popover, Text, useToggle, View } from 'reshaped'
 import Link from 'next/link'
 import { List, PaperPlaneTilt, Path, Triangle } from '@phosphor-icons/react'
 import { usePathname, useRouter } from 'next/navigation'
@@ -187,10 +177,7 @@ export const Header = () => {
 
           <XKOIButton />
 
-          <Button
-            onClick={!authenticated ? login : logout}
-            variant="ghost"
-          >
+          <Button onClick={!authenticated ? () => login : () => logout} variant="ghost">
             {authenticated ? 'Logout' : 'Login'}
           </Button>
         </View>
