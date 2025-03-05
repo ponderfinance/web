@@ -191,8 +191,8 @@ export const Header = () => {
 
           <XKOIButton />
 
-          {/*//@ts-ignore*/}
           <Button
+            /*//@ts-ignore*/
             onClick={!authenticated ? login : logout}
             variant={authenticated ? 'ghost' : 'faded'}
             rounded={true}

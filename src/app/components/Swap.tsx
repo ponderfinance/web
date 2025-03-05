@@ -1023,7 +1023,8 @@ export function SwapInterface({
                   size="large"
                   variant="solid"
                   color="primary"
-                  onClick={() => login}
+                  /*//@ts-ignore*/
+                  onClick={login}
                 >
                   Connect Wallet
                 </Button>
