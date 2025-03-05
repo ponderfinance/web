@@ -144,14 +144,14 @@ export function SwapInterface({
   const { data: tokenOutInfo } = useTokenInfo(tokenOut || ('' as Address))
 
   // Handle both ERC20 and native KUB balances
-  const { data: tokenInBalance } = useTokenBalance(
+  const { data: tokenInBalance, refetch: refetchTokenInBalance } = useTokenBalance(
     tokenIn && tokenIn.toLowerCase() !== KUB_ADDRESS.toLowerCase()
       ? tokenIn
       : ('' as Address),
     account
   )
 
-  const { data: tokenOutBalance } = useTokenBalance(
+  const { data: tokenOutBalance, refetch: refetchTokenOutBalance } = useTokenBalance(
     tokenOut && tokenOut.toLowerCase() !== KUB_ADDRESS.toLowerCase()
       ? tokenOut
       : ('' as Address),
@@ -159,7 +159,7 @@ export function SwapInterface({
   )
 
   // Fetch native KUB balance
-  const { data: nativeBalance } = useBalance({
+  const { data: nativeBalance, refetch: refetchNativeBalance } = useBalance({
     address: account,
   })
 
@@ -300,6 +300,32 @@ export function SwapInterface({
         !isDirectKubWkubSwap
     )
   )
+
+  // 3. Add function to refresh all balances
+  const refreshAllBalances = useCallback(async () => {
+    // Refresh token balances
+    if (tokenIn && tokenIn.toLowerCase() !== KUB_ADDRESS.toLowerCase()) {
+      await refetchTokenInBalance()
+    }
+
+    if (tokenOut && tokenOut.toLowerCase() !== KUB_ADDRESS.toLowerCase()) {
+      await refetchTokenOutBalance()
+    }
+
+    // If either token is native KUB, refresh native balance
+    if (
+      tokenIn?.toLowerCase() === KUB_ADDRESS.toLowerCase() ||
+      tokenOut?.toLowerCase() === KUB_ADDRESS.toLowerCase()
+    ) {
+      await refetchNativeBalance()
+    }
+  }, [
+    tokenIn,
+    tokenOut,
+    refetchTokenInBalance,
+    refetchTokenOutBalance,
+    refetchNativeBalance,
+  ])
 
   // Combine normal route with synthetic route
   const route = useMemo(() => {
@@ -530,6 +556,9 @@ export function SwapInterface({
             confirmations: 1,
           })
 
+          // Refresh balances immediately
+          await refreshAllBalances()
+
           return
         } catch (err: any) {
           console.error('WKUB deposit failed:', err)
@@ -732,6 +761,9 @@ export function SwapInterface({
   // Reset on successful transaction
   useEffect(() => {
     if (txStatus?.state === 'confirmed') {
+      // Refresh all balances after a successful swap
+      refreshAllBalances()
+
       setAmountIn('')
       setTxHash(undefined)
       setError(null)
