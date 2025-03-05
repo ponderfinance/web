@@ -119,7 +119,9 @@ export const Header = () => {
                   <Button attributes={attributes} variant="ghost">
                     <Text
                       variant="body-1"
-                      color={pathname === '/pool' ? 'neutral' : 'neutral-faded'}
+                      color={
+                        pathname.includes('/positions') ? 'neutral' : 'neutral-faded'
+                      }
                     >
                       <Link href="/positions">Pool </Link>
                     </Text>
