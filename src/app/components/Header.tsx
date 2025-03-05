@@ -9,6 +9,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import { Footer } from '@/src/app/components/Footer'
 import { XKOIButton } from '@/src/app/components/xKOIButton'
 import { useAccount } from 'wagmi'
+import { shortenAddress } from '@/src/app/utils/numbers'
 
 export const Header = () => {
   const { authenticated, login, logout } = usePrivy()
@@ -198,7 +199,9 @@ export const Header = () => {
             rounded={true}
             color="primary"
           >
-            {authenticated ? 'Logout' : 'Connect'}
+            {authenticated && account?.address
+              ? shortenAddress(account?.address)
+              : 'Connect'}
           </Button>
         </View>
       </Hidden>

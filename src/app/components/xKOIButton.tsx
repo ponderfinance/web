@@ -3,7 +3,7 @@ import { useStakingInfo } from '@ponderfinance/sdk'
 import { useAccount } from 'wagmi'
 import { formatUnits } from 'viem'
 import { shortenNumber } from '@/src/app/utils/numbers'
-import Image from "next/image";
+import Image from 'next/image'
 
 export const XKOIButton = () => {
   const { address } = useAccount()
@@ -12,7 +12,11 @@ export const XKOIButton = () => {
   if (!stakingInfo?.userShares) return null
 
   return (
-    <Button variant="outline" rounded={true} color="neutral">
+    <Button
+      variant="outline"
+      color="neutral"
+      attributes={{ style: { borderRadius: 'var(--rs-unit-x2)' } }}
+    >
       <Link href="/xkoi" attributes={{ style: { textDecoration: 'none' } }}>
         <View direction="row" gap={2} align="center" justify="center">
           <Image height={32} width={32} src={'/xkoi-logo.png'} alt={'xKoi Coin'} />
@@ -20,7 +24,9 @@ export const XKOIButton = () => {
             <Text variant="caption-1" color="neutral">
               {shortenNumber(formatUnits(stakingInfo?.userShares, 18))}
             </Text>
-            <Text variant="caption-1" color="neutral">xKOI</Text>
+            <Text variant="caption-1" color="neutral">
+              xKOI
+            </Text>
           </View>
         </View>
       </Link>
