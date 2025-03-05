@@ -8,12 +8,16 @@ import { List, PaperPlaneTilt, Path, Triangle } from '@phosphor-icons/react'
 import { usePathname, useRouter } from 'next/navigation'
 import { Footer } from '@/src/app/components/Footer'
 import { XKOIButton } from '@/src/app/components/xKOIButton'
+import { useAccount } from 'wagmi'
 
 export const Header = () => {
   const { authenticated, login, logout } = usePrivy()
   const pathname = usePathname()
   const router = useRouter()
   const { active, activate, deactivate } = useToggle(false)
+  const account = useAccount()
+
+  console.log('ac', account?.address)
 
   return (
     <View
@@ -188,8 +192,13 @@ export const Header = () => {
           <XKOIButton />
 
           {/*//@ts-ignore*/}
-          <Button onClick={!authenticated ? login : logout} variant="ghost">
-            {authenticated ? 'Logout' : 'Login'}
+          <Button
+            onClick={!authenticated ? login : logout}
+            variant={authenticated ? 'ghost' : 'faded'}
+            rounded={true}
+            color="primary"
+          >
+            {authenticated ? 'Logout' : 'Connect'}
           </Button>
         </View>
       </Hidden>

@@ -7,6 +7,7 @@ const config = {
         foregroundNeutralFaded: { hex: '#6e787d' },
         backgroundPage: { hex: '#1E1E1E' },
         backgroundPrimary: { hex: '#94E0FE' },
+        backgroundPrimaryFaded: { hex: '#273f48' },
         backgroundDisabled: { hex: '#2d4954' },
         backgroundElevationBase: { hex: '#212528' },
         backgroundElevationOverlay: { hex: '#212121' },

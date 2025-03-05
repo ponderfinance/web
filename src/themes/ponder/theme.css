@@ -85,6 +85,7 @@
 --rs-radius-medium: 12px;
 --rs-radius-large: 16px;
 --rs-color-background-primary: #94E0FE;
+--rs-color-background-primary-faded: #273f48;
 --rs-color-foreground-primary: #94E0FE;
 --rs-color-background-neutral: #2a2c30;
 --rs-color-background-neutral-faded: #272829;
@@ -98,6 +99,7 @@
 --rs-color-black: #000000;
 --rs-color-on-background-primary: #000000;
 --rs-color-rgb-background-primary: 148, 224, 254;
+--rs-color-rgb-background-primary-faded: 39, 63, 72;
 --rs-color-on-background-critical: #ffffff;
 --rs-color-on-background-warning: #000000;
 --rs-color-on-background-positive: #ffffff;
@@ -126,8 +128,7 @@
 			}
 		
 			[data-rs-theme="ponder"][data-rs-color-mode="light"] {
-					--rs-color-background-primary-faded: #ecebfe;
---rs-color-border-primary: #3b38ed;
+					--rs-color-border-primary: #3b38ed;
 --rs-color-border-primary-faded: #dedcfb;
 --rs-color-background-critical: #e22c2c;
 --rs-color-background-critical-faded: #fdeded;
@@ -152,7 +153,6 @@
 --rs-color-foreground-disabled: #c6ccda;
 --rs-color-background-elevation-raised: #ffffff;
 --rs-color-background-page-faded: #f9f9fb;
---rs-color-rgb-background-primary-faded: 236, 235, 254;
 --rs-color-rgb-background-critical: 226, 44, 44;
 --rs-color-rgb-background-critical-faded: 253, 237, 237;
 --rs-color-rgb-background-warning: 250, 204, 21;
@@ -165,8 +165,7 @@
 			}
 		
 			[data-rs-theme="ponder"][data-rs-color-mode="dark"] {
-					--rs-color-background-primary-faded: #252544;
---rs-color-border-primary: #8c8bf3;
+					--rs-color-border-primary: #8c8bf3;
 --rs-color-border-primary-faded: #323164;
 --rs-color-background-critical: #d02626;
 --rs-color-background-critical-faded: #3e1f1f;
@@ -191,7 +190,6 @@
 --rs-color-foreground-disabled: #434959;
 --rs-color-background-elevation-raised: #191b23;
 --rs-color-background-page-faded: #111319;
---rs-color-rgb-background-primary-faded: 37, 37, 68;
 --rs-color-rgb-background-critical: 208, 38, 38;
 --rs-color-rgb-background-critical-faded: 62, 31, 31;
 --rs-color-rgb-background-warning: 241, 197, 18;
