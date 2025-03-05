@@ -3,16 +3,13 @@ import { Text, View } from 'reshaped'
 import SwapInterface from '@/src/app/components/Swap'
 import Image from 'next/image'
 import Link from 'next/link'
+import { KKUB_ADDRESS, KOI_ADDRESS } from '@/src/app/constants/addresses'
+import { CURRENT_CHAIN } from '@/src/app/constants/chains'
 
 export default function Home() {
   return (
     <View direction="column">
-      <View
-        paddingBottom={16}
-        textAlign="center"
-        align="center"
-        grow={true}
-      >
+      <View paddingBottom={16} textAlign="center" align="center" grow={true}>
         <View paddingBottom={{ s: 2, m: 8 }} maxWidth={{ s: '200px', m: '380px' }}>
           <Text variant={{ s: 'title-6', m: 'title-3' }} align="center" weight="regular">
             trade, pool, <em>and launch.</em>
@@ -20,8 +17,8 @@ export default function Home() {
         </View>
 
         <SwapInterface
-          defaultTokenIn="0xe0432224871917fb5a137f4a153a51ecf9f74f57"
-          defaultTokenOut="0x67eBD850304c70d983B2d1b93ea79c7CD6c3F6b5"
+          defaultTokenIn={KOI_ADDRESS[CURRENT_CHAIN.id]}
+          defaultTokenOut={KKUB_ADDRESS[CURRENT_CHAIN.id]}
         />
         <View
           direction="row"

@@ -6,10 +6,11 @@ import {
 } from '@/src/app/constants/chains'
 
 export const privyConfig: PrivyClientConfig = {
-  defaultChain: bitkubChain,
-  supportedChains: [bitkubChain],
-  loginMethods: ['wallet'],
+  defaultChain: CURRENT_CHAIN,
+  supportedChains: [bitkubChain, bitkubTestnetChain],
+  loginMethods: ['wallet', 'sms'],
   appearance: {
     theme: 'dark',
+    walletList: ['detected_wallets', 'metamask', 'wallet_connect'],
   },
 }

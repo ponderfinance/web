@@ -369,8 +369,6 @@ export function SwapInterface({
     Boolean(serializedCallData)
   )
 
-  console.log('GAS', gasEstimate)
-
   // Contract interactions
   const { mutateAsync: approve } = useSwapApproval()
   const { mutateAsync: swap, isPending: isSwapping } = useSwap()

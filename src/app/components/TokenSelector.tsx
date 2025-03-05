@@ -4,6 +4,8 @@ import { useToggle } from 'reshaped'
 import Image from 'next/image'
 import { shortenAddress } from '@/src/app/utils/numbers'
 import { CaretDown } from '@phosphor-icons/react'
+import { CURRENT_CHAIN } from '@/src/app/constants/chains'
+import { KKUB_ADDRESS, KOI_ADDRESS } from '@/src/app/constants/addresses'
 
 interface Token {
   name: string
@@ -31,7 +33,7 @@ const tokenData: Token[] = [
   {
     name: 'KOI',
     symbol: 'KOI',
-    address: '0xe0432224871917fb5a137f4a153a51ecf9f74f57',
+    address: KOI_ADDRESS[CURRENT_CHAIN.id],
     icon: '/tokens/xkoi.png',
   },
   {
@@ -44,7 +46,7 @@ const tokenData: Token[] = [
   {
     name: 'Wrapped Bitkub',
     symbol: 'KKUB',
-    address: '0x67eBD850304c70d983B2d1b93ea79c7CD6c3F6b5',
+    address: KKUB_ADDRESS[CURRENT_CHAIN.id],
     icon: '/tokens/bitkub.png',
   },
 ]

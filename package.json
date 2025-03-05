@@ -15,7 +15,7 @@
     "@pinata/sdk": "^2.1.0",
     "@ponderfinance/dex": "^1.0.16",
     "@ponderfinance/sdk": "^1.0.30",
-    "@privy-io/react-auth": "1.70.0",
+    "@privy-io/react-auth": "2.6.1",
     "@tanstack/react-query": "^5.62.2",
     "@vercel/analytics": "^1.4.1",
     "@wagmi/core": "^2.14.2",

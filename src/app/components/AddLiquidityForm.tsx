@@ -13,6 +13,7 @@ import {
 } from '@ponderfinance/sdk'
 import { CURRENT_CHAIN } from '@/src/app/constants/chains'
 import TokenSelector from '@/src/app/components/TokenSelector'
+import { KKUB_ADDRESS } from '@/src/app/constants/addresses'
 
 interface AddLiquidityFormProps {
   defaultTokenA?: Address
@@ -38,7 +39,6 @@ export default function AddLiquidityForm({
 
   // Get KKUB address for current chain
   //TODO: make dependent on chain
-  const kkubAddress = '0x67eBD850304c70d983B2d1b93ea79c7CD6c3F6b5'
 
   // Check if we're dealing with a native KUB pair
   const isKUBPair = tokenB === zeroAddress
@@ -70,7 +70,7 @@ export default function AddLiquidityForm({
   })
 
   // For pair existence check, use KKUB address if it's a native pair
-  const pairTokenB = isKUBPair ? kkubAddress : (tokenB as Address)
+  const pairTokenB = isKUBPair ? KKUB_ADDRESS[CURRENT_CHAIN.id] : (tokenB as Address)
   const { data: pairExists } = usePairExists(tokenA as Address, pairTokenB)
   const { data: pairInfo } = usePairInfo(pairExists?.pairAddress as Address)
 
@@ -193,7 +193,7 @@ export default function AddLiquidityForm({
       // Add liquidity
       const result = await addLiquidity({
         tokenA,
-        tokenB: isKUBPair ? kkubAddress : tokenB,
+        tokenB: isKUBPair ? KKUB_ADDRESS[CURRENT_CHAIN.id] : tokenB,
         amountADesired,
         amountBDesired,
         amountAMin,
