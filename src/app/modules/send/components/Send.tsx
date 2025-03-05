@@ -7,7 +7,7 @@ import {
   isAddress,
   encodeFunctionData,
 } from 'viem'
-import { useAccount } from 'wagmi'
+import { useAccount, useBalance } from 'wagmi'
 import {
   useGasEstimate,
   useTokenBalance,
@@ -21,6 +21,7 @@ import { TokenBalanceDisplay } from '@/src/app/modules/swap/components/TokenBala
 import { CURRENT_CHAIN } from '@/src/app/constants/chains'
 import { InterfaceTabs } from '@/src/app/modules/swap/components/InterfaceTabs'
 import TokenSelector from '@/src/app/components/TokenSelector'
+import { formatNumber, roundDecimal } from '@/src/app/utils/numbers'
 
 interface SendInterfaceProps {
   defaultTokenToSend?: Address
@@ -61,33 +62,55 @@ export function SendInterface({
   const [isProcessing, setIsProcessing] = useState(false)
   const { login } = usePrivy()
 
-  // Skip hooks if no valid addresses
-  const skipHooks = !isAddress(tokenToSend)
-
-  // Token information
-  const { data: tokenInfo } = useTokenInfo(tokenToSend)
-  const { data: tokenBalance } = useTokenBalance(tokenToSend, account)
-
-  const isNativeToken = useMemo(() => {
-    return tokenToSend === KUB_ADDRESS
+  // Helper function to check if token is native KUB
+  const isNativeKUB = useMemo(() => {
+    return !!tokenToSend && tokenToSend.toLowerCase() === KUB_ADDRESS.toLowerCase()
   }, [tokenToSend])
 
+  // Token information - skip for native KUB
+  const { data: tokenInfo } = useTokenInfo(!isNativeKUB ? tokenToSend : ('' as Address))
+
+  // Handle both ERC20 and native KUB balances
+  const { data: tokenBalance } = useTokenBalance(
+    !isNativeKUB ? tokenToSend : ('' as Address),
+    account
+  )
+
+  // Fetch native KUB balance
+  const { data: nativeBalance } = useBalance({
+    address: account,
+  })
+
+  // Determine the effective balance based on token type
+  const effectiveBalance = useMemo(() => {
+    if (!tokenToSend) return BigInt(0)
+
+    if (isNativeKUB) {
+      return nativeBalance?.value || BigInt(0)
+    }
+
+    return tokenBalance ?? BigInt(0)
+  }, [tokenToSend, tokenBalance, nativeBalance, isNativeKUB])
+
   const parsedAmount = useMemo(() => {
-    if (!tokenInfo || !amountToSend) return BigInt(0)
+    if ((!tokenInfo && !isNativeKUB) || !amountToSend) return BigInt(0)
+
     try {
-      return parseUnits(amountToSend, tokenInfo.decimals)
+      // For native KUB, use 18 decimals
+      const decimals = isNativeKUB ? 18 : tokenInfo!.decimals
+      return parseUnits(amountToSend, decimals)
     } catch {
       return BigInt(0)
     }
-  }, [amountToSend, tokenInfo])
+  }, [amountToSend, tokenInfo, isNativeKUB])
 
   // Gas estimation for native token or ERC20
   const { data: gasEstimate } = useGasEstimate(
     account && isAddress(recipientAddress)
       ? {
-          to: isNativeToken ? (recipientAddress as Address) : tokenToSend,
-          value: isNativeToken ? parsedAmount : BigInt(0),
-          data: isNativeToken
+          to: isNativeKUB ? (recipientAddress as Address) : tokenToSend,
+          value: isNativeKUB ? parsedAmount : BigInt(0),
+          data: isNativeKUB
             ? '0x'
             : encodeFunctionData({
                 abi: ERC20_ABI,
@@ -104,25 +127,47 @@ export function SendInterface({
 
   // Validation states
   const isValidSend = useMemo(() => {
-    if (!parsedAmount || !tokenBalance || !account || !recipientAddress) return false
+    if (!parsedAmount || !effectiveBalance || !account || !recipientAddress) return false
     if (!isAddress(recipientAddress)) return false
 
-    return parsedAmount <= tokenBalance && parsedAmount > BigInt(0)
-  }, [parsedAmount, tokenBalance, account, recipientAddress])
+    // Convert effectiveBalance to BigInt to ensure type safety
+    const balanceBigInt = BigInt(effectiveBalance.toString())
+
+    // For native KUB, keep some for gas
+    if (isNativeKUB) {
+      const gasBuffer = gasEstimate?.estimate
+        ? BigInt(gasEstimate.estimate.toString())
+        : parseUnits('0.01', 18) // 0.01 KUB as buffer if estimate not available
+
+      return parsedAmount <= balanceBigInt - gasBuffer && parsedAmount > BigInt(0)
+    }
+
+    return parsedAmount <= balanceBigInt && parsedAmount > BigInt(0)
+  }, [
+    parsedAmount,
+    effectiveBalance,
+    account,
+    recipientAddress,
+    isNativeKUB,
+    gasEstimate,
+  ])
 
   const handleAmountInput = (value: string) => {
-    if (!tokenInfo) return
+    if (!tokenInfo && !isNativeKUB) return
     setError(null)
 
     // Validate numeric input with decimals
     if (!/^\d*\.?\d*$/.test(value)) return
 
+    // For native KUB, use 18 decimals
+    const decimals = isNativeKUB ? 18 : tokenInfo!.decimals
+
     const parts = value.split('.')
-    if (parts[1] && parts[1].length > tokenInfo.decimals) return
+    if (parts[1] && parts[1].length > decimals) return
 
     // Validate maximum amount
     try {
-      const parsedAmount = parseUnits(value || '0', tokenInfo.decimals)
+      const parsedAmount = parseUnits(value || '0', decimals)
       if (parsedAmount > MAX_UINT256) return
     } catch {
       return
@@ -144,7 +189,7 @@ export function SendInterface({
     try {
       let tx: `0x${string}` | undefined
 
-      if (isNativeToken) {
+      if (isNativeKUB) {
         // Native token transfer
         tx = await sdk.walletClient?.sendTransaction({
           to: recipientAddress as Address,
@@ -206,6 +251,25 @@ export function SendInterface({
     }
   }, [txStatus])
 
+  // Handle max button click
+  const handleMaxAmount = () => {
+    if (!effectiveBalance) return
+
+    // For native KUB, use 18 decimals and leave some for gas
+    if (isNativeKUB) {
+      const decimals = 18
+      const gasBuffer = gasEstimate?.estimate || parseUnits('0.01', 18)
+      const maxAmount = effectiveBalance - gasBuffer
+
+      if (maxAmount > BigInt(0)) {
+        setAmountToSend(formatUnits(maxAmount, decimals))
+      }
+    } else if (tokenInfo) {
+      // For ERC20 tokens
+      setAmountToSend(formatUnits(effectiveBalance, tokenInfo.decimals))
+    }
+  }
+
   return (
     <View align="center" width="100%" className={className}>
       <View width={{ s: '100%', m: '480px' }}>
@@ -240,20 +304,24 @@ export function SendInterface({
                 />
               </View>
               <View>
-                {tokenBalance && tokenInfo && (
+                {effectiveBalance && (
                   <View direction="row" align="center" justify="end" gap={2}>
-                    <TokenBalanceDisplay
-                      tokenInBalance={tokenBalance}
-                      tokenInInfo={tokenInfo}
-                    />
-                    {tokenBalance > BigInt(0) && (
-                      <Actionable
-                        onClick={() => {
-                          if (tokenInfo && tokenBalance) {
-                            setAmountToSend(formatUnits(tokenBalance, tokenInfo.decimals))
-                          }
-                        }}
-                      >
+                    {/* Display balance based on whether it's native KUB or ERC20 */}
+                    {isNativeKUB ? (
+                      <Text color="neutral-faded" variant="body-3" maxLines={1}>
+                        {formatNumber(roundDecimal(formatUnits(effectiveBalance, 18), 2))}{' '}
+                        KUB
+                      </Text>
+                    ) : (
+                      tokenInfo && (
+                        <TokenBalanceDisplay
+                          tokenInBalance={effectiveBalance}
+                          tokenInInfo={tokenInfo}
+                        />
+                      )
+                    )}
+                    {effectiveBalance > BigInt(0) && (
+                      <Actionable onClick={handleMaxAmount}>
                         <View
                           backgroundColor="primary-faded"
                           padding={1}
@@ -332,7 +400,9 @@ export function SendInterface({
                 </Button>
               ) : !isValidSend ? (
                 <Button fullWidth size="large" disabled>
-                  Invalid Send
+                  {isNativeKUB && parsedAmount > effectiveBalance
+                    ? 'Insufficient KUB (Keep some for gas)'
+                    : 'Invalid Send'}
                 </Button>
               ) : isProcessing || (!!txHash && txStatus?.state === 'pending') ? (
                 <Button fullWidth size="large" loading disabled>
@@ -346,6 +416,7 @@ export function SendInterface({
                   onClick={handleSend}
                   variant="solid"
                   color="primary"
+                  attributes={{ style: { borderRadius: 'var(--rs-radius-large)' } }}
                 >
                   Send
                 </Button>
