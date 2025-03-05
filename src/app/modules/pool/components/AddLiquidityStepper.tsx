@@ -1,4 +1,3 @@
-import React, { useState, useEffect, useMemo } from 'react'
 import {
   Stepper,
   View,
@@ -8,6 +7,7 @@ import {
   DropdownMenu,
   Actionable,
   useToast,
+  Badge,
 } from 'reshaped'
 import { Address, formatUnits, parseUnits, zeroAddress } from 'viem'
 import { useAccount, useBalance } from 'wagmi'
@@ -21,12 +21,13 @@ import {
   useTokenApproval,
 } from '@ponderfinance/sdk'
 import TokenSelector from '@/src/app/components/TokenSelector'
-import { GearSix, NotePencil, X } from '@phosphor-icons/react'
+import { GearSix, NotePencil, X, Warning } from '@phosphor-icons/react'
 import { TokenPair } from '@/src/app/components/TokenPair'
 import { formatNumber, roundDecimal } from '@/src/app/utils/numbers'
 import { useQuery } from '@tanstack/react-query'
 import { KKUB_ADDRESS } from '@/src/app/constants/addresses'
 import { CURRENT_CHAIN } from '@/src/app/constants/chains'
+import { useEffect, useMemo, useState } from 'react'
 
 interface AddLiquidityStepperProps {
   defaultTokenA?: Address
@@ -76,7 +77,7 @@ const AddLiquidityStepper = ({
         ),
       })
     }
-  }, [error])
+  }, [error, toast])
 
   // Determine if we're dealing with native KUB
   const isNativeKUBPair = useMemo(() => {
@@ -126,8 +127,13 @@ const AddLiquidityStepper = ({
   // For pair existence check, we need to use KKUB address if it's a native pair
   const pairTokenA = tokenA === zeroAddress ? TOKENS.KKUB : (tokenA as Address)
   const pairTokenB = tokenB === zeroAddress ? TOKENS.KKUB : (tokenB as Address)
-  const { data: pairExists } = usePairExists(pairTokenA, pairTokenB)
-  const { data: pairInfo } = usePairInfo(pairExists?.pairAddress as Address)
+  const { data: pairExists, isLoading: isPairCheckLoading } = usePairExists(
+    pairTokenA,
+    pairTokenB
+  )
+  const { data: pairInfo, isLoading: isPairInfoLoading } = usePairInfo(
+    pairExists?.pairAddress as Address
+  )
 
   // Get WETH (KKUB) address for comparison
   const { data: wethAddress } = useQuery({
@@ -205,7 +211,6 @@ const AddLiquidityStepper = ({
         }
       }
     } catch (err: any) {
-      // console.error('Approval error:', err)
       setError(err.message || 'Failed to approve token')
     } finally {
       setIsProcessing(false)
@@ -223,6 +228,7 @@ const AddLiquidityStepper = ({
       const tokenADecimals = tokenA === zeroAddress ? 18 : tokenAInfo!.decimals
       const amountABigInt = parseUnits(amountA, tokenADecimals)
 
+      // For new pairs, set 1:1 ratio
       if (
         BigInt(pairInfo.reserve0) === BigInt(0) &&
         BigInt(pairInfo.reserve1) === BigInt(0)
@@ -231,6 +237,7 @@ const AddLiquidityStepper = ({
         return
       }
 
+      // For existing pairs, calculate based on reserves
       const isToken0 = pairTokenA.toLowerCase() === pairInfo.token0.toLowerCase()
       const reserveIn = isToken0 ? BigInt(pairInfo.reserve0) : BigInt(pairInfo.reserve1)
       const reserveOut = isToken0 ? BigInt(pairInfo.reserve1) : BigInt(pairInfo.reserve0)
@@ -241,7 +248,6 @@ const AddLiquidityStepper = ({
 
       setAmountB(formattedAmount)
     } catch (err) {
-      // console.error('Error calculating amount B:', err)
       setAmountB('')
     }
   }, [amountA, tokenA, tokenB, pairTokenA, pairInfo, tokenAInfo, tokenBInfo])
@@ -365,6 +371,18 @@ const AddLiquidityStepper = ({
             .then(({ request }) => {
               return sdk?.walletClient?.writeContract(request)
             })
+            .then(() => {
+              const id = toast.show({
+                color: 'positive',
+                title: 'Position created',
+                text: 'You have successfully added liquidity.',
+                actionsSlot: (
+                  <Button onClick={() => toast.hide(id)} variant="ghost">
+                    <Icon svg={X} />
+                  </Button>
+                ),
+              })
+            })
         } else {
           // Case: tokenB is native KUB, tokenA is ERC20
           await sdk.publicClient
@@ -405,6 +423,18 @@ const AddLiquidityStepper = ({
             .then(({ request }) => {
               return sdk?.walletClient?.writeContract(request)
             })
+            .then(() => {
+              const id = toast.show({
+                color: 'positive',
+                title: 'Position created',
+                text: 'You have successfully added liquidity.',
+                actionsSlot: (
+                  <Button onClick={() => toast.hide(id)} variant="ghost">
+                    <Icon svg={X} />
+                  </Button>
+                ),
+              })
+            })
         }
       } else {
         await addLiquidity(
@@ -423,7 +453,7 @@ const AddLiquidityStepper = ({
               const id = toast.show({
                 color: 'positive',
                 title: 'Position created',
-                text: 'You have succesfully added liquidity.',
+                text: 'You have successfully added liquidity.',
                 actionsSlot: (
                   <Button onClick={() => toast.hide(id)} variant="ghost">
                     <Icon svg={X} />
@@ -439,8 +469,8 @@ const AddLiquidityStepper = ({
       setAmountB('')
       setActiveStep(0)
     } catch (err: any) {
-      // console.error('Add liquidity error:', err.message)
-      setError('Failed to add liquidity')
+      console.error('Add liquidity error:', err.message)
+      setError(err.message || 'Failed to add liquidity')
     } finally {
       setIsProcessing(false)
     }
@@ -471,10 +501,15 @@ const AddLiquidityStepper = ({
 
       return needsApproval
     } catch (err) {
-      // console.error('Error checking approval status:', err)
+      console.error('Error checking approval status:', err)
       return false
     }
   }, [tokenA, tokenB, tokenAInfo, tokenBInfo, amountA, amountB, isApprovedA, isApprovedB])
+
+  const isCreatingNewPair = useMemo(() => {
+    if (!pairExists) return false
+    return pairExists.canCreate
+  }, [pairExists])
 
   const isValid = useMemo(() => {
     if (!amountA || !amountB || !tokenA || !tokenB) return false
@@ -486,17 +521,26 @@ const AddLiquidityStepper = ({
       const amountABigInt = parseUnits(amountA, tokenADecimals)
       const amountBBigInt = parseUnits(amountB, tokenBDecimals)
 
+      // Add gas buffer for native KUB to ensure enough for transaction
+      const gasBuffer = parseUnits('0.01', 18)
+
       const hasEnoughTokenA =
         tokenA === zeroAddress
-          ? amountABigInt <= (kubBalance?.value || BigInt(0))
+          ? amountABigInt + gasBuffer <= (kubBalance?.value || BigInt(0))
           : amountABigInt <= (tokenABalance || BigInt(0))
 
       const hasEnoughTokenB =
         tokenB === zeroAddress
-          ? amountBBigInt <= (kubBalance?.value || BigInt(0))
+          ? amountBBigInt + gasBuffer <= (kubBalance?.value || BigInt(0))
           : amountBBigInt <= (tokenBBalance || BigInt(0))
 
-      return hasEnoughTokenA && hasEnoughTokenB
+      // Both tokens should be valid and have adequate balance
+      return (
+        hasEnoughTokenA &&
+        hasEnoughTokenB &&
+        (!!tokenAInfo || tokenA === zeroAddress) &&
+        (!!tokenBInfo || tokenB === zeroAddress)
+      )
     } catch (err) {
       return false
     }
@@ -531,18 +575,47 @@ const AddLiquidityStepper = ({
       <View direction="row" gap={4}>
         <View.Item columns={{ s: 12, m: 6 }}>
           <View gap={4}>
-            <TokenSelector onSelectToken={setTokenA} tokenAddress={tokenA} />
+            <TokenSelector
+              onSelectToken={setTokenA}
+              tokenAddress={tokenA}
+              otherSelectedToken={tokenB}
+            />
           </View>
         </View.Item>
         <View.Item columns={{ s: 12, m: 6 }}>
           <View gap={4}>
-            <TokenSelector onSelectToken={setTokenB} tokenAddress={tokenB} />
+            <TokenSelector
+              onSelectToken={setTokenB}
+              tokenAddress={tokenB}
+              otherSelectedToken={tokenA}
+            />
           </View>
         </View.Item>
       </View>
+
+      {tokenA && tokenB && isPairCheckLoading && (
+        <View align="center" padding={2}>
+          <Text color="neutral-faded">Checking pair status...</Text>
+        </View>
+      )}
+
+      {tokenA && tokenB && tokenA.toLowerCase() === tokenB.toLowerCase() && (
+        <View
+          backgroundColor="critical-faded"
+          padding={3}
+          borderRadius="medium"
+          direction="row"
+          align="center"
+          gap={2}
+        >
+          <Icon svg={Warning} color="critical" size={5} />
+          <Text color="critical">Cannot create a pair with identical tokens</Text>
+        </View>
+      )}
+
       <Button
         fullWidth
-        disabled={!tokenA || !tokenB}
+        disabled={!tokenA || !tokenB || tokenA.toLowerCase() === tokenB.toLowerCase()}
         onClick={handleNext}
         color="primary"
         size="large"
@@ -764,15 +837,33 @@ const AddLiquidityStepper = ({
         </View>
       </View>
 
-      {pairExists?.canCreate && (
-        <Text variant="caption-1" color="neutral-faded">
-          You are creating a new liquidity pool
-        </Text>
+      {isCreatingNewPair && (
+        <View
+          backgroundColor="primary-faded"
+          padding={4}
+          borderRadius="large"
+          direction="row"
+          align="center"
+          gap={2}
+        >
+          <Icon svg={Warning} color="primary" size={5} />
+          <View>
+            <Text weight="medium">Creating a new liquidity pool</Text>
+            <Text variant="body-3" color="neutral-faded">
+              You'll be the first liquidity provider for this pair. The ratio of tokens
+              you add will set the initial price.
+            </Text>
+          </View>
+        </View>
       )}
 
       {!account ? (
         <Button fullWidth color="primary" size="large" rounded={true}>
           Connect Wallet
+        </Button>
+      ) : isPairCheckLoading || isPairInfoLoading ? (
+        <Button fullWidth loading color="primary" size="large" rounded={true}>
+          Loading Pair Data...
         </Button>
       ) : !isValid ? (
         <Button fullWidth disabled color="primary" size="large" rounded={true}>
@@ -804,7 +895,7 @@ const AddLiquidityStepper = ({
           size="large"
           rounded={true}
         >
-          Create Position
+          {isCreatingNewPair ? 'Create Pair & Add Liquidity' : 'Add Liquidity'}
         </Button>
       )}
     </View>
@@ -813,9 +904,14 @@ const AddLiquidityStepper = ({
   return (
     <View width="100%" maxWidth="980px" gap={8}>
       <View direction="row" justify="space-between">
-        <Text variant="title-6" weight="regular">
-          New Position
-        </Text>
+        <View direction="row" align="center" gap={2}>
+          <Text variant="title-6" weight="regular">
+            New Position
+          </Text>
+          {isCreatingNewPair && tokenA && tokenB && (
+            <Badge color="primary">New Pool</Badge>
+          )}
+        </View>
         <DropdownMenu>
           <DropdownMenu.Trigger>
             {(attributes) => (
@@ -862,7 +958,14 @@ const AddLiquidityStepper = ({
                     completed={activeStep > 0}
                   />
 
-                  <Stepper.Item title="Step 2" subtitle="Enter deposit amounts" />
+                  <Stepper.Item
+                    title="Step 2"
+                    subtitle={
+                      isCreatingNewPair
+                        ? 'Set initial pool ratio'
+                        : 'Enter deposit amounts'
+                    }
+                  />
                 </Stepper>
               </View>
             </View>
