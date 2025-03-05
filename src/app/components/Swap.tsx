@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
-import { Text, Button, View, Actionable, Icon } from 'reshaped'
+import { Text, Button, View, Actionable, Icon, useToast } from 'reshaped'
 import { type Address, formatUnits, parseUnits } from 'viem'
 import { useAccount, useBalance } from 'wagmi'
 import { useQuery } from '@tanstack/react-query'
@@ -15,7 +15,7 @@ import {
   useTransaction,
   usePonderSDK,
 } from '@ponderfinance/sdk'
-import { ArrowDown, GasPump } from '@phosphor-icons/react'
+import { ArrowDown, GasPump, X } from '@phosphor-icons/react'
 import { usePrivy } from '@privy-io/react-auth'
 import { InterfaceTabs } from '@/src/app/modules/swap/components/InterfaceTabs'
 import { TokenBalanceDisplay } from '@/src/app/modules/swap/components/TokenBalanceDisplay'
@@ -128,6 +128,7 @@ export function SwapInterface({
 }: SwapInterfaceProps) {
   const sdk = usePonderSDK()
   const { address: account } = useAccount()
+  const toast = useToast()
 
   // Form state
   const [tokenIn, setTokenIn] = useState<Address | undefined>(defaultTokenIn)
@@ -770,6 +771,21 @@ export function SwapInterface({
     }
   }, [txStatus])
 
+  useEffect(() => {
+    if (error) {
+      const id = toast.show({
+        color: 'critical',
+        title: '',
+        text: error,
+        actionsSlot: (
+          <Button onClick={() => toast.hide(id)} variant="ghost">
+            <Icon svg={X} />
+          </Button>
+        ),
+      })
+    }
+  }, [error])
+
   // Validate amounts on route changes
   useEffect(() => {
     if (route && (tokenInInfo || isNativeKUB(tokenIn)) && amountIn) {
@@ -1039,13 +1055,6 @@ export function SwapInterface({
             {/*    )}*/}
             {/*  </View>*/}
             {/*)}*/}
-
-            {/* Error Display */}
-            {error && (
-              <Text color="critical" align="center" className="mt-4">
-                {error}
-              </Text>
-            )}
 
             {/* Action Buttons */}
             <View gap={4} className="mt-4">
