@@ -1,6 +1,10 @@
 import React from 'react'
 import { View, Text } from 'reshaped'
 import Image from 'next/image'
+import { CURRENT_CHAIN } from '@/src/app/constants/chains'
+import { KKUB_ADDRESS, KOI_ADDRESS } from '@/src/app/constants/addresses'
+import { shortenAddress } from '@/src/app/utils/numbers'
+import { useTokenInfo } from '@ponderfinance/sdk'
 
 // Token interfaces
 interface Token {
@@ -18,55 +22,84 @@ interface TokenPairProps {
   size?: 'small' | 'large'
 }
 
-// Token data from your original code
+// Default token list with chain-specific addresses
 const tokenData: Token[] = [
   {
     name: 'KOI',
     symbol: 'KOI',
-    address: '0xe0432224871917fb5a137f4a153a51ecf9f74f57',
+    address: KOI_ADDRESS[CURRENT_CHAIN.id],
     icon: '/tokens/xkoi.png',
   },
   {
-    name: 'Wrapped Bitkub',
+    name: 'Bitkub Coin',
+    symbol: 'KUB',
+    address: '0x0000000000000000000000000000000000000000',
+    icon: '/tokens/bitkub.png',
+    isNative: true,
+  },
+  {
+    name: 'Wrapped Bitkub Coin',
     symbol: 'KKUB',
-    address: '0x67eBD850304c70d983B2d1b93ea79c7CD6c3F6b5',
+    address: KKUB_ADDRESS[CURRENT_CHAIN.id],
     icon: '/tokens/bitkub.png',
   },
 ]
 
-// Function to find token by address
-const findTokenByAddress = (address?: `0x${string}`): Token | null => {
+// Function to find token in our predefined list
+const findTokenInList = (address?: `0x${string}`): Token | null => {
   if (!address) return null
 
   // Normalize addresses for comparison (case-insensitive)
   const normalizedAddress = address.toLowerCase()
-  return (
-    tokenData.find((token) => token.address.toLowerCase() === normalizedAddress) || null
+  const token = tokenData.find(
+    (token) => token.address.toLowerCase() === normalizedAddress
   )
+
+  return token || null
 }
 
 // Default addresses if none provided
-const DEFAULT_TOKEN_A = '0xe0432224871917fb5a137f4a153a51ecf9f74f57' as `0x${string}` // KOI
-const DEFAULT_TOKEN_B = '0x67eBD850304c70d983B2d1b93ea79c7CD6c3F6b5' as `0x${string}` // Native KUB
+const DEFAULT_TOKEN_A = KOI_ADDRESS[CURRENT_CHAIN.id]
+const DEFAULT_TOKEN_B = KKUB_ADDRESS[CURRENT_CHAIN.id]
 
 export const TokenPair: React.FC<TokenPairProps> = ({
   tokenAddressA,
   tokenAddressB,
   size = 'small',
 }) => {
-  // Find tokens by address
-  const firstToken = findTokenByAddress(tokenAddressA || DEFAULT_TOKEN_A)
-  const secondToken = findTokenByAddress(tokenAddressB || DEFAULT_TOKEN_B)
+  // For native KUB handling
+  const isTokenANative = tokenAddressA === '0x0000000000000000000000000000000000000000'
+  const isTokenBNative = tokenAddressB === '0x0000000000000000000000000000000000000000'
 
-  // Fallbacks if tokens not found
-  const firstTokenDisplay = firstToken || {
-    symbol: 'KOI',
-    icon: '/tokens/xkoi.png',
+  // Use token info hooks for non-native tokens
+  const { data: tokenAInfo } = useTokenInfo(
+    isTokenANative ? (null as unknown as `0x${string}`) : (tokenAddressA as `0x${string}`)
+  )
+  const { data: tokenBInfo } = useTokenInfo(
+    isTokenBNative ? (null as unknown as `0x${string}`) : (tokenAddressB as `0x${string}`)
+  )
+
+  // Find predefined tokens by address
+  const firstListToken = findTokenInList(tokenAddressA || DEFAULT_TOKEN_A)
+  const secondListToken = findTokenInList(tokenAddressB || DEFAULT_TOKEN_B)
+
+  // Determine final token display info by combining predefined list and token info from hook
+  const firstTokenDisplay = {
+    symbol: isTokenANative
+      ? 'KUB'
+      : tokenAInfo?.symbol ||
+        firstListToken?.symbol ||
+        (tokenAddressA ? shortenAddress(tokenAddressA) : 'Token A'),
+    icon: firstListToken?.icon || '/tokens/coin.svg',
   }
 
-  const secondTokenDisplay = secondToken || {
-    symbol: 'KUB',
-    icon: '/tokens/bitkub.png',
+  const secondTokenDisplay = {
+    symbol: isTokenBNative
+      ? 'KUB'
+      : tokenBInfo?.symbol ||
+        secondListToken?.symbol ||
+        (tokenAddressB ? shortenAddress(tokenAddressB) : 'Token B'),
+    icon: secondListToken?.icon || '/tokens/coin.svg',
   }
 
   return (
@@ -133,3 +166,5 @@ export const TokenPair: React.FC<TokenPairProps> = ({
     </View>
   )
 }
+
+export default TokenPair

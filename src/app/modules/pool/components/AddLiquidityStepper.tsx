@@ -191,6 +191,9 @@ const AddLiquidityStepper = ({
             spender: sdk.router.address,
             amount: amountADesired,
           })
+
+          // Force a refresh of the allowance data
+          await allowanceA.refetch()
         }
       }
 
@@ -208,11 +211,19 @@ const AddLiquidityStepper = ({
             spender: sdk.router.address,
             amount: amountBDesired,
           })
+
+          // Force a refresh of the allowance data
+          await allowanceB.refetch()
         }
       }
+
+      // Add small delay to ensure state updates
+      setTimeout(() => {
+        setIsProcessing(false)
+      }, 500)
     } catch (err: any) {
+      // console.error('Approval error:', err)
       setError(err.message || 'Failed to approve token')
-    } finally {
       setIsProcessing(false)
     }
   }
@@ -501,10 +512,21 @@ const AddLiquidityStepper = ({
 
       return needsApproval
     } catch (err) {
-      console.error('Error checking approval status:', err)
+      // console.error('Error checking approval status:', err)
       return false
     }
-  }, [tokenA, tokenB, tokenAInfo, tokenBInfo, amountA, amountB, isApprovedA, isApprovedB])
+  }, [
+    tokenA,
+    tokenB,
+    tokenAInfo,
+    tokenBInfo,
+    amountA,
+    amountB,
+    isApprovedA,
+    isApprovedB,
+    allowanceA?.data, // Add explicit dependencies on allowance data
+    allowanceB?.data,
+  ])
 
   const isCreatingNewPair = useMemo(() => {
     if (!pairExists) return false
@@ -557,12 +579,31 @@ const AddLiquidityStepper = ({
   ])
 
   const handleNext = () => {
+    if (isNativeAndWrappedPair) {
+      setError('KUB and KKUB pairs are not allowed. Please select different tokens.')
+      return
+    }
+
     setActiveStep((prev) => Math.min(1, prev + 1))
   }
 
   const handleBack = () => {
     setActiveStep((prev) => Math.max(0, prev - 1))
   }
+
+  const isNativeAndWrappedPair = useMemo(() => {
+    if (!tokenA || !tokenB) return false
+
+    // Check if one token is native KUB and the other is KKUB
+    const isTokenANative = tokenA === zeroAddress
+    const isTokenBNative = tokenB === zeroAddress
+
+    const isTokenAKKUB = tokenA === TOKENS.KKUB
+    const isTokenBKKUB = tokenB === TOKENS.KKUB
+
+    // Return true if we have a native KUB + KKUB pair
+    return (isTokenANative && isTokenBKKUB) || (isTokenBNative && isTokenAKKUB)
+  }, [tokenA, tokenB, TOKENS.KKUB])
 
   const renderTokenSelect = () => (
     <View gap={4} padding={6} borderColor="neutral-faded" borderRadius="large">
@@ -588,6 +629,7 @@ const AddLiquidityStepper = ({
               onSelectToken={setTokenB}
               tokenAddress={tokenB}
               otherSelectedToken={tokenA}
+              disabled={!tokenA || !tokenB || isNativeAndWrappedPair}
             />
           </View>
         </View.Item>
