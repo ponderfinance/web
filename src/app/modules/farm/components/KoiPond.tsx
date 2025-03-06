@@ -47,7 +47,7 @@ function ManageFarmModal({
   )
 }
 
-export default function FarmingPage() {
+export default function KoiPond() {
   const [selectedFarm, setSelectedFarm] = useState<{
     pid: number
     lpToken: Address
@@ -92,9 +92,9 @@ export default function FarmingPage() {
           <Button onClick={activate}>Create Farm</Button>
         </View>
 
-        {/*<Modal active={active} onClose={deactivate}>*/}
-        {/*  <CreateFarm />*/}
-        {/*</Modal>*/}
+        <Modal active={active} onClose={deactivate}>
+          <CreateFarm />
+        </Modal>
       </View>
 
       {/* Modal overlay */}

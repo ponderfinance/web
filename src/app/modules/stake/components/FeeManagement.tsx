@@ -26,7 +26,7 @@ function PendingFeesCard({ feeInfo }: { feeInfo: any }) {
       borderRadius="large"
     >
       <Text variant="title-5" weight="regular">
-        Pending Fees
+        Pending Protocol Fees
       </Text>
       <View direction="row" justify="space-between">
         <Text>KOI</Text>
@@ -303,7 +303,7 @@ export default function FeesPage() {
         </Modal>
       </View>
 
-      <FeeManagement />
+      {/*<FeeManagement />*/}
     </View>
   )
 }
