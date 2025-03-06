@@ -46,7 +46,7 @@ function WalletProvider({
       publicClient: (publicClient || fallbackPublicClient) as PublicClient,
       walletClient: viemWalletClient,
     })
-  }, [publicClient, address])
+  }, [publicClient, address, CURRENT_CHAIN])
 
   return (
     <PonderProvider sdk={sdk!} queryClient={queryClient}>
