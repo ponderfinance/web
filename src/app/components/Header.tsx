@@ -62,6 +62,15 @@ export const Header = () => {
               </Popover.Trigger>
               <Popover.Content>
                 <Footer />
+                <View direction="row" gap={2}>
+                  <a href="https://magic.decentralized-content.com/ipfs/bafkreigugdnvgtgfjx5hhghvzocvd5uwzat5zut4xsokbdtdnl4oyd4wny">
+                    <Text variant="caption-2">Terms of Service</Text>
+                  </a>
+                  <a href="https://magic.decentralized-content.com/ipfs/bafkreigyvyrxudd5zb6az5upwuypv46u66wsjs5r254hhfrlqoa3icrewq">
+                    <Text variant="caption-2">Privacy Policy</Text>
+                  </a>
+                </View>
+
               </Popover.Content>
             </Popover>
           </View>
