@@ -3,6 +3,7 @@ import { Button, Text, View } from 'reshaped'
 import LiquidityPositionsList from '@/src/app/components/LiqudityPositionsList'
 import { Plus } from '@phosphor-icons/react'
 import Link from 'next/link'
+import PoolsList from '@/src/app/components/PoolsList'
 
 export default function Pool() {
   return (
@@ -25,6 +26,7 @@ export default function Pool() {
           </Link>
         </View>
 
+        {/*<PoolsList />*/}
         <LiquidityPositionsList />
       </View>
     </View>
