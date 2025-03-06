@@ -27,7 +27,7 @@ import { formatNumber, roundDecimal } from '@/src/app/utils/numbers'
 import { useQuery } from '@tanstack/react-query'
 import { KKUB_ADDRESS } from '@/src/app/constants/addresses'
 import { CURRENT_CHAIN } from '@/src/app/constants/chains'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, useCallback } from 'react'
 
 interface AddLiquidityStepperProps {
   defaultTokenA?: Address
@@ -39,6 +39,30 @@ const TOKENS = {
   KKUB: KKUB_ADDRESS[CURRENT_CHAIN.id] as Address,
   KUB: zeroAddress as Address,
 }
+
+// Extended ABI for tokens that might use allowances instead of allowance
+const extendedAllowanceAbi = [
+  {
+    name: 'allowance',
+    type: 'function',
+    inputs: [
+      { name: 'owner', type: 'address' },
+      { name: 'spender', type: 'address' },
+    ],
+    outputs: [{ name: '', type: 'uint256' }],
+    stateMutability: 'view',
+  },
+  {
+    name: 'allowances',
+    type: 'function',
+    inputs: [
+      { name: 'owner', type: 'address' },
+      { name: 'spender', type: 'address' },
+    ],
+    outputs: [{ name: '', type: 'uint256' }],
+    stateMutability: 'view',
+  },
+] as const
 
 const AddLiquidityStepper = ({
   defaultTokenA,
@@ -58,6 +82,10 @@ const AddLiquidityStepper = ({
   const [slippage, setSlippage] = useState(1.0) // 1% default
   const [error, setError] = useState<string>('')
   const [isProcessing, setIsProcessing] = useState(false)
+  const [manualApprovalCheck, setManualApprovalCheck] = useState({
+    tokenA: false,
+    tokenB: false,
+  })
   const toast = useToast()
 
   useEffect(() => {
@@ -149,6 +177,105 @@ const AddLiquidityStepper = ({
     status,
   } = useAddLiquidity()
 
+  // Direct check for token allowance (supporting both allowance and allowances)
+  const checkTokenAllowance = useCallback(
+    async (token: Address, owner: Address, spender: Address): Promise<bigint> => {
+      if (!sdk?.publicClient) return BigInt(0)
+
+      try {
+        // Try allowances first (specific to KUSDT)
+        return (await sdk.publicClient.readContract({
+          address: token,
+          abi: extendedAllowanceAbi,
+          functionName: 'allowances',
+          args: [owner, spender],
+        })) as bigint
+      } catch (err) {
+        try {
+          // Fall back to standard allowance
+          return (await sdk.publicClient.readContract({
+            address: token,
+            abi: extendedAllowanceAbi,
+            functionName: 'allowance',
+            args: [owner, spender],
+          })) as bigint
+        } catch (err2) {
+          console.error('Failed to check token allowance:', err2)
+          return BigInt(0)
+        }
+      }
+    },
+    [sdk]
+  )
+
+  // Check manual approvals when needed
+  useEffect(() => {
+    const checkApprovals = async () => {
+      if (
+        !account ||
+        !sdk?.router?.address ||
+        !tokenA ||
+        !tokenB ||
+        !amountA ||
+        !amountB
+      ) {
+        return
+      }
+
+      try {
+        // Check token A (if not native)
+        if (tokenA !== zeroAddress && tokenAInfo) {
+          const amountADesired = parseUnits(amountA, tokenAInfo.decimals)
+          const tokenAAllowance = await checkTokenAllowance(
+            tokenA as Address,
+            account as Address,
+            sdk.router.address as Address
+          )
+          setManualApprovalCheck((prev) => ({
+            ...prev,
+            tokenA: tokenAAllowance >= amountADesired,
+          }))
+        } else {
+          setManualApprovalCheck((prev) => ({ ...prev, tokenA: true }))
+        }
+
+        // Check token B (if not native)
+        if (tokenB !== zeroAddress && tokenBInfo) {
+          const amountBDesired = parseUnits(amountB, tokenBInfo.decimals)
+          const tokenBAllowance = await checkTokenAllowance(
+            tokenB as Address,
+            account as Address,
+            sdk.router.address as Address
+          )
+          setManualApprovalCheck((prev) => ({
+            ...prev,
+            tokenB: tokenBAllowance >= amountBDesired,
+          }))
+        } else {
+          setManualApprovalCheck((prev) => ({ ...prev, tokenB: true }))
+        }
+      } catch (err) {
+        console.error('Error checking token approvals:', err)
+      }
+    }
+
+    // Check after approvals or when dependencies change
+    if (!isProcessing) {
+      checkApprovals()
+    }
+  }, [
+    tokenA,
+    tokenB,
+    amountA,
+    amountB,
+    account,
+    sdk?.router?.address,
+    tokenAInfo,
+    tokenBInfo,
+    isProcessing,
+    checkTokenAllowance,
+  ])
+
   const validateAmounts = (amountADesired: bigint, amountBDesired: bigint) => {
     if (amountADesired <= BigInt(0) || amountBDesired <= BigInt(0)) {
       setError('Amounts must be greater than 0')
@@ -169,60 +296,135 @@ const AddLiquidityStepper = ({
     }
   }
 
-  // Handle token approval
+  // Handle token approval with support for allowances
   const handleApproval = async () => {
     if (!account || !sdk?.router?.address) return
 
     try {
       setError('')
       setIsProcessing(true)
+      let approvalSuccess = false
 
       // Approve tokenA if it's an ERC20 and needs approval
       if (tokenA !== zeroAddress && tokenAInfo && amountA) {
-        const amountADesired = parseUnits(amountA, tokenAInfo.decimals)
+        try {
+          const amountADesired = parseUnits(amountA, tokenAInfo.decimals)
 
-        if (!isApprovedA(amountADesired)) {
-          console.log(
-            `Approving ${tokenAInfo.symbol} (${tokenA}) for amount ${amountADesired}`
+          // Check current allowance
+          const currentAllowanceA = await checkTokenAllowance(
+            tokenA as Address,
+            account,
+            sdk.router.address
           )
 
-          await approveA.mutateAsync({
-            token: tokenA as Address,
-            spender: sdk.router.address,
-            amount: amountADesired,
-          })
+          console.log(
+            `Current allowance for ${tokenAInfo.symbol}:`,
+            currentAllowanceA.toString(),
+            'Required:',
+            amountADesired.toString()
+          )
 
-          // Force a refresh of the allowance data
-          await allowanceA.refetch()
+          if (currentAllowanceA < amountADesired) {
+            console.log(
+              `Approving ${tokenAInfo.symbol} (${tokenA}) for amount ${amountADesired}`
+            )
+
+            await approveA.mutateAsync({
+              token: tokenA as Address,
+              spender: sdk.router.address,
+              amount: amountADesired,
+            })
+
+            // Verify approval went through
+            await new Promise((resolve) => setTimeout(resolve, 2000))
+
+            const newAllowanceA = await checkTokenAllowance(
+              tokenA as Address,
+              account,
+              sdk.router.address
+            )
+
+            console.log(
+              `New allowance for ${tokenAInfo.symbol}:`,
+              newAllowanceA.toString()
+            )
+
+            if (newAllowanceA >= amountADesired) {
+              setManualApprovalCheck((prev) => ({ ...prev, tokenA: true }))
+              approvalSuccess = true
+            }
+          } else {
+            console.log(`${tokenAInfo.symbol} already has sufficient allowance`)
+            setManualApprovalCheck((prev) => ({ ...prev, tokenA: true }))
+            approvalSuccess = true
+          }
+        } catch (err) {
+          console.error('Error approving token A:', err)
         }
       }
 
       // Approve tokenB if it's an ERC20 and needs approval
       if (tokenB !== zeroAddress && tokenBInfo && amountB) {
-        const amountBDesired = parseUnits(amountB, tokenBInfo.decimals)
+        try {
+          const amountBDesired = parseUnits(amountB, tokenBInfo.decimals)
 
-        if (!isApprovedB(amountBDesired)) {
-          console.log(
-            `Approving ${tokenBInfo.symbol} (${tokenB}) for amount ${amountBDesired}`
+          // Check current allowance
+          const currentAllowanceB = await checkTokenAllowance(
+            tokenB as Address,
+            account,
+            sdk.router.address
           )
 
-          await approveB.mutateAsync({
-            token: tokenB as Address,
-            spender: sdk.router.address,
-            amount: amountBDesired,
-          })
+          console.log(
+            `Current allowance for ${tokenBInfo.symbol}:`,
+            currentAllowanceB.toString(),
+            'Required:',
+            amountBDesired.toString()
+          )
 
-          // Force a refresh of the allowance data
-          await allowanceB.refetch()
+          if (currentAllowanceB < amountBDesired) {
+            console.log(
+              `Approving ${tokenBInfo.symbol} (${tokenB}) for amount ${amountBDesired}`
+            )
+
+            await approveB.mutateAsync({
+              token: tokenB as Address,
+              spender: sdk.router.address,
+              amount: amountBDesired,
+            })
+
+            // Verify approval went through
+            await new Promise((resolve) => setTimeout(resolve, 2000))
+
+            const newAllowanceB = await checkTokenAllowance(
+              tokenB as Address,
+              account,
+              sdk.router.address
+            )
+
+            console.log(
+              `New allowance for ${tokenBInfo.symbol}:`,
+              newAllowanceB.toString()
+            )
+
+            if (newAllowanceB >= amountBDesired) {
+              setManualApprovalCheck((prev) => ({ ...prev, tokenB: true }))
+              approvalSuccess = true
+            }
+          } else {
+            console.log(`${tokenBInfo.symbol} already has sufficient allowance`)
+            setManualApprovalCheck((prev) => ({ ...prev, tokenB: true }))
+            approvalSuccess = true
+          }
+        } catch (err) {
+          console.error('Error approving token B:', err)
         }
       }
 
-      // Add small delay to ensure state updates
-      setTimeout(() => {
-        setIsProcessing(false)
-      }, 500)
+      // Force a re-render after approval
+      setIsProcessing(false)
     } catch (err: any) {
-      // console.error('Approval error:', err)
+      console.error('Approval error:', err)
       setError(err.message || 'Failed to approve token')
       setIsProcessing(false)
     }
@@ -322,17 +524,33 @@ const AddLiquidityStepper = ({
       const amountAMin = (amountADesired * slippageMultiplier) / BigInt(10000)
       const amountBMin = (amountBDesired * slippageMultiplier) / BigInt(10000)
 
-      // Check ERC20 token approvals
-      if (tokenA !== zeroAddress && !isApprovedA(amountADesired)) {
-        setError(`${tokenAInfo?.symbol || 'Token A'} approval required`)
-        setIsProcessing(false)
-        return
+      // Verify approvals one last time
+      let approvalsOK = true
+
+      if (tokenA !== zeroAddress) {
+        const currentAllowanceA = await checkTokenAllowance(
+          tokenA as Address,
+          account,
+          sdk.router.address
+        )
+        if (currentAllowanceA < amountADesired) {
+          setError(`${tokenAInfo?.symbol || 'Token A'} approval required`)
+          setIsProcessing(false)
+          return
+        }
       }
 
-      if (tokenB !== zeroAddress && !isApprovedB(amountBDesired)) {
-        setError(`${tokenBInfo?.symbol || 'Token B'} approval required`)
-        setIsProcessing(false)
-        return
+      if (tokenB !== zeroAddress) {
+        const currentAllowanceB = await checkTokenAllowance(
+          tokenB as Address,
+          account,
+          sdk.router.address
+        )
+        if (currentAllowanceB < amountBDesired) {
+          setError(`${tokenBInfo?.symbol || 'Token B'} approval required`)
+          setIsProcessing(false)
+          return
+        }
       }
 
       // IMPORTANT: Handle native KUB pairs
@@ -487,45 +705,30 @@ const AddLiquidityStepper = ({
     }
   }
 
+  // Use manual approval check instead of relying on the hook's isApproved
   const isApprovalNeeded = useMemo(() => {
-    // Check if either token needs approval
+    // Check if either token needs approval based on our manual checks
     if (!amountA || !amountB) return false
 
-    try {
-      let needsApproval = false
-
-      // Check first token if it's not native KUB
-      if (tokenA !== zeroAddress && tokenAInfo) {
-        const amountABigInt = parseUnits(amountA, tokenAInfo.decimals)
-        if (!isApprovedA(amountABigInt)) {
-          needsApproval = true
-        }
-      }
-
-      // Check second token if it's not native KUB
-      if (tokenB !== zeroAddress && tokenBInfo && !needsApproval) {
-        const amountBBigInt = parseUnits(amountB, tokenBInfo.decimals)
-        if (!isApprovedB(amountBBigInt)) {
-          needsApproval = true
-        }
-      }
-
-      return needsApproval
-    } catch (err) {
-      // console.error('Error checking approval status:', err)
-      return false
+    // If either token is native KUB, it doesn't need approval
+    if (tokenA === zeroAddress) {
+      // Only check token B (if it's not native)
+      if (tokenB === zeroAddress) return false
+      return !manualApprovalCheck.tokenB
+    } else if (tokenB === zeroAddress) {
+      // Only check token A
+      return !manualApprovalCheck.tokenA
+    } else {
+      // Check both tokens
+      return !manualApprovalCheck.tokenA || !manualApprovalCheck.tokenB
     }
   }, [
     tokenA,
     tokenB,
-    tokenAInfo,
-    tokenBInfo,
     amountA,
     amountB,
-    isApprovedA,
-    isApprovedB,
-    allowanceA?.data, // Add explicit dependencies on allowance data
-    allowanceB?.data,
+    manualApprovalCheck.tokenA,
+    manualApprovalCheck.tokenB,
   ])
 
   const isCreatingNewPair = useMemo(() => {

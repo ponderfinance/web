@@ -43,6 +43,12 @@ const tokenData: Token[] = [
     address: KKUB_ADDRESS[CURRENT_CHAIN.id],
     icon: '/tokens/bitkub.png',
   },
+  {
+    name: 'Bitkub-Peg USDT',
+    symbol: 'USDT',
+    address: "0x7d984C24d2499D840eB3b7016077164e15E5faA6",
+    icon: '/tokens/usdt.png',
+  },
 ]
 
 // Function to find token in our predefined list
