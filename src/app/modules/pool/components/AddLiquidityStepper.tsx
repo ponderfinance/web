@@ -28,6 +28,7 @@ import { useQuery } from '@tanstack/react-query'
 import { KKUB_ADDRESS } from '@/src/app/constants/addresses'
 import { CURRENT_CHAIN } from '@/src/app/constants/chains'
 import { useEffect, useMemo, useState, useCallback } from 'react'
+import { usePrivy } from '@privy-io/react-auth'
 
 interface AddLiquidityStepperProps {
   defaultTokenA?: Address
@@ -69,6 +70,8 @@ const AddLiquidityStepper = ({
   defaultTokenB = zeroAddress,
 }: AddLiquidityStepperProps) => {
   const sdk = usePonderSDK()
+  const { login } = usePrivy()
+
   const { address: account } = useAccount()
   const [activeStep, setActiveStep] = useState(0)
 
@@ -1103,7 +1106,8 @@ const AddLiquidityStepper = ({
       )}
 
       {!account ? (
-        <Button fullWidth color="primary" size="large" rounded={true}>
+        //@ts-ignore
+        <Button fullWidth color="primary" size="large" rounded={true} onClick={login}>
           Connect Wallet
         </Button>
       ) : isPairCheckLoading || isPairInfoLoading ? (
