@@ -4,7 +4,7 @@ import { CURRENT_CHAIN } from '@/src/app/constants/chains'
 export const privyConfig: PrivyClientConfig = {
   defaultChain: CURRENT_CHAIN,
   supportedChains: [CURRENT_CHAIN],
-  loginMethods: ['wallet', 'telegram'],
+  loginMethods: ['wallet'],
   appearance: {
     theme: 'dark',
     walletList: ['okx_wallet', 'detected_wallets', 'metamask', 'wallet_connect'],
