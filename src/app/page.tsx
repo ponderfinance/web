@@ -30,7 +30,7 @@ export default function Home() {
           attributes={{ style: { margin: '0 auto' } }}
         >
           <Text variant="body-1" align="center">
-            Bitkub Chain’s AMM and fair token launch platform governed by{' '}
+            Automated Market Maker and fair token launch platform on KUB, governed by{' '}
             <Link
               href={'/xkoi'}
               style={{ textDecoration: 'underline', cursor: 'pointer' }}
