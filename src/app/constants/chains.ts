@@ -9,7 +9,7 @@ export const bitkubChain = {
         symbol: 'KUB',
     },
     rpcUrls: {
-        default: { http: ['https://rpc.bitkubchain.io'] },
+        default: { http: ['https://dataseed2-rpc.bitkubchain.org'] },
         public: { http: ['https://rpc.bitkubchain.io'] },
     },
     blockExplorers: {
@@ -27,7 +27,7 @@ export const bitkubTestnetChain = {
         symbol: 'KUB',
     },
     rpcUrls: {
-        default: { http: ['https://rpc-testnet.bitkubchain.io'] },
+        default: { http: ['https://dataseed2-testnet-rpc.bitkubchain.org'] },
         public: { http: ['https://rpc-testnet.bitkubchain.io'] },
     },
     blockExplorers: {
