@@ -2,11 +2,11 @@
 
 import React from 'react'
 import { graphql, useLazyLoadQuery } from 'react-relay'
-import { pageExploreQuery } from '@/src/__generated__/pageExploreQuery.graphql'
+import { ExplorePageQuery } from '@/src/__generated__/ExplorePageQuery.graphql'
 import { Explore } from '@/src/modules/explore/components/Explore'
 
 const explorePageQuery = graphql`
-  query pageExploreQuery(
+  query ExplorePageQuery(
     $first: Int!
     $orderBy: PairOrderBy!
     $orderDirection: OrderDirection!
@@ -21,12 +21,14 @@ const explorePageQuery = graphql`
             address
             symbol
             decimals
+            ...TokenPairFragment
           }
           token1 {
             id
             address
             symbol
             decimals
+            ...TokenPairFragment
           }
           tvl
           reserveUSD
@@ -45,7 +47,7 @@ export const ExplorePage = () => {
   const [orderBy, setOrderBy] = React.useState<string>('reserveUSD')
   const [orderDirection, setOrderDirection] = React.useState<string>('desc')
 
-  const data = useLazyLoadQuery<pageExploreQuery>(
+  const data = useLazyLoadQuery<ExplorePageQuery>(
     explorePageQuery,
     {
       first: 50,

@@ -1,6 +1,7 @@
 import React from 'react'
 import { View, Text, Actionable } from 'reshaped'
-import { pageExploreQuery } from '@/src/__generated__/pageExploreQuery.graphql'
+import { ExplorePageQuery } from '@/src/__generated__/ExplorePageQuery.graphql'
+import { TokenPair } from '@/src/components/TokenPair'
 
 // Helper to format currency values
 const formatCurrency = (value: number): string => {
@@ -16,7 +17,7 @@ const formatCurrency = (value: number): string => {
 
 // Define the component props
 interface ExploreProps {
-  data: pageExploreQuery['response']
+  data: ExplorePageQuery['response']
   orderBy: string
   orderDirection: string
   setOrderBy: (value: string) => void
@@ -89,23 +90,14 @@ export const Explore: React.FC<ExploreProps> = ({
 
             <View.Item columns={3}>
               <View direction="row" align="center" gap={2}>
-                <View direction="row">
-                  <View
-                    width={8}
-                    height={8}
-                    borderRadius="circular"
-                    backgroundColor="primary"
-                    justify="center"
-                    align="center"
-                  >
-                    <Text weight="medium">{node.token0.symbol?.charAt(0)}</Text>
-                  </View>
-                </View>
-                <View direction="column" gap={1}>
-                  <Text weight="medium">
-                    {node.token0.symbol}/{node.token1.symbol}
-                  </Text>
-                </View>
+                {/* Pass token fragments to TokenPair component */}
+                <TokenPair
+                  tokenA={node.token0}
+                  tokenB={node.token1}
+                  tokenAddressA={node.token0.address as `0x${string}`}
+                  tokenAddressB={node.token1.address as `0x${string}`}
+                  size="small"
+                />
               </View>
             </View.Item>
 

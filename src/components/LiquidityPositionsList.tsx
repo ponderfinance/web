@@ -6,7 +6,7 @@ import { KKUB_ADDRESS, usePonderSDK, useRemoveLiquidity } from '@ponderfinance/s
 import { useAccount } from 'wagmi'
 import { Address } from 'viem'
 import LiquidityPositionItem from './LiquidityPositionItem'
-import { pagePoolQuery } from '@/src/__generated__/pagePoolQuery.graphql'
+import { PoolPageQuery } from '@/src/__generated__/PoolPageQuery.graphql'
 import { CURRENT_CHAIN } from '@/src/constants/chains'
 
 interface Position {
@@ -35,7 +35,7 @@ interface Position {
 }
 
 interface LiquidityPositionsListProps {
-  positionsData: NonNullable<pagePoolQuery['response']['userPositions']>
+  positionsData: NonNullable<PoolPageQuery['response']['userPositions']>
 }
 
 export function LiquidityPositionsList({ positionsData }: LiquidityPositionsListProps) {

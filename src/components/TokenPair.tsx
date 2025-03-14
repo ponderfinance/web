@@ -1,6 +1,5 @@
 import React from 'react'
-import { View, Text } from 'reshaped'
-import Image from 'next/image'
+import { View, Text, Image } from 'reshaped'
 import { graphql, useFragment } from 'react-relay'
 import { shortenAddress } from '@/src/utils/numbers'
 import { TokenPairFragment$key } from '@/src/__generated__/TokenPairFragment.graphql'
@@ -11,6 +10,10 @@ interface TokenPairProps {
   tokenAddressA?: `0x${string}`
   tokenAddressB?: `0x${string}`
   size?: 'small' | 'large'
+}
+
+export const getIpfsGateway = (uri: string): string => {
+  return uri?.replace('ipfs://', 'https://lucidhaus.infura-ipfs.io/ipfs/')
 }
 
 export const tokenFragment = graphql`
@@ -52,7 +55,9 @@ export const TokenPair: React.FC<TokenPairProps> = ({
     symbol: isTokenANative
       ? 'KUB'
       : tokenAData?.symbol || (tokenAddressA ? shortenAddress(tokenAddressA) : 'Token A'),
-    icon: isTokenANative ? NATIVE_KUB_ICON : tokenAData?.imageURI || DEFAULT_TOKEN_ICON,
+    icon: isTokenANative
+      ? NATIVE_KUB_ICON
+      : getIpfsGateway(tokenAData?.imageURI || '') || DEFAULT_TOKEN_ICON,
   }
 
   // Determine second token display information
@@ -60,10 +65,10 @@ export const TokenPair: React.FC<TokenPairProps> = ({
     symbol: isTokenBNative
       ? 'KUB'
       : tokenBData?.symbol || (tokenAddressB ? shortenAddress(tokenAddressB) : 'Token B'),
-    icon: isTokenBNative ? NATIVE_KUB_ICON : tokenBData?.imageURI || DEFAULT_TOKEN_ICON,
+    icon: isTokenBNative
+      ? NATIVE_KUB_ICON
+      : getIpfsGateway(tokenBData?.imageURI || '') || DEFAULT_TOKEN_ICON,
   }
-
-  console.log('TOK', tokenAData)
 
   return (
     <View>
@@ -87,8 +92,8 @@ export const TokenPair: React.FC<TokenPairProps> = ({
             >
               <Image
                 src={firstTokenDisplay.icon}
-                height={size === 'small' ? 32 : 44}
-                width={size === 'small' ? 32 : 44}
+                height={size === 'small' ? 8 : 11}
+                width={size === 'small' ? 8 : 11}
                 alt={firstTokenDisplay.symbol}
               />
             </View>
@@ -115,8 +120,8 @@ export const TokenPair: React.FC<TokenPairProps> = ({
             >
               <Image
                 src={secondTokenDisplay.icon}
-                height={size === 'small' ? 32 : 44}
-                width={size === 'small' ? 32 : 44}
+                height={size === 'small' ? 8 : 11}
+                width={size === 'small' ? 8 : 11}
                 alt={secondTokenDisplay.symbol}
               />
             </View>
@@ -129,4 +134,3 @@ export const TokenPair: React.FC<TokenPairProps> = ({
     </View>
   )
 }
-

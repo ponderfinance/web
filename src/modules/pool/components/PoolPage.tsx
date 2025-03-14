@@ -2,7 +2,7 @@
 
 import { useAccount } from 'wagmi'
 import { graphql, useLazyLoadQuery } from 'react-relay'
-import { pagePoolQuery } from '@/src/__generated__/pagePoolQuery.graphql'
+import { PoolPageQuery } from '@/src/__generated__/PoolPageQuery.graphql'
 import { Button, Text, View } from 'reshaped'
 import Link from 'next/link'
 import { Plus } from '@phosphor-icons/react'
@@ -10,7 +10,7 @@ import { LiquidityPositionsList } from '@/src/components/LiquidityPositionsList'
 import React from 'react'
 
 const userPositionsQuery = graphql`
-  query pagePoolQuery($userAddress: String!) {
+  query PoolPageQuery($userAddress: String!) {
     userPositions(userAddress: $userAddress) {
       liquidityPositions {
         ...LiquidityPositionItem_position
@@ -23,7 +23,7 @@ export const PoolPage = () => {
   const account = useAccount()
 
   // Fetch data at the page level
-  const data = useLazyLoadQuery<pagePoolQuery>(
+  const data = useLazyLoadQuery<PoolPageQuery>(
     userPositionsQuery,
     {
       userAddress: account.address?.toLowerCase() || '',

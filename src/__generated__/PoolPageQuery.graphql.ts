@@ -1,5 +1,5 @@
 /**
- * @generated SignedSource<<f8a3c9f12fc474ad3def5782c1cdd4e8>>
+ * @generated SignedSource<<a1d26de2be89f1f77f9791ae11d92edc>>
  * @lightSyntaxTransform
  * @nogrep
  */
@@ -10,19 +10,19 @@
 
 import { ConcreteRequest, Query } from 'relay-runtime';
 import { FragmentRefs } from "relay-runtime";
-export type pagePoolQuery$variables = {
+export type PoolPageQuery$variables = {
   userAddress: string;
 };
-export type pagePoolQuery$data = {
+export type PoolPageQuery$data = {
   readonly userPositions: {
     readonly liquidityPositions: ReadonlyArray<{
       readonly " $fragmentSpreads": FragmentRefs<"LiquidityPositionItem_position">;
     }>;
   };
 };
-export type pagePoolQuery = {
-  response: pagePoolQuery$data;
-  variables: pagePoolQuery$variables;
+export type PoolPageQuery = {
+  response: PoolPageQuery$data;
+  variables: PoolPageQuery$variables;
 };
 
 const node: ConcreteRequest = (function(){
@@ -91,7 +91,7 @@ return {
     "argumentDefinitions": (v0/*: any*/),
     "kind": "Fragment",
     "metadata": null,
-    "name": "pagePoolQuery",
+    "name": "PoolPageQuery",
     "selections": [
       {
         "alias": null,
@@ -128,7 +128,7 @@ return {
   "operation": {
     "argumentDefinitions": (v0/*: any*/),
     "kind": "Operation",
-    "name": "pagePoolQuery",
+    "name": "PoolPageQuery",
     "selections": [
       {
         "alias": null,
@@ -196,16 +196,16 @@ return {
     ]
   },
   "params": {
-    "cacheID": "a0f1efcbdec946c72e58466df292f77d",
+    "cacheID": "8871dd2bbad2435a5355ca6cfad73992",
     "id": null,
     "metadata": {},
-    "name": "pagePoolQuery",
+    "name": "PoolPageQuery",
     "operationKind": "query",
-    "text": "query pagePoolQuery(\n  $userAddress: String!\n) {\n  userPositions(userAddress: $userAddress) {\n    liquidityPositions {\n      ...LiquidityPositionItem_position\n      id\n    }\n  }\n}\n\nfragment LiquidityPositionItem_position on LiquidityPosition {\n  id\n  pair {\n    id\n    address\n    token0 {\n      id\n      address\n      symbol\n      ...TokenPairFragment\n    }\n    token1 {\n      id\n      address\n      symbol\n      ...TokenPairFragment\n    }\n  }\n  liquidityTokens\n}\n\nfragment TokenPairFragment on Token {\n  id\n  address\n  name\n  symbol\n  decimals\n  imageURI\n}\n"
+    "text": "query PoolPageQuery(\n  $userAddress: String!\n) {\n  userPositions(userAddress: $userAddress) {\n    liquidityPositions {\n      ...LiquidityPositionItem_position\n      id\n    }\n  }\n}\n\nfragment LiquidityPositionItem_position on LiquidityPosition {\n  id\n  pair {\n    id\n    address\n    token0 {\n      id\n      address\n      symbol\n      ...TokenPairFragment\n    }\n    token1 {\n      id\n      address\n      symbol\n      ...TokenPairFragment\n    }\n  }\n  liquidityTokens\n}\n\nfragment TokenPairFragment on Token {\n  id\n  address\n  name\n  symbol\n  decimals\n  imageURI\n}\n"
   }
 };
 })();
 
-(node as any).hash = "91c40360963989124c2e7457aa3a3374";
+(node as any).hash = "0e148b4c5a6a24eb043b49db62bd9d9d";
 
 export default node;
