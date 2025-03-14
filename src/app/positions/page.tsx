@@ -5,7 +5,7 @@ import LiquidityPositionsList from '@/src/components/LiquidityPositionsList'
 import { Plus } from '@phosphor-icons/react'
 import Link from 'next/link'
 import PoolsList from '@/src/components/PoolsList'
-import ErrorBoundary from "@/src/components/ErrorBoundary";
+import ErrorBoundary from '@/src/components/ErrorBoundary'
 
 export default function Pool() {
   return (
@@ -27,7 +27,6 @@ export default function Pool() {
             </Button>
           </Link>
         </View>
-
         <ErrorBoundary>
           <PoolsList />
         </ErrorBoundary>
