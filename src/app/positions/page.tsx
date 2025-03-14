@@ -1,9 +1,11 @@
 'use client'
+
 import { Button, Text, View } from 'reshaped'
-import LiquidityPositionsList from '@/src/app/components/LiqudityPositionsList'
+import LiquidityPositionsList from '@/src/components/LiquidityPositionsList'
 import { Plus } from '@phosphor-icons/react'
 import Link from 'next/link'
-import PoolsList from '@/src/app/components/PoolsList'
+import PoolsList from '@/src/components/PoolsList'
+import ErrorBoundary from "@/src/components/ErrorBoundary";
 
 export default function Pool() {
   return (
@@ -26,8 +28,10 @@ export default function Pool() {
           </Link>
         </View>
 
-        {/*<PoolsList />*/}
-        <LiquidityPositionsList />
+        <ErrorBoundary>
+          <PoolsList />
+        </ErrorBoundary>
+        {/*<LiquidityPositionsList />*/}
       </View>
     </View>
   )

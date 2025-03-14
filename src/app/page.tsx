@@ -1,10 +1,11 @@
 'use client'
+
 import { Text, View } from 'reshaped'
-import SwapInterface from '@/src/app/components/Swap'
+import SwapInterface from '@/src/components/Swap'
 import Image from 'next/image'
 import Link from 'next/link'
-import { KKUB_ADDRESS, KOI_ADDRESS } from '@/src/app/constants/addresses'
-import { CURRENT_CHAIN } from '@/src/app/constants/chains'
+import { KKUB_ADDRESS, KOI_ADDRESS } from '@/src/constants/addresses'
+import { CURRENT_CHAIN } from '@/src/constants/chains'
 
 export default function Home() {
   return (

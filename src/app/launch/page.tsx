@@ -1,7 +1,7 @@
 'use client'
 import { View } from 'reshaped'
-import LaunchCreationForm from '@/src/app/components/launch/LaunchToken'
-import LaunchContributionCard from "@/src/app/components/launch/LaunchContributionCard";
+import LaunchCreationForm from '@/src/components/launch/LaunchToken'
+import LaunchContributionCard from "@/src/components/launch/LaunchContributionCard";
 export default function Launch() {
   return (
     <View direction="column">

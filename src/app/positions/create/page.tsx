@@ -1,8 +1,8 @@
 'use client'
 
-import AddLiquidityStepper from '@/src/app/modules/pool/components/AddLiquidityStepper'
-import { KKUB_ADDRESS, KOI_ADDRESS } from '@/src/app/constants/addresses'
-import { CURRENT_CHAIN } from '@/src/app/constants/chains'
+import AddLiquidityStepper from '@/src/modules/pool/components/AddLiquidityStepper'
+import { KKUB_ADDRESS, KOI_ADDRESS } from '@/src/constants/addresses'
+import { CURRENT_CHAIN } from '@/src/constants/chains'
 
 export default function Pool() {
   return (

@@ -1,8 +1,8 @@
 'use client'
 import { View } from 'reshaped'
-import SwapInterface from '@/src/app/components/Swap'
-import { KOI_ADDRESS } from '@/src/app/constants/addresses'
-import { CURRENT_CHAIN } from '@/src/app/constants/chains'
+import SwapInterface from '@/src/components/Swap'
+import { KOI_ADDRESS } from '@/src/constants/addresses'
+import { CURRENT_CHAIN } from '@/src/constants/chains'
 export default function Swap() {
   return (
     <View direction="column">

@@ -1,5 +1,5 @@
 import type { PrivyClientConfig } from '@privy-io/react-auth'
-import { CURRENT_CHAIN } from '@/src/app/constants/chains'
+import { CURRENT_CHAIN } from '@/src/constants/chains'
 
 export const privyConfig: PrivyClientConfig = {
   defaultChain: CURRENT_CHAIN,

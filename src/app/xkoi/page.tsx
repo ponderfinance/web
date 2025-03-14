@@ -1,7 +1,7 @@
 'use client'
 import { View } from 'reshaped'
-import KoiPond from '@/src/app/modules/farm/components/KoiPond'
-import FeesPage from '@/src/app/modules/stake/components/FeeManagement'
+import KoiPond from '@/src/modules/farm/components/KoiPond'
+import FeesPage from '@/src/modules/stake/components/FeeManagement'
 export default function Farm() {
   return (
     <View direction="column">

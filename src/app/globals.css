@@ -1,9 +1,15 @@
+@import url('https://fonts.googleapis.com/css2?family=Pirata+One&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 :root {
+  --font-pirata-one: 'Pirata One', cursive;
+}
+:root {
   --font-pathway-extreme: 'Pathway Extreme', sans-serif;
+  --font-pirata-one: 'Pirata One', cursive;
 }
 
 @media (prefers-color-scheme: dark) {

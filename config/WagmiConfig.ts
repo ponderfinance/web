@@ -1,5 +1,5 @@
 import { createConfig, http } from 'wagmi'
-import {bitkubChain, bitkubTestnetChain} from "@/src/app/constants/chains";
+import {bitkubChain, bitkubTestnetChain} from "@/src/constants/chains";
 
 export const wagmiConfig = createConfig({
   chains: [bitkubChain, bitkubTestnetChain],
