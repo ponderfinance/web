@@ -168,16 +168,9 @@ const PoolsListContent: React.FC<PoolsListContentProps> = ({
 
         <View.Item columns={2}>
           <View direction="row" align="center" gap={1}>
-            <Actionable onClick={() => handleSort('reserveUSD')}>
-              <Text color="neutral-faded" weight="medium">
-                TVL
-              </Text>
-              <ChevronIcon
-                direction={
-                  orderBy === 'reserveUSD' && orderDirection === 'asc' ? 'up' : 'down'
-                }
-              />
-            </Actionable>
+            <Text color="neutral-faded" weight="medium">
+              TVL
+            </Text>
           </View>
         </View.Item>
       </View>
@@ -192,6 +185,7 @@ const PoolsListContent: React.FC<PoolsListContentProps> = ({
             padding={4}
             borderColor="neutral-faded"
             backgroundColor="elevation-base"
+            className={'border-0'}
           >
             <View.Item columns={1}>
               <Text color="neutral-faded">{index + 1}</Text>
@@ -209,15 +203,6 @@ const PoolsListContent: React.FC<PoolsListContentProps> = ({
                     align="center"
                   >
                     <Text weight="medium">{node.token0.symbol?.charAt(0)}</Text>
-                  </View>
-                  <View
-                    width={8}
-                    height={8}
-                    borderRadius="circular"
-                    justify="center"
-                    align="center"
-                  >
-                    <Text weight="medium">{node.token1.symbol?.charAt(0)}</Text>
                   </View>
                 </View>
                 <View direction="column" gap={1}>

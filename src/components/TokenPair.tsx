@@ -31,14 +31,14 @@ const tokenData: Token[] = [
     icon: '/tokens/xkoi.png',
   },
   {
-    name: 'Bitkub Coin',
+    name: 'KUB Coin',
     symbol: 'KUB',
     address: '0x0000000000000000000000000000000000000000',
     icon: '/tokens/bitkub.png',
     isNative: true,
   },
   {
-    name: 'Wrapped Bitkub Coin',
+    name: 'Wrapped KUB Coin',
     symbol: 'KKUB',
     address: KKUB_ADDRESS[CURRENT_CHAIN.id],
     icon: '/tokens/bitkub.png',
