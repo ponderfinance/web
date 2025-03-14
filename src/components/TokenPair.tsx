@@ -127,7 +127,7 @@ export const TokenPair: React.FC<TokenPairProps> = ({
             </View>
           </View>
         </View>
-        <Text variant="body-1">
+        <Text variant={size === 'small' ? 'body-2' : 'body-1'}>
           {firstTokenDisplay.symbol} / {secondTokenDisplay.symbol}
         </Text>
       </View>

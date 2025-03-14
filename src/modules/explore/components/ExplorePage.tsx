@@ -4,6 +4,7 @@ import React from 'react'
 import { graphql, useLazyLoadQuery } from 'react-relay'
 import { ExplorePageQuery } from '@/src/__generated__/ExplorePageQuery.graphql'
 import { Explore } from '@/src/modules/explore/components/Explore'
+import { Text, View } from 'reshaped'
 
 const explorePageQuery = graphql`
   query ExplorePageQuery(
@@ -60,12 +61,17 @@ export const ExplorePage = () => {
   )
 
   return (
-    <Explore
-      data={data}
-      orderBy={orderBy}
-      orderDirection={orderDirection}
-      setOrderBy={setOrderBy}
-      setOrderDirection={setOrderDirection}
-    />
+    <View gap={2}>
+      <View>
+        <Text variant="featured-2">Pools</Text>
+      </View>
+      <Explore
+        data={data}
+        orderBy={orderBy}
+        orderDirection={orderDirection}
+        setOrderBy={setOrderBy}
+        setOrderDirection={setOrderDirection}
+      />
+    </View>
   )
 }

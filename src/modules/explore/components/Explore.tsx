@@ -50,7 +50,12 @@ export const Explore: React.FC<ExploreProps> = ({
       width="100%"
     >
       {/* Table Header */}
-      <View direction="row" gap={0} padding={4} borderColor="neutral-faded">
+      <View
+        direction="row"
+        gap={0}
+        padding={4}
+        className={'border-0 border-b border-neutral-faded'}
+      >
         <View.Item columns={1}>
           <Text color="neutral-faded" weight="medium">
             #
@@ -80,9 +85,9 @@ export const Explore: React.FC<ExploreProps> = ({
             direction="row"
             gap={0}
             padding={4}
-            borderColor="neutral-faded"
             backgroundColor="elevation-base"
             className={'border-0'}
+            align="center"
           >
             <View.Item columns={1}>
               <Text color="neutral-faded">{index + 1}</Text>
@@ -102,7 +107,7 @@ export const Explore: React.FC<ExploreProps> = ({
             </View.Item>
 
             <View.Item columns={2}>
-              <Text>{formatCurrency(node.tvl)}</Text>
+              <Text variant="body-2">{formatCurrency(node.tvl)}</Text>
             </View.Item>
           </View>
         ))}
