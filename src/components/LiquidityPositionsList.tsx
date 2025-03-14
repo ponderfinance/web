@@ -9,6 +9,7 @@ import { graphql, useLazyLoadQuery } from 'react-relay'
 import LiquidityPositionItem from './LiquidityPositionItem'
 import { LiquidityPositionsListQuery } from '@/src/__generated__/LiquidityPositionsListQuery.graphql'
 
+// Define the query to fetch initial position data from GraphQL
 const UserPositionsQuery = graphql`
   query LiquidityPositionsListQuery($userAddress: String!) {
     userPositions(userAddress: $userAddress) {
@@ -45,6 +46,30 @@ interface Position {
 }
 
 export default function LiquidityPositionsList() {
+  const [isMounted, setIsMounted] = useState(false)
+
+  // Only render client-side data after component is mounted
+  useEffect(() => {
+    setIsMounted(true)
+  }, [])
+
+  // Show loading skeleton during SSR or before mounting
+  if (!isMounted) {
+    return (
+      <View direction="column" gap={4}>
+        <Skeleton height={20} width="100%" borderRadius="large" />
+        <Skeleton height={20} width="100%" borderRadius="large" />
+        <Skeleton height={20} width="100%" borderRadius="large" />
+      </View>
+    )
+  }
+
+  // Client-side content
+  return <LiquidityPositionsContent />
+}
+
+// Separate the content with data fetching to avoid hydration issues
+function LiquidityPositionsContent() {
   const sdk = usePonderSDK()
   const account = useAccount()
   const [wethAddress, setWethAddress] = useState('')
@@ -73,7 +98,7 @@ export default function LiquidityPositionsList() {
     fetchWethAddress()
   }, [sdk])
 
-  // Fetch user positions data - this will trigger Suspense until loaded
+  // Now safe to use since we're client-side
   const data = useLazyLoadQuery<LiquidityPositionsListQuery>(
     UserPositionsQuery,
     {
@@ -289,7 +314,7 @@ export default function LiquidityPositionsList() {
     )
   }
 
-  // Prepare the component with Suspense
+  // Return the component UI
   return (
     <View gap={16}>
       {data.userPositions.liquidityPositions.length === 0 && (

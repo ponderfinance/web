@@ -30,7 +30,7 @@ export default function Pool() {
         <ErrorBoundary>
           <PoolsList />
         </ErrorBoundary>
-        {/*<LiquidityPositionsList />*/}
+        <LiquidityPositionsList />
       </View>
     </View>
   )

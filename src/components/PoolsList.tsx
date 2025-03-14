@@ -86,7 +86,6 @@ function PoolsListContent({
     PoolsListFragment$key
   >(PoolsListFragment, queryData)
 
-  console.log('DATA', data)
 
   // Implement intersection observer for infinite scroll
   useEffect(() => {
