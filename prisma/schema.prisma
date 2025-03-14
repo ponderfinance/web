@@ -14,6 +14,7 @@ model Token {
   name            String?
   symbol          String?
   decimals        Int?
+  imageURI        String?  // URI for the token image
   // Relationships
   pairsAsToken0   Pair[]   @relation("Token0")
   pairsAsToken1   Pair[]   @relation("Token1")

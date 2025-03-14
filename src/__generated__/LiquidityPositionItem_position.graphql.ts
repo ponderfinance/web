@@ -1,5 +1,5 @@
 /**
- * @generated SignedSource<<3c7c3b72ddbc824eb9bd82c346fd8ee8>>
+ * @generated SignedSource<<8768531e530c4262c8144d29a074fe3e>>
  * @lightSyntaxTransform
  * @nogrep
  */
@@ -20,11 +20,13 @@ export type LiquidityPositionItem_position$data = {
       readonly address: string;
       readonly id: string;
       readonly symbol: string | null;
+      readonly " $fragmentSpreads": FragmentRefs<"TokenPairFragment">;
     };
     readonly token1: {
       readonly address: string;
       readonly id: string;
       readonly symbol: string | null;
+      readonly " $fragmentSpreads": FragmentRefs<"TokenPairFragment">;
     };
   };
   readonly " $fragmentType": "LiquidityPositionItem_position";
@@ -58,6 +60,11 @@ v2 = [
     "kind": "ScalarField",
     "name": "symbol",
     "storageKey": null
+  },
+  {
+    "args": null,
+    "kind": "FragmentSpread",
+    "name": "TokenPairFragment"
   }
 ];
 return {
@@ -113,6 +120,6 @@ return {
 };
 })();
 
-(node as any).hash = "a018dbf9c7f939510994404b498dc293";
+(node as any).hash = "a54b1b912d75fa8ddd62e983ed54a87b";
 
 export default node;

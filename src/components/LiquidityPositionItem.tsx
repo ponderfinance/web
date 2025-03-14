@@ -21,11 +21,13 @@ export const PositionFragment = graphql`
         id
         address
         symbol
+        ...TokenPairFragment
       }
       token1 {
         id
         address
         symbol
+        ...TokenPairFragment
       }
     }
     liquidityTokens
@@ -222,7 +224,10 @@ function PositionContent({
       padding={8}
     >
       <View gap={4}>
+        {/* Pass token fragment data to TokenPair with fallback to just addresses */}
         <TokenPair
+          tokenA={fragmentData.pair.token0}
+          tokenB={fragmentData.pair.token1}
           tokenAddressA={position.token0.address}
           tokenAddressB={position.token1.address}
           size="large"

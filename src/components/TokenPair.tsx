@@ -1,112 +1,69 @@
 import React from 'react'
 import { View, Text } from 'reshaped'
 import Image from 'next/image'
-import { CURRENT_CHAIN } from '@/src/constants/chains'
-import { KKUB_ADDRESS, KOI_ADDRESS } from '@/src/constants/addresses'
+import { graphql, useFragment } from 'react-relay'
 import { shortenAddress } from '@/src/utils/numbers'
-import { useTokenInfo } from '@ponderfinance/sdk'
+import { TokenPairFragment$key } from '@/src/__generated__/TokenPairFragment.graphql'
 
-// Token interfaces
-interface Token {
-  name: string
-  symbol: string
-  address: `0x${string}`
-  icon: string
-  isNative?: boolean
-}
-
-// Component props interface
 interface TokenPairProps {
+  tokenA?: TokenPairFragment$key | null
+  tokenB?: TokenPairFragment$key | null
   tokenAddressA?: `0x${string}`
   tokenAddressB?: `0x${string}`
   size?: 'small' | 'large'
 }
 
-// Default token list with chain-specific addresses
-const tokenData: Token[] = [
-  {
-    name: 'KOI',
-    symbol: 'KOI',
-    address: KOI_ADDRESS[CURRENT_CHAIN.id],
-    icon: '/tokens/xkoi.png',
-  },
-  {
-    name: 'KUB Coin',
-    symbol: 'KUB',
-    address: '0x0000000000000000000000000000000000000000',
-    icon: '/tokens/bitkub.png',
-    isNative: true,
-  },
-  {
-    name: 'Wrapped KUB Coin',
-    symbol: 'KKUB',
-    address: KKUB_ADDRESS[CURRENT_CHAIN.id],
-    icon: '/tokens/bitkub.png',
-  },
-  {
-    name: 'Bitkub-Peg USDT',
-    symbol: 'USDT',
-    address: "0x7d984C24d2499D840eB3b7016077164e15E5faA6",
-    icon: '/tokens/usdt.png',
-  },
-]
+export const tokenFragment = graphql`
+  fragment TokenPairFragment on Token {
+    id
+    address
+    name
+    symbol
+    decimals
+    imageURI
+  }
+`
 
-// Function to find token in our predefined list
-const findTokenInList = (address?: `0x${string}`): Token | null => {
-  if (!address) return null
-
-  // Normalize addresses for comparison (case-insensitive)
-  const normalizedAddress = address.toLowerCase()
-  const token = tokenData.find(
-    (token) => token.address.toLowerCase() === normalizedAddress
-  )
-
-  return token || null
-}
-
-// Default addresses if none provided
-const DEFAULT_TOKEN_A = KOI_ADDRESS[CURRENT_CHAIN.id]
-const DEFAULT_TOKEN_B = KKUB_ADDRESS[CURRENT_CHAIN.id]
+// Default fallback images if token not found
+const DEFAULT_TOKEN_ICON = '/tokens/coin.svg'
+const NATIVE_KUB_ICON = '/tokens/bitkub.png'
 
 export const TokenPair: React.FC<TokenPairProps> = ({
+  tokenA,
+  tokenB,
   tokenAddressA,
   tokenAddressB,
   size = 'small',
 }) => {
-  // For native KUB handling
+  // Check if the tokens are native KUB (address 0x0...)
   const isTokenANative = tokenAddressA === '0x0000000000000000000000000000000000000000'
   const isTokenBNative = tokenAddressB === '0x0000000000000000000000000000000000000000'
 
-  // Use token info hooks for non-native tokens
-  const { data: tokenAInfo } = useTokenInfo(
-    isTokenANative ? (null as unknown as `0x${string}`) : (tokenAddressA as `0x${string}`)
-  )
-  const { data: tokenBInfo } = useTokenInfo(
-    isTokenBNative ? (null as unknown as `0x${string}`) : (tokenAddressB as `0x${string}`)
-  )
+  // Use the fragment for pre-loaded token data
+  const tokenAData = tokenA
+    ? useFragment<TokenPairFragment$key>(tokenFragment, tokenA)
+    : null
+  const tokenBData = tokenB
+    ? useFragment<TokenPairFragment$key>(tokenFragment, tokenB)
+    : null
 
-  // Find predefined tokens by address
-  const firstListToken = findTokenInList(tokenAddressA || DEFAULT_TOKEN_A)
-  const secondListToken = findTokenInList(tokenAddressB || DEFAULT_TOKEN_B)
-
-  // Determine final token display info by combining predefined list and token info from hook
+  // Determine first token display information
   const firstTokenDisplay = {
     symbol: isTokenANative
       ? 'KUB'
-      : tokenAInfo?.symbol ||
-        firstListToken?.symbol ||
-        (tokenAddressA ? shortenAddress(tokenAddressA) : 'Token A'),
-    icon: firstListToken?.icon || '/tokens/coin.svg',
+      : tokenAData?.symbol || (tokenAddressA ? shortenAddress(tokenAddressA) : 'Token A'),
+    icon: isTokenANative ? NATIVE_KUB_ICON : tokenAData?.imageURI || DEFAULT_TOKEN_ICON,
   }
 
+  // Determine second token display information
   const secondTokenDisplay = {
     symbol: isTokenBNative
       ? 'KUB'
-      : tokenBInfo?.symbol ||
-        secondListToken?.symbol ||
-        (tokenAddressB ? shortenAddress(tokenAddressB) : 'Token B'),
-    icon: secondListToken?.icon || '/tokens/coin.svg',
+      : tokenBData?.symbol || (tokenAddressB ? shortenAddress(tokenAddressB) : 'Token B'),
+    icon: isTokenBNative ? NATIVE_KUB_ICON : tokenBData?.imageURI || DEFAULT_TOKEN_ICON,
   }
+
+  console.log('TOK', tokenAData)
 
   return (
     <View>
@@ -173,4 +130,3 @@ export const TokenPair: React.FC<TokenPairProps> = ({
   )
 }
 
-export default TokenPair

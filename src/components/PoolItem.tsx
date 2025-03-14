@@ -41,17 +41,6 @@ export default function PoolItem({ pairRef }: PoolItemProps) {
   // Use the fragment to access data
   const pair = useFragment(poolFragment, pairRef)
 
-  // Format token amounts
-  const token0Amount = formatUnits(
-    BigInt(pair.reserve0),
-    Number(pair.token0.decimals || 18)
-  )
-
-  const token1Amount = formatUnits(
-    BigInt(pair.reserve1),
-    Number(pair.token1.decimals || 18)
-  )
-
   return (
     <View
       direction="column"

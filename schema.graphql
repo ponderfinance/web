@@ -4,384 +4,392 @@ scalar DateTime
 scalar BigInt
 
 type ChartDataPoint {
-    time: Int!                # Unix timestamp
-    value: Float!             # Value at this point in time
+  time: Int!                # Unix timestamp
+  value: Float!             # Value at this point in time
 }
 
 # Volume chart data with additional volume metrics
 type VolumeChartData {
-    time: Int!                # Unix timestamp
-    value: Float!             # Primary value (usually volume in token0)
-    volume0: Float            # Volume in token0
-    volume1: Float            # Volume in token1
-    count: Int                # Number of transactions
+  time: Int!                # Unix timestamp
+  value: Float!             # Primary value (usually volume in token0)
+  volume0: Float            # Volume in token0
+  volume1: Float            # Volume in token1
+  count: Int                # Number of transactions
+}
+
+# Input types for filtering
+input TokenWhereInput {
+  address: String
+  symbol: String
+  name: String
 }
 
 type Query {
-    # Tokens
-    token(id: ID!): Token
-    tokens(first: Int, after: String): TokenConnection!
+  # Tokens
+  token(id: ID!): Token
+  tokens(first: Int, after: String, where: TokenWhereInput): TokenConnection!
 
-    # Pairs/Pools
-    pair(id: ID!): Pair
-    pairs(first: Int, after: String, orderBy: PairOrderBy, orderDirection: OrderDirection): PairConnection!
-    topPairs(first: Int): PairConnection!
+  # Pairs/Pools
+  pair(id: ID!): Pair
+  pairs(first: Int, after: String, orderBy: PairOrderBy, orderDirection: OrderDirection): PairConnection!
+  topPairs(first: Int): PairConnection!
 
-    # User data
-    user(id: ID!): User
-    userPositions(userAddress: String!): UserPositions!
+  # User data
+  user(id: ID!): User
+  userPositions(userAddress: String!): UserPositions!
 
-    # Protocol data
-    protocolMetrics: ProtocolMetric!
+  # Protocol data
+  protocolMetrics: ProtocolMetric!
 
-    # Farm data
-    farmingPools(first: Int, after: String): FarmingPoolConnection!
-    farmingPool(pid: Int!): FarmingPool
+  # Farm data
+  farmingPools(first: Int, after: String): FarmingPoolConnection!
+  farmingPool(pid: Int!): FarmingPool
 
-    # Staking data
-    stakingMetrics: StakingMetric!
+  # Staking data
+  stakingMetrics: StakingMetric!
 
-    # Launcher data
-    activeLaunches(first: Int, after: String): LaunchConnection!
-    completedLaunches(first: Int, after: String): LaunchConnection!
-    launch(launchId: Int!): Launch
+  # Launcher data
+  activeLaunches(first: Int, after: String): LaunchConnection!
+  completedLaunches(first: Int, after: String): LaunchConnection!
+  launch(launchId: Int!): Launch
 
-    # Get price chart data for a pair
-    pairPriceChart(
-        pairAddress: String!
-        timeframe: String = "1d"
-        limit: Int = 100
-    ): [ChartDataPoint!]!
+  # Get price chart data for a pair
+  pairPriceChart(
+    pairAddress: String!
+    timeframe: String = "1d"
+    limit: Int = 100
+  ): [ChartDataPoint!]!
 
-    # Get volume chart data for a pair
-    pairVolumeChart(
-        pairAddress: String!
-        timeframe: String = "1d"
-        limit: Int = 100
-    ): [VolumeChartData!]!
+  # Get volume chart data for a pair
+  pairVolumeChart(
+    pairAddress: String!
+    timeframe: String = "1d"
+    limit: Int = 100
+  ): [VolumeChartData!]!
 
-    # Get price chart data for a token (across all pairs)
-    tokenPriceChart(
-        tokenAddress: String!
-        timeframe: String = "1d"
-        limit: Int = 100
-    ): [ChartDataPoint!]!
+  # Get price chart data for a token (across all pairs)
+  tokenPriceChart(
+    tokenAddress: String!
+    timeframe: String = "1d"
+    limit: Int = 100
+  ): [ChartDataPoint!]!
 }
 
 enum OrderDirection {
-    asc
-    desc
+  asc
+  desc
 }
 
 enum PairOrderBy {
-    volumeUSD
-    reserveUSD
-    createdAt
+  volumeUSD
+  reserveUSD
+  createdAt
 }
 
 # Pagination types
 type PageInfo {
-    hasNextPage: Boolean!
-    hasPreviousPage: Boolean!
-    startCursor: String
-    endCursor: String
+  hasNextPage: Boolean!
+  hasPreviousPage: Boolean!
+  startCursor: String
+  endCursor: String
 }
 
 # Core Token Type
 type Token {
-    id: ID!
-    address: String!
-    name: String
-    symbol: String
-    decimals: Int
-    pairs0: [Pair!]!
-    pairs1: [Pair!]!
+  id: ID!
+  address: String!
+  name: String
+  symbol: String
+  decimals: Int
+  imageURI: String
+  pairs0: [Pair!]!
+  pairs1: [Pair!]!
 }
 
 # Token Connection
 type TokenConnection {
-    edges: [TokenEdge!]!
-    pageInfo: PageInfo!
-    totalCount: Int!
+  edges: [TokenEdge!]!
+  pageInfo: PageInfo!
+  totalCount: Int!
 }
 
 type TokenEdge {
-    node: Token!
-    cursor: String!
+  node: Token!
+  cursor: String!
 }
 
 # Trading Pair
 type Pair {
-    id: ID!
-    address: String!
-    token0: Token!
-    token1: Token!
-    reserve0: String!
-    reserve1: String!
-    totalSupply: String!
-    token0Price: String!
-    token1Price: String!
-    createdAt: DateTime!
-    liquidityPositions(first: Int, after: String): LiquidityPositionConnection!
-    swaps(first: Int, after: String): SwapConnection!
-    priceHistory(days: Int!, interval: String): PriceSnapshotConnection!
-    tvl: Float!
-    reserveUSD: String!
+  id: ID!
+  address: String!
+  token0: Token!
+  token1: Token!
+  reserve0: String!
+  reserve1: String!
+  totalSupply: String!
+  token0Price: String!
+  token1Price: String!
+  createdAt: DateTime!
+  liquidityPositions(first: Int, after: String): LiquidityPositionConnection!
+  swaps(first: Int, after: String): SwapConnection!
+  priceHistory(days: Int!, interval: String): PriceSnapshotConnection!
+  tvl: Float!
+  reserveUSD: String!
 }
 
 # Pair Connection
 type PairConnection {
-    edges: [PairEdge!]!
-    pageInfo: PageInfo!
-    totalCount: Int!
+  edges: [PairEdge!]!
+  pageInfo: PageInfo!
+  totalCount: Int!
 }
 
 type PairEdge {
-    node: Pair!
-    cursor: String!
+  node: Pair!
+  cursor: String!
 }
 
 # Liquidity Position
 type LiquidityPosition {
-    id: ID!
-    pair: Pair!
-    userAddress: String!
-    liquidityTokens: String!
-    lastBlockNumber: Int
-    createdAt: DateTime!
-    updatedAt: DateTime!
+  id: ID!
+  pair: Pair!
+  userAddress: String!
+  liquidityTokens: String!
+  lastBlockNumber: Int
+  createdAt: DateTime!
+  updatedAt: DateTime!
 }
 
 # Liquidity Position Connection
 type LiquidityPositionConnection {
-    edges: [LiquidityPositionEdge!]!
-    pageInfo: PageInfo!
-    totalCount: Int!
+  edges: [LiquidityPositionEdge!]!
+  pageInfo: PageInfo!
+  totalCount: Int!
 }
 
 type LiquidityPositionEdge {
-    node: LiquidityPosition!
-    cursor: String!
+  node: LiquidityPosition!
+  cursor: String!
 }
 
 # Swap Event
 type Swap {
-    id: ID!
-    pairId: String!
-    txHash: String!
-    userAddress: String!
-    amountIn0: String!
-    amountIn1: String!
-    amountOut0: String!
-    amountOut1: String!
-    blockNumber: Int!
-    timestamp: Int!
+  id: ID!
+  pairId: String!
+  txHash: String!
+  userAddress: String!
+  amountIn0: String!
+  amountIn1: String!
+  amountOut0: String!
+  amountOut1: String!
+  blockNumber: Int!
+  timestamp: Int!
 }
 
 # Swap Connection
 type SwapConnection {
-    edges: [SwapEdge!]!
-    pageInfo: PageInfo!
-    totalCount: Int!
+  edges: [SwapEdge!]!
+  pageInfo: PageInfo!
+  totalCount: Int!
 }
 
 type SwapEdge {
-    node: Swap!
-    cursor: String!
+  node: Swap!
+  cursor: String!
 }
 
 # Price History Snapshot
 type PriceSnapshot {
-    id: ID!
-    pairId: String!
-    token0Price: String!
-    token1Price: String!
-    timestamp: Int!
-    blockNumber: Int!
+  id: ID!
+  pairId: String!
+  token0Price: String!
+  token1Price: String!
+  timestamp: Int!
+  blockNumber: Int!
 }
 
 # Price Snapshot Connection
 type PriceSnapshotConnection {
-    edges: [PriceSnapshotEdge!]!
-    pageInfo: PageInfo!
-    totalCount: Int!
+  edges: [PriceSnapshotEdge!]!
+  pageInfo: PageInfo!
+  totalCount: Int!
 }
 
 type PriceSnapshotEdge {
-    node: PriceSnapshot!
-    cursor: String!
+  node: PriceSnapshot!
+  cursor: String!
 }
 
 # User Type combining different positions
 type User {
-    id: ID!
-    address: String!
-    liquidityPositions(first: Int, after: String): LiquidityPositionConnection!
-    swaps(first: Int, after: String): SwapConnection!
-    farmingPositions(first: Int, after: String): FarmingPositionConnection!
-    stakingPosition: StakingPosition
-    totalSwapCount: Int!
-    totalLpCount: Int!
-    swapVolumeUSD: String!
-    liquidityProvidedUSD: String!
+  id: ID!
+  address: String!
+  liquidityPositions(first: Int, after: String): LiquidityPositionConnection!
+  swaps(first: Int, after: String): SwapConnection!
+  farmingPositions(first: Int, after: String): FarmingPositionConnection!
+  stakingPosition: StakingPosition
+  totalSwapCount: Int!
+  totalLpCount: Int!
+  swapVolumeUSD: String!
+  liquidityProvidedUSD: String!
 }
 
 # User Positions combined for dashboard view
 type UserPositions {
-    liquidityPositions: [LiquidityPosition!]!
-    farmingPositions: [FarmingPosition!]!
-    stakingPosition: StakingPosition
+  liquidityPositions: [LiquidityPosition!]!
+  farmingPositions: [FarmingPosition!]!
+  stakingPosition: StakingPosition
 }
 
 # Farming Pool
 type FarmingPool {
-    id: ID!
-    pid: Int!
-    lpTokenAddress: String!
-    allocPoint: String!
-    lastRewardTime: Int!
-    depositFeeBP: Int!
-    boostMultiplier: Int!
-    totalStaked: String!
-    totalWeightedShares: String!
-    positions(first: Int, after: String): FarmingPositionConnection!
+  id: ID!
+  pid: Int!
+  lpTokenAddress: String!
+  allocPoint: String!
+  lastRewardTime: Int!
+  depositFeeBP: Int!
+  boostMultiplier: Int!
+  totalStaked: String!
+  totalWeightedShares: String!
+  positions(first: Int, after: String): FarmingPositionConnection!
 }
 
 # Farming Pool Connection
 type FarmingPoolConnection {
-    edges: [FarmingPoolEdge!]!
-    pageInfo: PageInfo!
-    totalCount: Int!
+  edges: [FarmingPoolEdge!]!
+  pageInfo: PageInfo!
+  totalCount: Int!
 }
 
 type FarmingPoolEdge {
-    node: FarmingPool!
-    cursor: String!
+  node: FarmingPool!
+  cursor: String!
 }
 
 # Farming Position
 type FarmingPosition {
-    id: ID!
-    userAddress: String!
-    pid: Int!
-    amount: String!
-    rewardDebt: String!
-    ponderStaked: String!
-    weightedShares: String!
-    lastTxHash: String!
-    lastBlockNumber: Int!
-    createdAt: DateTime!
-    updatedAt: DateTime!
-    poolId: String!
+  id: ID!
+  userAddress: String!
+  pid: Int!
+  amount: String!
+  rewardDebt: String!
+  ponderStaked: String!
+  weightedShares: String!
+  lastTxHash: String!
+  lastBlockNumber: Int!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  poolId: String!
 }
 
 # Farming Position Connection
 type FarmingPositionConnection {
-    edges: [FarmingPositionEdge!]!
-    pageInfo: PageInfo!
-    totalCount: Int!
+  edges: [FarmingPositionEdge!]!
+  pageInfo: PageInfo!
+  totalCount: Int!
 }
 
 type FarmingPositionEdge {
-    node: FarmingPosition!
-    cursor: String!
+  node: FarmingPosition!
+  cursor: String!
 }
 
 # Staking Position
 type StakingPosition {
-    id: ID!
-    userAddress: String!
-    ponderStaked: String!
-    xPonderBalance: String!
-    totalRewardsClaimed: String!
-    lastTxHash: String
-    lastBlockNumber: Int
-    createdAt: DateTime!
-    updatedAt: DateTime!
+  id: ID!
+  userAddress: String!
+  ponderStaked: String!
+  xPonderBalance: String!
+  totalRewardsClaimed: String!
+  lastTxHash: String
+  lastBlockNumber: Int
+  createdAt: DateTime!
+  updatedAt: DateTime!
 }
 
 # Protocol Metrics
 type ProtocolMetric {
-    id: ID!
-    timestamp: Int!
-    totalValueLockedUSD: String!
-    liquidityPoolsTVL: String!
-    stakingTVL: String!
-    farmingTVL: String!
-    dailyVolumeUSD: String!
-    weeklyVolumeUSD: String!
-    monthlyVolumeUSD: String!
-    totalVolumeUSD: String!
-    dailyFeesUSD: String!
-    weeklyFeesUSD: String!
-    monthlyFeesUSD: String!
-    totalFeesUSD: String!
-    totalUsers: Int!
-    dailyActiveUsers: Int!
-    weeklyActiveUsers: Int!
-    monthlyActiveUsers: Int!
+  id: ID!
+  timestamp: Int!
+  totalValueLockedUSD: String!
+  liquidityPoolsTVL: String!
+  stakingTVL: String!
+  farmingTVL: String!
+  dailyVolumeUSD: String!
+  weeklyVolumeUSD: String!
+  monthlyVolumeUSD: String!
+  totalVolumeUSD: String!
+  dailyFeesUSD: String!
+  weeklyFeesUSD: String!
+  monthlyFeesUSD: String!
+  totalFeesUSD: String!
+  totalUsers: Int!
+  dailyActiveUsers: Int!
+  weeklyActiveUsers: Int!
+  monthlyActiveUsers: Int!
 }
 
 # Staking Metrics
 type StakingMetric {
-    id: ID!
-    timestamp: Int!
-    totalPonderStaked: String!
-    totalXPonderBalance: String!
-    totalRewardsClaimed: String!
-    totalStakers: Int!
-    totalRebases: Int!
-    currentAPR: String
+  id: ID!
+  timestamp: Int!
+  totalPonderStaked: String!
+  totalXPonderBalance: String!
+  totalRewardsClaimed: String!
+  totalStakers: Int!
+  totalRebases: Int!
+  currentAPR: String
 }
 
 # Token Launch
 type Launch {
-    id: ID!
-    launchId: Int!
-    tokenAddress: String!
-    creatorAddress: String!
-    kubRaised: String!
-    ponderRaised: String!
-    status: String!
-    kubPairAddress: String
-    ponderPairAddress: String
-    hasDualPools: Boolean
-    completedAt: DateTime
-    contributions(first: Int, after: String): ContributionConnection!
+  id: ID!
+  launchId: Int!
+  tokenAddress: String!
+  creatorAddress: String!
+  kubRaised: String!
+  ponderRaised: String!
+  status: String!
+  kubPairAddress: String
+  ponderPairAddress: String
+  hasDualPools: Boolean
+  completedAt: DateTime
+  contributions(first: Int, after: String): ContributionConnection!
 }
 
 # Launch Connection
 type LaunchConnection {
-    edges: [LaunchEdge!]!
-    pageInfo: PageInfo!
-    totalCount: Int!
+  edges: [LaunchEdge!]!
+  pageInfo: PageInfo!
+  totalCount: Int!
 }
 
 type LaunchEdge {
-    node: Launch!
-    cursor: String!
+  node: Launch!
+  cursor: String!
 }
 
 # Launch Contribution
 type Contribution {
-    id: ID!
-    launchId: Int!
-    contributorAddress: String!
-    kubAmount: String!
-    ponderAmount: String!
-    ponderValue: String!
-    tokensReceived: String!
-    refunded: Boolean
+  id: ID!
+  launchId: Int!
+  contributorAddress: String!
+  kubAmount: String!
+  ponderAmount: String!
+  ponderValue: String!
+  tokensReceived: String!
+  refunded: Boolean
 }
 
 # Contribution Connection
 type ContributionConnection {
-    edges: [ContributionEdge!]!
-    pageInfo: PageInfo!
-    totalCount: Int!
+  edges: [ContributionEdge!]!
+  pageInfo: PageInfo!
+  totalCount: Int!
 }
 
 type ContributionEdge {
-    node: Contribution!
-    cursor: String!
+  node: Contribution!
+  cursor: String!
 }

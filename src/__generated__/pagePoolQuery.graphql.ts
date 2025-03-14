@@ -1,5 +1,5 @@
 /**
- * @generated SignedSource<<fed9b0c4da7ddd99ffdce7105def913b>>
+ * @generated SignedSource<<f8a3c9f12fc474ad3def5782c1cdd4e8>>
  * @lightSyntaxTransform
  * @nogrep
  */
@@ -10,19 +10,19 @@
 
 import { ConcreteRequest, Query } from 'relay-runtime';
 import { FragmentRefs } from "relay-runtime";
-export type LiquidityPositionsListQuery$variables = {
+export type pagePoolQuery$variables = {
   userAddress: string;
 };
-export type LiquidityPositionsListQuery$data = {
+export type pagePoolQuery$data = {
   readonly userPositions: {
     readonly liquidityPositions: ReadonlyArray<{
       readonly " $fragmentSpreads": FragmentRefs<"LiquidityPositionItem_position">;
     }>;
   };
 };
-export type LiquidityPositionsListQuery = {
-  response: LiquidityPositionsListQuery$data;
-  variables: LiquidityPositionsListQuery$variables;
+export type pagePoolQuery = {
+  response: pagePoolQuery$data;
+  variables: pagePoolQuery$variables;
 };
 
 const node: ConcreteRequest = (function(){
@@ -63,6 +63,27 @@ v4 = [
     "kind": "ScalarField",
     "name": "symbol",
     "storageKey": null
+  },
+  {
+    "alias": null,
+    "args": null,
+    "kind": "ScalarField",
+    "name": "name",
+    "storageKey": null
+  },
+  {
+    "alias": null,
+    "args": null,
+    "kind": "ScalarField",
+    "name": "decimals",
+    "storageKey": null
+  },
+  {
+    "alias": null,
+    "args": null,
+    "kind": "ScalarField",
+    "name": "imageURI",
+    "storageKey": null
   }
 ];
 return {
@@ -70,7 +91,7 @@ return {
     "argumentDefinitions": (v0/*: any*/),
     "kind": "Fragment",
     "metadata": null,
-    "name": "LiquidityPositionsListQuery",
+    "name": "pagePoolQuery",
     "selections": [
       {
         "alias": null,
@@ -107,7 +128,7 @@ return {
   "operation": {
     "argumentDefinitions": (v0/*: any*/),
     "kind": "Operation",
-    "name": "LiquidityPositionsListQuery",
+    "name": "pagePoolQuery",
     "selections": [
       {
         "alias": null,
@@ -175,16 +196,16 @@ return {
     ]
   },
   "params": {
-    "cacheID": "51350cd0fa0b49a67baeaaa2f98430a0",
+    "cacheID": "a0f1efcbdec946c72e58466df292f77d",
     "id": null,
     "metadata": {},
-    "name": "LiquidityPositionsListQuery",
+    "name": "pagePoolQuery",
     "operationKind": "query",
-    "text": "query LiquidityPositionsListQuery(\n  $userAddress: String!\n) {\n  userPositions(userAddress: $userAddress) {\n    liquidityPositions {\n      ...LiquidityPositionItem_position\n      id\n    }\n  }\n}\n\nfragment LiquidityPositionItem_position on LiquidityPosition {\n  id\n  pair {\n    id\n    address\n    token0 {\n      id\n      address\n      symbol\n    }\n    token1 {\n      id\n      address\n      symbol\n    }\n  }\n  liquidityTokens\n}\n"
+    "text": "query pagePoolQuery(\n  $userAddress: String!\n) {\n  userPositions(userAddress: $userAddress) {\n    liquidityPositions {\n      ...LiquidityPositionItem_position\n      id\n    }\n  }\n}\n\nfragment LiquidityPositionItem_position on LiquidityPosition {\n  id\n  pair {\n    id\n    address\n    token0 {\n      id\n      address\n      symbol\n      ...TokenPairFragment\n    }\n    token1 {\n      id\n      address\n      symbol\n      ...TokenPairFragment\n    }\n  }\n  liquidityTokens\n}\n\nfragment TokenPairFragment on Token {\n  id\n  address\n  name\n  symbol\n  decimals\n  imageURI\n}\n"
   }
 };
 })();
 
-(node as any).hash = "d6714fdf0f9979323087951b1cbe28b8";
+(node as any).hash = "91c40360963989124c2e7457aa3a3374";
 
 export default node;

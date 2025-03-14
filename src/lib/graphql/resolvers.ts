@@ -100,12 +100,40 @@ export const resolvers = {
     },
     tokens: async (
       _: any,
-      { first = 10, after }: { first?: number; after?: string },
+      {
+        first = 10,
+        after,
+        where,
+      }: {
+        first?: number
+        after?: string
+        where?: { address?: string; symbol?: string; name?: string }
+      },
       { prisma }: Context
     ) => {
       // Set up query params
       const queryParams: any = {
         take: first + 1, // Take one extra to check if there's a next page
+      }
+
+      // Add filtering by where parameter
+      if (where) {
+        queryParams.where = {}
+
+        // Filter by address if provided
+        if (where.address) {
+          queryParams.where.address = where.address.toLowerCase()
+        }
+
+        // Filter by symbol if provided
+        if (where.symbol) {
+          queryParams.where.symbol = where.symbol
+        }
+
+        // Filter by name if provided
+        if (where.name) {
+          queryParams.where.name = where.name
+        }
       }
 
       // Add cursor if provided
@@ -119,7 +147,9 @@ export const resolvers = {
       const tokens = await prisma.token.findMany(queryParams)
 
       // Get total count (optional - could be expensive for large datasets)
-      const totalCount = await prisma.token.count()
+      const totalCount = await prisma.token.count(
+        where ? { where: queryParams.where } : undefined
+      )
 
       // Create pagination response
       const paginationResult = createCursorPagination(
@@ -905,6 +935,22 @@ export const resolvers = {
       return prisma.pair.findMany({
         where: { token1Id: parent.id },
       })
+    },
+    imageURI: async (parent: any, _: any, { prisma }: Context) => {
+      if (parent.imageURI !== undefined) {
+        return parent.imageURI
+      }
+
+      try {
+        const token = await prisma.token.findUnique({
+          where: { id: parent.id },
+          select: { imageURI: true },
+        })
+        return token?.imageURI || null
+      } catch (error) {
+        console.error('Error fetching token imageURI:', error)
+        return null
+      }
     },
   },
 

@@ -1,7 +1,8 @@
-import {Explore} from "@/src/modules/explore/components/Explore";
+export const dynamic = 'force-dynamic'
 
-export default function ExplorePage() {
-    return (
-        <Explore />
-    )
+import React from 'react'
+import { ExplorePage } from '@/src/modules/explore/components/ExplorePage'
+
+export default function Explore() {
+  return <ExplorePage />
 }

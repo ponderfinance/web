@@ -1,24 +1,13 @@
 'use client'
 
-import React, { useState, useEffect, Suspense } from 'react'
-import { Text, View, Button, Skeleton, Modal } from 'reshaped'
-import { usePonderSDK, useRemoveLiquidity } from '@ponderfinance/sdk'
+import React, { useState, useEffect } from 'react'
+import { Text, View, Button, Modal } from 'reshaped'
+import { KKUB_ADDRESS, usePonderSDK, useRemoveLiquidity } from '@ponderfinance/sdk'
 import { useAccount } from 'wagmi'
-import { Address, formatUnits } from 'viem'
-import { graphql, useLazyLoadQuery } from 'react-relay'
+import { Address } from 'viem'
 import LiquidityPositionItem from './LiquidityPositionItem'
-import { LiquidityPositionsListQuery } from '@/src/__generated__/LiquidityPositionsListQuery.graphql'
-
-// Define the query to fetch initial position data from GraphQL
-const UserPositionsQuery = graphql`
-  query LiquidityPositionsListQuery($userAddress: String!) {
-    userPositions(userAddress: $userAddress) {
-      liquidityPositions {
-        ...LiquidityPositionItem_position
-      }
-    }
-  }
-`
+import { pagePoolQuery } from '@/src/__generated__/pagePoolQuery.graphql'
+import { CURRENT_CHAIN } from '@/src/constants/chains'
 
 interface Position {
   id: string
@@ -45,34 +34,13 @@ interface Position {
   tokenAddress?: Address
 }
 
-export default function LiquidityPositionsList() {
-  const [isMounted, setIsMounted] = useState(false)
-
-  // Only render client-side data after component is mounted
-  useEffect(() => {
-    setIsMounted(true)
-  }, [])
-
-  // Show loading skeleton during SSR or before mounting
-  if (!isMounted) {
-    return (
-      <View direction="column" gap={4}>
-        <Skeleton height={20} width="100%" borderRadius="large" />
-        <Skeleton height={20} width="100%" borderRadius="large" />
-        <Skeleton height={20} width="100%" borderRadius="large" />
-      </View>
-    )
-  }
-
-  // Client-side content
-  return <LiquidityPositionsContent />
+interface LiquidityPositionsListProps {
+  positionsData: NonNullable<pagePoolQuery['response']['userPositions']>
 }
 
-// Separate the content with data fetching to avoid hydration issues
-function LiquidityPositionsContent() {
+export function LiquidityPositionsList({ positionsData }: LiquidityPositionsListProps) {
   const sdk = usePonderSDK()
   const account = useAccount()
-  const [wethAddress, setWethAddress] = useState('')
   const [selectedPosition, setSelectedPosition] = useState<Position | null>(null)
   const [isModalActive, setIsModalActive] = useState(false)
   const [percentToRemove, setPercentToRemove] = useState('100')
@@ -81,33 +49,7 @@ function LiquidityPositionsContent() {
   const [needsApproval, setNeedsApproval] = useState(false)
   const [error, setError] = useState<string>('')
   const removeLiquidity = useRemoveLiquidity()
-
-  // Fetch WETH address on component mount
-  useEffect(() => {
-    const fetchWethAddress = async () => {
-      if (sdk) {
-        try {
-          const address = await sdk.router.KKUB()
-          setWethAddress(address.toLowerCase())
-        } catch (err) {
-          console.error('Error fetching WETH address:', err)
-        }
-      }
-    }
-
-    fetchWethAddress()
-  }, [sdk])
-
-  // Now safe to use since we're client-side
-  const data = useLazyLoadQuery<LiquidityPositionsListQuery>(
-    UserPositionsQuery,
-    {
-      userAddress: account.address?.toLowerCase() || '',
-    },
-    {
-      fetchPolicy: 'network-only',
-    }
-  )
+  const wethAddress = KKUB_ADDRESS[CURRENT_CHAIN.id]
 
   // Check if approval is needed
   const checkApproval = async () => {
@@ -299,14 +241,13 @@ function LiquidityPositionsContent() {
   if (!wethAddress) {
     return (
       <View direction="column" gap={4}>
-        <Skeleton height={20} width="100%" borderRadius="large" />
-        <Skeleton height={20} width="100%" borderRadius="large" />
+        <Text align="center">Loading WETH address...</Text>
       </View>
     )
   }
 
   // Check if we have positions data
-  if (!data?.userPositions?.liquidityPositions) {
+  if (!positionsData?.liquidityPositions) {
     return (
       <View direction="column" gap={4}>
         <Text align="center">No data available</Text>
@@ -317,12 +258,12 @@ function LiquidityPositionsContent() {
   // Return the component UI
   return (
     <View gap={16}>
-      {data.userPositions.liquidityPositions.length === 0 && (
+      {positionsData.liquidityPositions.length === 0 && (
         <Text align="center">No liquidity positions found.</Text>
       )}
 
       {/* Render each position component */}
-      {data.userPositions.liquidityPositions.map((positionNode, i) => (
+      {positionsData.liquidityPositions.map((positionNode, i) => (
         <LiquidityPositionItem
           key={i} //TODO: change
           positionRef={positionNode}
