@@ -171,13 +171,13 @@ export const Header = () => {
               </Popover.Content>
             </Popover>
 
-            {/*<Link href="/launch">*/}
+            {/*<Link href="/explore">*/}
             {/*  <Button variant="ghost">*/}
             {/*    <Text*/}
             {/*      variant="body-1"*/}
-            {/*      color={pathname === '/launch' ? 'neutral' : 'neutral-faded'}*/}
+            {/*      color={pathname === '/explore' ? 'neutral' : 'neutral-faded'}*/}
             {/*    >*/}
-            {/*      Launch*/}
+            {/*      Explore*/}
             {/*    </Text>*/}
             {/*  </Button>*/}
             {/*</Link>*/}

@@ -1,5 +1,5 @@
 /**
- * @generated SignedSource<<85389f793e3eacb8b53deb3531ea18f9>>
+ * @generated SignedSource<<440453b2b5b4331d1f2ef5cf503b8987>>
  * @lightSyntaxTransform
  * @nogrep
  */
@@ -9,12 +9,41 @@
 // @ts-nocheck
 
 import { ConcreteRequest, Query } from 'relay-runtime';
-import { FragmentRefs } from "relay-runtime";
+export type OrderDirection = "asc" | "desc" | "%future added value";
+export type PairOrderBy = "createdAt" | "reserveUSD" | "volumeUSD" | "%future added value";
 export type PoolsListQuery$variables = {
-  first?: number | null;
+  first: number;
+  orderBy: PairOrderBy;
+  orderDirection: OrderDirection;
 };
 export type PoolsListQuery$data = {
-  readonly " $fragmentSpreads": FragmentRefs<"PoolsListFragment">;
+  readonly pairs: {
+    readonly edges: ReadonlyArray<{
+      readonly node: {
+        readonly address: string;
+        readonly id: string;
+        readonly reserveUSD: string;
+        readonly token0: {
+          readonly address: string;
+          readonly decimals: number | null;
+          readonly id: string;
+          readonly symbol: string | null;
+        };
+        readonly token1: {
+          readonly address: string;
+          readonly decimals: number | null;
+          readonly id: string;
+          readonly symbol: string | null;
+        };
+        readonly tvl: number;
+      };
+    }>;
+    readonly pageInfo: {
+      readonly endCursor: string | null;
+      readonly hasNextPage: boolean;
+    };
+    readonly totalCount: number;
+  };
 };
 export type PoolsListQuery = {
   response: PoolsListQuery$data;
@@ -27,43 +56,35 @@ var v0 = [
     "defaultValue": null,
     "kind": "LocalArgument",
     "name": "first"
+  },
+  {
+    "defaultValue": null,
+    "kind": "LocalArgument",
+    "name": "orderBy"
+  },
+  {
+    "defaultValue": null,
+    "kind": "LocalArgument",
+    "name": "orderDirection"
   }
 ],
 v1 = {
-  "kind": "Variable",
-  "name": "first",
-  "variableName": "first"
-},
-v2 = [
-  (v1/*: any*/),
-  {
-    "kind": "Literal",
-    "name": "orderBy",
-    "value": "createdAt"
-  },
-  {
-    "kind": "Literal",
-    "name": "orderDirection",
-    "value": "desc"
-  }
-],
-v3 = {
   "alias": null,
   "args": null,
   "kind": "ScalarField",
   "name": "id",
   "storageKey": null
 },
-v4 = {
+v2 = {
   "alias": null,
   "args": null,
   "kind": "ScalarField",
   "name": "address",
   "storageKey": null
 },
-v5 = [
-  (v3/*: any*/),
-  (v4/*: any*/),
+v3 = [
+  (v1/*: any*/),
+  (v2/*: any*/),
   {
     "alias": null,
     "args": null,
@@ -78,6 +99,125 @@ v5 = [
     "name": "decimals",
     "storageKey": null
   }
+],
+v4 = [
+  {
+    "alias": null,
+    "args": [
+      {
+        "kind": "Variable",
+        "name": "first",
+        "variableName": "first"
+      },
+      {
+        "kind": "Variable",
+        "name": "orderBy",
+        "variableName": "orderBy"
+      },
+      {
+        "kind": "Variable",
+        "name": "orderDirection",
+        "variableName": "orderDirection"
+      }
+    ],
+    "concreteType": "PairConnection",
+    "kind": "LinkedField",
+    "name": "pairs",
+    "plural": false,
+    "selections": [
+      {
+        "alias": null,
+        "args": null,
+        "concreteType": "PairEdge",
+        "kind": "LinkedField",
+        "name": "edges",
+        "plural": true,
+        "selections": [
+          {
+            "alias": null,
+            "args": null,
+            "concreteType": "Pair",
+            "kind": "LinkedField",
+            "name": "node",
+            "plural": false,
+            "selections": [
+              (v1/*: any*/),
+              (v2/*: any*/),
+              {
+                "alias": null,
+                "args": null,
+                "concreteType": "Token",
+                "kind": "LinkedField",
+                "name": "token0",
+                "plural": false,
+                "selections": (v3/*: any*/),
+                "storageKey": null
+              },
+              {
+                "alias": null,
+                "args": null,
+                "concreteType": "Token",
+                "kind": "LinkedField",
+                "name": "token1",
+                "plural": false,
+                "selections": (v3/*: any*/),
+                "storageKey": null
+              },
+              {
+                "alias": null,
+                "args": null,
+                "kind": "ScalarField",
+                "name": "tvl",
+                "storageKey": null
+              },
+              {
+                "alias": null,
+                "args": null,
+                "kind": "ScalarField",
+                "name": "reserveUSD",
+                "storageKey": null
+              }
+            ],
+            "storageKey": null
+          }
+        ],
+        "storageKey": null
+      },
+      {
+        "alias": null,
+        "args": null,
+        "concreteType": "PageInfo",
+        "kind": "LinkedField",
+        "name": "pageInfo",
+        "plural": false,
+        "selections": [
+          {
+            "alias": null,
+            "args": null,
+            "kind": "ScalarField",
+            "name": "hasNextPage",
+            "storageKey": null
+          },
+          {
+            "alias": null,
+            "args": null,
+            "kind": "ScalarField",
+            "name": "endCursor",
+            "storageKey": null
+          }
+        ],
+        "storageKey": null
+      },
+      {
+        "alias": null,
+        "args": null,
+        "kind": "ScalarField",
+        "name": "totalCount",
+        "storageKey": null
+      }
+    ],
+    "storageKey": null
+  }
 ];
 return {
   "fragment": {
@@ -85,15 +225,7 @@ return {
     "kind": "Fragment",
     "metadata": null,
     "name": "PoolsListQuery",
-    "selections": [
-      {
-        "args": [
-          (v1/*: any*/)
-        ],
-        "kind": "FragmentSpread",
-        "name": "PoolsListFragment"
-      }
-    ],
+    "selections": (v4/*: any*/),
     "type": "Query",
     "abstractKey": null
   },
@@ -102,154 +234,19 @@ return {
     "argumentDefinitions": (v0/*: any*/),
     "kind": "Operation",
     "name": "PoolsListQuery",
-    "selections": [
-      {
-        "alias": null,
-        "args": (v2/*: any*/),
-        "concreteType": "PairConnection",
-        "kind": "LinkedField",
-        "name": "pairs",
-        "plural": false,
-        "selections": [
-          {
-            "alias": null,
-            "args": null,
-            "concreteType": "PairEdge",
-            "kind": "LinkedField",
-            "name": "edges",
-            "plural": true,
-            "selections": [
-              {
-                "alias": null,
-                "args": null,
-                "concreteType": "Pair",
-                "kind": "LinkedField",
-                "name": "node",
-                "plural": false,
-                "selections": [
-                  (v3/*: any*/),
-                  (v4/*: any*/),
-                  {
-                    "alias": null,
-                    "args": null,
-                    "kind": "ScalarField",
-                    "name": "totalSupply",
-                    "storageKey": null
-                  },
-                  {
-                    "alias": null,
-                    "args": null,
-                    "kind": "ScalarField",
-                    "name": "reserve0",
-                    "storageKey": null
-                  },
-                  {
-                    "alias": null,
-                    "args": null,
-                    "kind": "ScalarField",
-                    "name": "reserve1",
-                    "storageKey": null
-                  },
-                  {
-                    "alias": null,
-                    "args": null,
-                    "concreteType": "Token",
-                    "kind": "LinkedField",
-                    "name": "token0",
-                    "plural": false,
-                    "selections": (v5/*: any*/),
-                    "storageKey": null
-                  },
-                  {
-                    "alias": null,
-                    "args": null,
-                    "concreteType": "Token",
-                    "kind": "LinkedField",
-                    "name": "token1",
-                    "plural": false,
-                    "selections": (v5/*: any*/),
-                    "storageKey": null
-                  },
-                  {
-                    "alias": null,
-                    "args": null,
-                    "kind": "ScalarField",
-                    "name": "__typename",
-                    "storageKey": null
-                  }
-                ],
-                "storageKey": null
-              },
-              {
-                "alias": null,
-                "args": null,
-                "kind": "ScalarField",
-                "name": "cursor",
-                "storageKey": null
-              }
-            ],
-            "storageKey": null
-          },
-          {
-            "alias": null,
-            "args": null,
-            "concreteType": "PageInfo",
-            "kind": "LinkedField",
-            "name": "pageInfo",
-            "plural": false,
-            "selections": [
-              {
-                "alias": null,
-                "args": null,
-                "kind": "ScalarField",
-                "name": "hasNextPage",
-                "storageKey": null
-              },
-              {
-                "alias": null,
-                "args": null,
-                "kind": "ScalarField",
-                "name": "endCursor",
-                "storageKey": null
-              }
-            ],
-            "storageKey": null
-          },
-          {
-            "alias": null,
-            "args": null,
-            "kind": "ScalarField",
-            "name": "totalCount",
-            "storageKey": null
-          }
-        ],
-        "storageKey": null
-      },
-      {
-        "alias": null,
-        "args": (v2/*: any*/),
-        "filters": [
-          "orderBy",
-          "orderDirection"
-        ],
-        "handle": "connection",
-        "key": "PoolsList_pairs",
-        "kind": "LinkedHandle",
-        "name": "pairs"
-      }
-    ]
+    "selections": (v4/*: any*/)
   },
   "params": {
-    "cacheID": "706b9c015a9bdefd35f5aefd412ece42",
+    "cacheID": "77794d02be0c46ffffe5bfd49f14aa45",
     "id": null,
     "metadata": {},
     "name": "PoolsListQuery",
     "operationKind": "query",
-    "text": "query PoolsListQuery(\n  $first: Int\n) {\n  ...PoolsListFragment_3ASum4\n}\n\nfragment PoolItem_pair on Pair {\n  id\n  address\n  totalSupply\n  reserve0\n  reserve1\n  token0 {\n    id\n    address\n    symbol\n    decimals\n  }\n  token1 {\n    id\n    address\n    symbol\n    decimals\n  }\n}\n\nfragment PoolsListFragment_3ASum4 on Query {\n  pairs(first: $first, orderBy: createdAt, orderDirection: desc) {\n    edges {\n      node {\n        id\n        ...PoolItem_pair\n        __typename\n      }\n      cursor\n    }\n    pageInfo {\n      hasNextPage\n      endCursor\n    }\n    totalCount\n  }\n}\n"
+    "text": "query PoolsListQuery(\n  $first: Int!\n  $orderBy: PairOrderBy!\n  $orderDirection: OrderDirection!\n) {\n  pairs(first: $first, orderBy: $orderBy, orderDirection: $orderDirection) {\n    edges {\n      node {\n        id\n        address\n        token0 {\n          id\n          address\n          symbol\n          decimals\n        }\n        token1 {\n          id\n          address\n          symbol\n          decimals\n        }\n        tvl\n        reserveUSD\n      }\n    }\n    pageInfo {\n      hasNextPage\n      endCursor\n    }\n    totalCount\n  }\n}\n"
   }
 };
 })();
 
-(node as any).hash = "9af668ee1c3d877ec310c265cd009f44";
+(node as any).hash = "57fcf02ac2895c908c6a8175af909b9a";
 
 export default node;

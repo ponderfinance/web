@@ -1,4 +1,35 @@
 import { PrismaClient } from '@prisma/client'
+import { createPublicClient, PublicClient } from 'viem'
+import { calculateReservesUSD } from '@/src/lib/graphql/oracleUtils'
+import { CURRENT_CHAIN } from '@/src/constants/chains'
+import { http } from 'wagmi'
+
+// USDT address
+const USDT_ADDRESS = '0x7d984C24d2499D840eB3b7016077164e15E5faA6'
+// Oracle address
+const ORACLE_ADDRESS = '0xcf814870800a3bcac4a6b858424a9370a64c75ad'
+
+// Oracle ABI for the functions we need
+const ORACLE_ABI = [
+  {
+    inputs: [
+      { internalType: 'address', name: 'pair', type: 'address' },
+      { internalType: 'address', name: 'tokenIn', type: 'address' },
+      { internalType: 'uint256', name: 'amountIn', type: 'uint256' },
+      { internalType: 'uint32', name: 'period', type: 'uint32' },
+    ],
+    name: 'consult',
+    outputs: [{ internalType: 'uint256', name: 'amountOut', type: 'uint256' }],
+    stateMutability: 'view',
+    type: 'function',
+  },
+]
+
+// Create viem public client for contract calls
+const publicClient = createPublicClient({
+  chain: CURRENT_CHAIN,
+  transport: http(CURRENT_CHAIN.rpcUrls.default.http[0]),
+})
 
 // Define the context type
 type Context = {
@@ -120,15 +151,18 @@ export const resolvers = {
       }: {
         first?: number
         after?: string
-        orderBy?: 'createdAt' | 'reserve0' | 'reserve1'
+        orderBy?: 'createdAt' | 'reserve0' | 'reserve1' | 'reserveUSD'
         orderDirection?: 'asc' | 'desc'
       },
       { prisma }: Context
     ) => {
       try {
-        // Set up ordering
+        // Handle orderBy for reserveUSD specially since it's not a DB field
+        const isOrderByReserveUSD = orderBy === 'reserveUSD'
+
+        // Set up ordering for DB query
         const orderByClause: any = {}
-        orderByClause[orderBy] = orderDirection
+        orderByClause[isOrderByReserveUSD ? 'reserve0' : orderBy] = orderDirection
 
         // Set up query params
         const queryParams: any = {
@@ -149,7 +183,38 @@ export const resolvers = {
         // Get total count
         const totalCount = await prisma.pair.count()
 
-        // Create pagination response
+        // If we're ordering by reserveUSD, we need to calculate it for each pair and sort
+        if (isOrderByReserveUSD) {
+          // Create an array to hold pairs with their TVL
+          const pairsWithTVL = await Promise.all(
+            pairs.map(async (pair) => {
+              const tvl = await calculateReservesUSD(pair, prisma)
+              return { ...pair, tvl: parseFloat(tvl) }
+            })
+          )
+
+          // Sort by TVL
+          pairsWithTVL.sort((a, b) => {
+            return orderDirection === 'asc' ? a.tvl - b.tvl : b.tvl - a.tvl
+          })
+
+          // Take the correct number of pairs after sorting
+          const sortedPairs = pairsWithTVL.slice(0, first + 1)
+
+          // Create pagination response with the sorted pairs
+          const paginationResult = createCursorPagination(
+            sortedPairs.map((p) => ({ ...p, tvl: undefined })), // Remove the temporary tvl property
+            first,
+            after ? decodeCursor(after) : undefined
+          )
+
+          return {
+            ...paginationResult,
+            totalCount,
+          }
+        }
+
+        // Create standard pagination response for other sort orders
         const paginationResult = createCursorPagination(
           pairs,
           first,
@@ -854,6 +919,16 @@ export const resolvers = {
         where: { id: parent.token1Id },
       })
     },
+
+    reserveUSD: async (parent: any, _: any, { prisma }: Context) => {
+      return calculateReservesUSD(parent, prisma)
+    },
+
+    tvl: async (parent: any, _: any, { prisma }: Context) => {
+      const reserveUSD = await resolvers.Pair.reserveUSD(parent, _, { prisma })
+      return parseFloat(reserveUSD)
+    },
+
     liquidityPositions: async (
       parent: any,
       { first = 10, after }: { first?: number; after?: string },
@@ -966,6 +1041,7 @@ export const resolvers = {
         }
       }
     },
+
     priceHistory: async (
       parent: any,
       {
@@ -1324,4 +1400,64 @@ export const resolvers = {
       })
     },
   },
+}
+
+async function getTokenPriceFromOracle(params: {
+  pairAddress: string
+  tokenAddress: string
+  amount?: bigint
+  periodInSeconds?: number
+}): Promise<number> {
+  try {
+    const {
+      pairAddress,
+      tokenAddress,
+      amount = BigInt('1000000000000000000'),
+      periodInSeconds = 3600,
+    } = params
+
+    // Call the oracle's consult function
+    const amountOut = await publicClient.readContract({
+      address: ORACLE_ADDRESS as `0x${string}`,
+      abi: ORACLE_ABI,
+      functionName: 'consult',
+      args: [
+        pairAddress as `0x${string}`,
+        tokenAddress as `0x${string}`,
+        amount,
+        periodInSeconds,
+      ],
+    })
+
+    // Calculate the price per token
+    const pricePerToken = Number(amountOut) / Number(amount)
+
+    return pricePerToken
+  } catch (error) {
+    console.error(`Error getting price from oracle:`, error)
+    return 0
+  }
+}
+
+async function findUSDTPair(
+  tokenAddress: string,
+  prisma: PrismaClient
+): Promise<string | null> {
+  // Find pairs where the token is paired with USDT
+  const pair = await prisma.pair.findFirst({
+    where: {
+      OR: [
+        {
+          token0: { address: tokenAddress.toLowerCase() },
+          token1: { address: USDT_ADDRESS.toLowerCase() },
+        },
+        {
+          token0: { address: USDT_ADDRESS.toLowerCase() },
+          token1: { address: tokenAddress.toLowerCase() },
+        },
+      ],
+    },
+  })
+
+  return pair ? pair.address : null
 }

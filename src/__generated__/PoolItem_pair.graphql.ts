@@ -1,5 +1,5 @@
 /**
- * @generated SignedSource<<58e381ffe9a233f54fb608f2d1a49a0c>>
+ * @generated SignedSource<<39b90c89917a2b0e9fce24f5c8aa02a1>>
  * @lightSyntaxTransform
  * @nogrep
  */
@@ -15,6 +15,7 @@ export type PoolItem_pair$data = {
   readonly id: string;
   readonly reserve0: string;
   readonly reserve1: string;
+  readonly reserveUSD: string;
   readonly token0: {
     readonly address: string;
     readonly decimals: number | null;
@@ -28,6 +29,7 @@ export type PoolItem_pair$data = {
     readonly symbol: string | null;
   };
   readonly totalSupply: string;
+  readonly tvl: number;
   readonly " $fragmentType": "PoolItem_pair";
 };
 export type PoolItem_pair$key = {
@@ -116,6 +118,20 @@ return {
       "plural": false,
       "selections": (v2/*: any*/),
       "storageKey": null
+    },
+    {
+      "alias": null,
+      "args": null,
+      "kind": "ScalarField",
+      "name": "tvl",
+      "storageKey": null
+    },
+    {
+      "alias": null,
+      "args": null,
+      "kind": "ScalarField",
+      "name": "reserveUSD",
+      "storageKey": null
     }
   ],
   "type": "Pair",
@@ -123,6 +139,6 @@ return {
 };
 })();
 
-(node as any).hash = "b21f980769e68dc376684eacecf93139";
+(node as any).hash = "212c420bda92caa54fd2336faa2321cd";
 
 export default node;

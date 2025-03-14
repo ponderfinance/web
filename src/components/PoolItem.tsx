@@ -28,6 +28,8 @@ const poolFragment = graphql`
       symbol
       decimals
     }
+    tvl
+    reserveUSD
   }
 `
 

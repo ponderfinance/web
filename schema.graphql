@@ -125,6 +125,8 @@ type Pair {
     liquidityPositions(first: Int, after: String): LiquidityPositionConnection!
     swaps(first: Int, after: String): SwapConnection!
     priceHistory(days: Int!, interval: String): PriceSnapshotConnection!
+    tvl: Float!
+    reserveUSD: String!
 }
 
 # Pair Connection

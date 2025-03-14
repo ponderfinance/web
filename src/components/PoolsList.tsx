@@ -1,35 +1,38 @@
 'use client'
 
-import React, { useEffect, useRef, useState } from 'react'
-import { Text, View, Skeleton } from 'reshaped'
-import { graphql, useLazyLoadQuery, usePaginationFragment } from 'react-relay'
-import PoolItem from './PoolItem'
+import React, { useState, useEffect } from 'react'
+import { View, Text, Skeleton, Actionable } from 'reshaped'
+import { graphql, useLazyLoadQuery } from 'react-relay'
+
 import { PoolsListQuery } from '@/src/__generated__/PoolsListQuery.graphql'
-import { PoolsListFragment$key } from '@/src/__generated__/PoolsListFragment.graphql'
 
-// The initial query to load the first batch of pools
-const PoolsQuery = graphql`
-  query PoolsListQuery($first: Int) {
-    ...PoolsListFragment @arguments(first: $first)
-  }
-`
-
-// The fragment that defines the data requirements and pagination
-const PoolsListFragment = graphql`
-  fragment PoolsListFragment on Query
-  @argumentDefinitions(
-    first: { type: "Int", defaultValue: 10 }
-    after: { type: "String" }
-  )
-  @refetchable(queryName: "PoolsListPaginationQuery") {
-    pairs(first: $first, after: $after, orderBy: createdAt, orderDirection: desc)
-      @connection(key: "PoolsList_pairs", filters: ["orderBy", "orderDirection"]) {
+// Define the GraphQL query - must match the component name
+const poolsListQuery = graphql`
+  query PoolsListQuery(
+    $first: Int!
+    $orderBy: PairOrderBy!
+    $orderDirection: OrderDirection!
+  ) {
+    pairs(first: $first, orderBy: $orderBy, orderDirection: $orderDirection) {
       edges {
         node {
           id
-          ...PoolItem_pair
+          address
+          token0 {
+            id
+            address
+            symbol
+            decimals
+          }
+          token1 {
+            id
+            address
+            symbol
+            decimals
+          }
+          tvl
+          reserveUSD
         }
-        cursor
       }
       pageInfo {
         hasNextPage
@@ -40,10 +43,44 @@ const PoolsListFragment = graphql`
   }
 `
 
-export default function PoolsList() {
-  const POOLS_PER_PAGE = 10
-  const loadMoreRef = useRef<HTMLDivElement>(null)
+// Helper to format currency values
+const formatCurrency = (value: number): string => {
+  if (value === 0) return '$0'
+  if (value < 0.01) return '<$0.01'
+
+  if (value >= 1e9) return `$${(value / 1e9).toFixed(1)}B`
+  if (value >= 1e6) return `$${(value / 1e6).toFixed(1)}M`
+  if (value >= 1e3) return `$${(value / 1e3).toFixed(1)}K`
+
+  return `$${value.toFixed(2)}`
+}
+
+// Custom chevron SVG component
+const ChevronIcon = ({ direction = 'down' }: { direction?: 'up' | 'down' }) => (
+  <svg
+    width="16"
+    height="16"
+    viewBox="0 0 16 16"
+    fill="none"
+    style={{
+      transform: direction === 'up' ? 'rotate(180deg)' : 'none',
+      transition: 'transform 0.2s ease-in-out',
+    }}
+  >
+    <path
+      d="M4 6L8 10L12 6"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+)
+
+const PoolsList: React.FC = () => {
   const [isMounted, setIsMounted] = useState(false)
+  const [orderBy, setOrderBy] = useState<string>('reserveUSD')
+  const [orderDirection, setOrderDirection] = useState<string>('desc')
 
   // Only render client-side data after component is mounted
   useEffect(() => {
@@ -53,113 +90,152 @@ export default function PoolsList() {
   // Show loading skeleton during SSR or before mounting
   if (!isMounted) {
     return (
-      <View direction="column" gap={4} data-testid="pools-list-loading">
-        <Skeleton height={20} width="100%" borderRadius="large" />
-        <Skeleton height={20} width="100%" borderRadius="large" />
-        <Skeleton height={20} width="100%" borderRadius="large" />
-      </View>
-    )
-  }
-
-  // Client-side content
-  return <PoolsListContent loadMoreRef={loadMoreRef} />
-}
-
-// Separate the content with data fetching to avoid hydration issues
-function PoolsListContent({
-  loadMoreRef,
-}: {
-  loadMoreRef: React.RefObject<HTMLDivElement>
-}) {
-  const POOLS_PER_PAGE = 10
-
-  // Initial query to load the first batch of pools
-  const queryData = useLazyLoadQuery<PoolsListQuery>(
-    PoolsQuery,
-    { first: POOLS_PER_PAGE },
-    { fetchPolicy: 'store-and-network' } // Fetch from cache and network
-  )
-
-  // Use the pagination fragment to handle loading more pools
-  const { data, loadNext, hasNext, isLoadingNext } = usePaginationFragment<
-    PoolsListQuery,
-    PoolsListFragment$key
-  >(PoolsListFragment, queryData)
-
-
-  // Implement intersection observer for infinite scroll
-  useEffect(() => {
-    if (!loadMoreRef.current || !hasNext) return
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        const [entry] = entries
-        if (entry.isIntersecting && hasNext && !isLoadingNext) {
-          loadNext(POOLS_PER_PAGE)
-        }
-      },
-      { threshold: 0.5 }
-    )
-
-    const currentRef = loadMoreRef.current
-    if (currentRef) {
-      observer.observe(currentRef)
-    }
-
-    return () => {
-      if (currentRef) {
-        observer.unobserve(currentRef)
-      }
-    }
-  }, [loadMoreRef, hasNext, isLoadingNext, loadNext])
-
-  // Loading state
-  if (!data?.pairs) {
-    return (
       <View direction="column" gap={4}>
-        <Skeleton height={20} width="100%" borderRadius="large" />
-        <Skeleton height={20} width="100%" borderRadius="large" />
-        <Skeleton height={20} width="100%" borderRadius="large" />
+        <Skeleton height={40} width="100%" borderRadius="large" />
+        <Skeleton height={400} width="100%" borderRadius="large" />
       </View>
     )
   }
-
-  // Empty state
-  if (data.pairs.edges.length === 0) {
-    return <Text align="center">No pools found.</Text>
-  }
-
-  const totalCount = data.pairs.totalCount || 0
 
   return (
-    <View direction="column" gap={16}>
-      {/* Pool list */}
-      <View direction="column" gap={8}>
-        {data.pairs.edges.map((edge) => {
-          // Skip if the node is null or undefined
-          if (!edge?.node) return null
+    <PoolsListContent
+      orderBy={orderBy}
+      orderDirection={orderDirection}
+      setOrderBy={setOrderBy}
+      setOrderDirection={setOrderDirection}
+    />
+  )
+}
 
-          return <PoolItem key={edge.node.id} pairRef={edge.node} />
-        })}
+// Separate content component for client-side rendering
+interface PoolsListContentProps {
+  orderBy: string
+  orderDirection: string
+  setOrderBy: (value: string) => void
+  setOrderDirection: (value: string) => void
+}
+
+const PoolsListContent: React.FC<PoolsListContentProps> = ({
+  orderBy,
+  orderDirection,
+  setOrderBy,
+  setOrderDirection,
+}) => {
+  // Fetch data using the GraphQL query
+  const data = useLazyLoadQuery<PoolsListQuery>(
+    poolsListQuery,
+    {
+      first: 50,
+      orderBy: orderBy as any, // Cast to the enum type
+      orderDirection: orderDirection as any, //
+    },
+    {
+      fetchPolicy: 'network-only',
+    }
+  )
+
+  // Handle sorting
+  const handleSort = (column: string) => {
+    if (orderBy === column) {
+      setOrderDirection(orderDirection === 'asc' ? 'desc' : 'asc')
+    } else {
+      setOrderBy(column)
+      setOrderDirection('desc')
+    }
+  }
+
+  return (
+    <View
+      borderRadius="medium"
+      backgroundColor="elevation-base"
+      borderColor="neutral-faded"
+      overflow="auto"
+      width="100%"
+    >
+      {/* Table Header */}
+      <View direction="row" gap={0} padding={4} borderColor="neutral-faded">
+        <View.Item columns={1}>
+          <Text color="neutral-faded" weight="medium">
+            #
+          </Text>
+        </View.Item>
+
+        <View.Item columns={3}>
+          <Text color="neutral-faded" weight="medium">
+            Pool
+          </Text>
+        </View.Item>
+
+        <View.Item columns={2}>
+          <View direction="row" align="center" gap={1}>
+            <Actionable onClick={() => handleSort('reserveUSD')}>
+              <Text color="neutral-faded" weight="medium">
+                TVL
+              </Text>
+              <ChevronIcon
+                direction={
+                  orderBy === 'reserveUSD' && orderDirection === 'asc' ? 'up' : 'down'
+                }
+              />
+            </Actionable>
+          </View>
+        </View.Item>
       </View>
 
-      {/* Loading more indicator */}
-      {isLoadingNext && (
-        <View direction="column" gap={4}>
-          <Skeleton height={20} width="100%" borderRadius="large" />
-          <Skeleton height={20} width="100%" borderRadius="large" />
-        </View>
-      )}
+      {/* Table Body */}
+      <View direction="column" gap={0}>
+        {data.pairs.edges.map(({ node }, index) => (
+          <View
+            key={node.id}
+            direction="row"
+            gap={0}
+            padding={4}
+            borderColor="neutral-faded"
+            backgroundColor="elevation-base"
+          >
+            <View.Item columns={1}>
+              <Text color="neutral-faded">{index + 1}</Text>
+            </View.Item>
 
-      {/* Invisible element to trigger loading more */}
-      {hasNext && <div ref={loadMoreRef} style={{ height: '20px' }} />}
+            <View.Item columns={3}>
+              <View direction="row" align="center" gap={2}>
+                <View direction="row">
+                  <View
+                    width={8}
+                    height={8}
+                    borderRadius="circular"
+                    backgroundColor="primary"
+                    justify="center"
+                    align="center"
+                  >
+                    <Text weight="medium">{node.token0.symbol?.charAt(0)}</Text>
+                  </View>
+                  <View
+                    width={8}
+                    height={8}
+                    borderRadius="circular"
+                    justify="center"
+                    align="center"
+                  >
+                    <Text weight="medium">{node.token1.symbol?.charAt(0)}</Text>
+                  </View>
+                </View>
+                <View direction="column" gap={1}>
+                  <Text weight="medium">
+                    {node.token0.symbol}/{node.token1.symbol}
+                  </Text>
+                </View>
+              </View>
+            </View.Item>
 
-      {/* No more pools message */}
-      {!hasNext && data.pairs.edges.length > 0 && (
-        <Text align="center" color="neutral">
-          Showing {data.pairs.edges.length} of {totalCount} pools
-        </Text>
-      )}
+            <View.Item columns={2}>
+              <Text>{formatCurrency(node.tvl)}</Text>
+            </View.Item>
+          </View>
+        ))}
+      </View>
     </View>
   )
 }
+
+export default PoolsList

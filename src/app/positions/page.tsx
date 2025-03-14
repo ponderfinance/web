@@ -27,9 +27,7 @@ export default function Pool() {
             </Button>
           </Link>
         </View>
-        <ErrorBoundary>
-          <PoolsList />
-        </ErrorBoundary>
+
         <LiquidityPositionsList />
       </View>
     </View>
