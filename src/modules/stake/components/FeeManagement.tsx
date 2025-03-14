@@ -165,14 +165,14 @@ function FeeManagement() {
   return (
     <View gap={6}>
       <PendingFeesCard feeInfo={feeInfo} />
-      <ActionsCard
-        onCollect={handleCollectFees}
-        onDistribute={() => distributeFees()}
-        isCollecting={isCollecting}
-        isDistributing={isDistributing}
-        isLoadingPairs={isLoadingPairs}
-        hasPendingFees={!!hasPendingFees}
-      />
+      {/*<ActionsCard*/}
+      {/*  onCollect={handleCollectFees}*/}
+      {/*  onDistribute={() => distributeFees()}*/}
+      {/*  isCollecting={isCollecting}*/}
+      {/*  isDistributing={isDistributing}*/}
+      {/*  isLoadingPairs={isLoadingPairs}*/}
+      {/*  hasPendingFees={!!hasPendingFees}*/}
+      {/*/>*/}
     </View>
   )
 }
@@ -303,7 +303,7 @@ export default function FeesPage() {
         </Modal>
       </View>
 
-      <FeeManagement />
+      {/*<FeeManagement />*/}
     </View>
   )
 }
