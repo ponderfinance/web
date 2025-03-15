@@ -48,6 +48,9 @@ model Pair {
   updatedAt          DateTime         @updatedAt
   lastBlockUpdate    Int
 
+  reserveSnapshots PairReserveSnapshot[]
+
+
   @@index([token0Id, token1Id])
 }
 
@@ -587,4 +590,17 @@ model OracleMetric {
   observationCardinality  Int      // Observation array size
   createdAt               DateTime @default(now())
   updatedAt               DateTime @updatedAt
+}
+
+model PairReserveSnapshot {
+  id          String   @id @default(uuid()) @map("_id")
+  pairId      String
+  reserve0    String
+  reserve1    String
+  reserveUSD  String
+  timestamp   Int
+  pair        Pair     @relation(fields: [pairId], references: [id])
+
+  @@index([pairId, timestamp(sort: Desc)])
+  @@index([reserveUSD])
 }

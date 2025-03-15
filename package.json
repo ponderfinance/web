@@ -24,6 +24,7 @@
     "@vercel/analytics": "^1.4.1",
     "@wagmi/core": "^2.14.2",
     "bignumber.js": "^9.1.2",
+    "dataloader": "^2.2.3",
     "graphql": "^16.10.0",
     "lightweight-charts": "^4.2.2",
     "next": "14.2.17",

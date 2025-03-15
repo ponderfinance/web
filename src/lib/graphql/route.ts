@@ -1,13 +1,18 @@
+// app/api/graphql/route.ts (update this file)
 import { NextRequest, NextResponse } from 'next/server'
 import { executeGraphQL } from '@/src/lib/graphql/server'
-import { PrismaClient } from '@prisma/client'
+import { initBackgroundTasks } from '@/src/lib/backgroundTasks'
 
-// Create a singleton Prisma client instance
-const prisma = new PrismaClient()
+if (process.env.NODE_ENV === 'production') {
+  initBackgroundTasks()
+}
 
 export async function POST(request: NextRequest) {
   try {
-    // Parse the request body
+    if (process.env.NODE_ENV !== 'production') {
+      initBackgroundTasks()
+    }
+
     const body = await request.json()
     const { query, variables } = body
 
@@ -22,7 +27,7 @@ export async function POST(request: NextRequest) {
     const result = await executeGraphQL({
       query,
       variables,
-      contextValue: { prisma, req: request },
+      contextValue: { req: request },
     })
 
     // Return the result

@@ -1,11 +1,23 @@
+// src/lib/graphql/server.ts
 import { execute, parse } from 'graphql'
 import { schema } from './schema'
 import prisma from '../db/prisma'
+import { createLoaders } from '../dataloader'
+import { Context } from './types'
+
+// Create the context for this request
+function createContext(req?: Request): Context {
+  return {
+    prisma,
+    req,
+    loaders: createLoaders(prisma),
+  }
+}
 
 type ExecuteGraphQLParams = {
   query: string
   variables?: Record<string, any>
-  contextValue?: Record<string, any>
+  contextValue?: Partial<Omit<Context, 'loaders'>>
 }
 
 export async function executeGraphQL({
@@ -17,15 +29,16 @@ export async function executeGraphQL({
     // Parse the query string into a GraphQL document
     const document = parse(query)
 
+    // Create context with loaders and merge with provided context values
+    const context = createContext(contextValue.req)
+
     // Execute the query against our schema
-    const result = await execute({
+    return await execute({
       schema,
       document,
       variableValues: variables,
-      contextValue: { ...contextValue, prisma },
+      contextValue: context,
     })
-
-    return result
   } catch (error) {
     console.error('GraphQL execution error:', error)
 

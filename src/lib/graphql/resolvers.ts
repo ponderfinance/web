@@ -3,6 +3,7 @@ import { createPublicClient, PublicClient } from 'viem'
 import { calculateReservesUSD } from '@/src/lib/graphql/oracleUtils'
 import { CURRENT_CHAIN } from '@/src/constants/chains'
 import { http } from 'wagmi'
+import { Context } from './types' // Add this import
 
 // USDT address
 const USDT_ADDRESS = '0x7d984C24d2499D840eB3b7016077164e15E5faA6'
@@ -30,12 +31,6 @@ const publicClient = createPublicClient({
   chain: CURRENT_CHAIN,
   transport: http(CURRENT_CHAIN.rpcUrls.default.http[0]),
 })
-
-// Define the context type
-type Context = {
-  prisma: PrismaClient
-  req?: Request
-}
 
 interface ChartDataPoint {
   time: number
@@ -184,56 +179,101 @@ export const resolvers = {
         orderBy?: 'createdAt' | 'reserve0' | 'reserve1' | 'reserveUSD'
         orderDirection?: 'asc' | 'desc'
       },
-      { prisma }: Context
+      { prisma, loaders }: Context
     ) => {
       try {
         // Handle orderBy for reserveUSD specially since it's not a DB field
         const isOrderByReserveUSD = orderBy === 'reserveUSD'
 
-        // Set up ordering for DB query
-        const orderByClause: any = {}
-        orderByClause[isOrderByReserveUSD ? 'reserve0' : orderBy] = orderDirection
-
-        // Set up query params
-        const queryParams: any = {
-          take: first + 1, // Take one extra to check if there's a next page
-          orderBy: orderByClause,
-        }
-
-        // Add cursor if provided
-        if (after) {
-          const cursorId = decodeCursor(after)
-          queryParams.cursor = { id: cursorId }
-          queryParams.skip = 1 // Skip the cursor itself
-        }
-
-        // Fetch pairs with pagination
-        const pairs = await prisma.pair.findMany(queryParams)
-
-        // Get total count
-        const totalCount = await prisma.pair.count()
-
-        // If we're ordering by reserveUSD, we need to calculate it for each pair and sort
         if (isOrderByReserveUSD) {
-          // Create an array to hold pairs with their TVL
-          const pairsWithTVL = await Promise.all(
+          // For pagination with cursor
+          let paginationFilter = {}
+          if (after) {
+            const cursorId = decodeCursor(after)
+            paginationFilter = {
+              cursor: { id: cursorId },
+              skip: 1, // Skip the cursor itself
+            }
+          }
+
+          // Query all pairs at once with token data to reduce roundtrips
+          const pairs = await prisma.pair.findMany({
+            take: first * 2, // Get more than needed for efficient sorting
+            ...paginationFilter,
+            include: {
+              token0: true,
+              token1: true,
+            },
+          })
+
+          // Get all relevant snapshots in a single query
+          const pairIds = pairs.map((pair) => pair.id)
+          const snapshots = await prisma.pairReserveSnapshot.findMany({
+            where: {
+              pairId: { in: pairIds },
+            },
+            orderBy: { timestamp: 'desc' },
+          })
+
+          // Create a lookup map for the latest snapshot of each pair
+          const latestSnapshotMap = new Map()
+          for (const snapshot of snapshots) {
+            if (!latestSnapshotMap.has(snapshot.pairId)) {
+              latestSnapshotMap.set(snapshot.pairId, snapshot)
+            }
+          }
+
+          // Process all pairs and add reserveUSD
+          const pairsWithReserves = await Promise.all(
             pairs.map(async (pair) => {
-              const tvl = await calculateReservesUSD(pair, prisma)
-              return { ...pair, tvl: parseFloat(tvl) }
+              // Try to get from snapshot first
+              const snapshot = latestSnapshotMap.get(pair.id)
+
+              // If we have a snapshot, use its values
+              if (snapshot) {
+                return {
+                  ...pair,
+                  reserveUSD: snapshot.reserveUSD,
+                  tvl: parseFloat(snapshot.reserveUSD),
+                }
+              }
+
+              // If no snapshot exists, calculate on-demand (fallback)
+              // This should rarely happen if your background job is running properly
+              try {
+                const reserveUSD = await calculateReservesUSD(pair, prisma)
+                return {
+                  ...pair,
+                  reserveUSD,
+                  tvl: parseFloat(reserveUSD),
+                }
+              } catch (error) {
+                console.error(`Error calculating reserveUSD for pair ${pair.id}:`, error)
+                return {
+                  ...pair,
+                  reserveUSD: '0',
+                  tvl: 0,
+                }
+              }
             })
           )
 
-          // Sort by TVL
-          pairsWithTVL.sort((a, b) => {
-            return orderDirection === 'asc' ? a.tvl - b.tvl : b.tvl - a.tvl
+          // Sort by reserveUSD
+          pairsWithReserves.sort((a, b) => {
+            const valA = a.tvl
+            const valB = b.tvl
+            return orderDirection === 'asc' ? valA - valB : valB - valA
           })
 
-          // Take the correct number of pairs after sorting
-          const sortedPairs = pairsWithTVL.slice(0, first + 1)
+          // Apply pagination and take correct number of results
+          const page = pairsWithReserves.slice(0, first + 1)
 
-          // Create pagination response with the sorted pairs
+          // Get total count
+          const totalCount = await prisma.pair.count()
+
+          // Create pagination response
           const paginationResult = createCursorPagination(
-            sortedPairs.map((p) => ({ ...p, tvl: undefined })), // Remove the temporary tvl property
+            page,
             first,
             after ? decodeCursor(after) : undefined
           )
@@ -244,7 +284,21 @@ export const resolvers = {
           }
         }
 
-        // Create standard pagination response for other sort orders
+        // For other sorting criteria, use the standard approach
+        const queryParams: any = {
+          take: first + 1, // Take one extra to check if there's a next page
+          orderBy: { [orderBy]: orderDirection },
+        }
+
+        if (after) {
+          const cursorId = decodeCursor(after)
+          queryParams.cursor = { id: cursorId }
+          queryParams.skip = 1 // Skip the cursor itself
+        }
+
+        const pairs = await prisma.pair.findMany(queryParams)
+        const totalCount = await prisma.pair.count()
+
         const paginationResult = createCursorPagination(
           pairs,
           first,
@@ -955,24 +1009,46 @@ export const resolvers = {
   },
 
   Pair: {
-    token0: async (parent: any, _: any, { prisma }: Context) => {
-      return prisma.token.findUnique({
-        where: { id: parent.token0Id },
-      })
+    token0: async (parent: any, _: any, { loaders }: Context) => {
+      return loaders.tokenLoader.load(parent.token0Id)
     },
-    token1: async (parent: any, _: any, { prisma }: Context) => {
-      return prisma.token.findUnique({
-        where: { id: parent.token1Id },
-      })
+    token1: async (parent: any, _: any, { loaders }: Context) => {
+      return loaders.tokenLoader.load(parent.token1Id)
     },
+    reserveUSD: async (parent: any, _: any, { loaders, prisma }: Context) => {
+      // If we already have the calculated value from a previous step, use it
+      if (parent.reserveUSD) return parent.reserveUSD
 
-    reserveUSD: async (parent: any, _: any, { prisma }: Context) => {
-      return calculateReservesUSD(parent, prisma)
-    },
+      // Otherwise, try to get it from the latest snapshot
+      try {
+        const snapshot = await prisma.pairReserveSnapshot.findFirst({
+          where: { pairId: parent.id },
+          orderBy: { timestamp: 'desc' },
+        })
 
-    tvl: async (parent: any, _: any, { prisma }: Context) => {
-      const reserveUSD = await resolvers.Pair.reserveUSD(parent, _, { prisma })
-      return parseFloat(reserveUSD)
+        if (snapshot) {
+          return snapshot.reserveUSD
+        }
+
+        // If no snapshot exists, calculate on-demand (fallback)
+        return calculateReservesUSD(parent, prisma)
+      } catch (error) {
+        console.error(`Error fetching reserveUSD for pair ${parent.id}:`, error)
+        return '0'
+      }
+    },
+    tvl: async (parent: any, _: any, { loaders, prisma }: Context) => {
+      // If we already have the TVL value, use it
+      if (parent.tvl !== undefined) return parent.tvl
+
+      // Otherwise, calculate from reserveUSD
+      try {
+        const reserveUSD = await resolvers.Pair.reserveUSD(parent, _, { loaders, prisma })
+        return parseFloat(reserveUSD)
+      } catch (error) {
+        console.error(`Error calculating TVL for pair ${parent.id}:`, error)
+        return 0
+      }
     },
 
     liquidityPositions: async (
