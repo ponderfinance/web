@@ -2,6 +2,16 @@
 const config = {
   themes: {
     ponder: {
+      fontFamily: {
+        title: {
+          family:
+            "'Pathway Extreme', BlinkMacSystemFont, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif",
+        },
+        body: {
+          family:
+            "'Pathway Extreme', BlinkMacSystemFont, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif",
+        },
+      },
       color: {
         foregroundPrimary: { hex: '#94E0FE' },
         foregroundNeutralFaded: { hex: '#6e787d' },

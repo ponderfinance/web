@@ -853,23 +853,26 @@ export const resolvers = {
 
     // Inside the Query object in your resolvers
     recentTransactions: async (
-        _: any,
-        { first = 20, after }: { first?: number, after?: string },
-        { prisma }: Context
+      _: any,
+      { first = 20, after }: { first?: number; after?: string },
+      { prisma }: Context
     ) => {
       try {
         // Set up query params
         const queryParams: any = {
           take: first + 1, // Take one extra to check if there's a next page
           orderBy: { timestamp: 'desc' },
+          where: {
+            contractSender: { not: null },
+          },
           include: {
             pair: {
               include: {
                 token0: true,
-                token1: true
-              }
-            }
-          }
+                token1: true,
+              },
+            },
+          },
         }
 
         // Add cursor if provided
@@ -882,20 +885,24 @@ export const resolvers = {
         // Fetch recent swaps with pagination
         const swaps = await prisma.swap.findMany(queryParams)
 
-        // Get total count - this could be expensive, so we might want to estimate
-        // or limit the count to a reasonable time period
-        const totalCount = await prisma.swap.count({
-          where: {
-            // Optionally limit to recent transactions (e.g., last 24 hours)
-            timestamp: { gte: Math.floor(Date.now() / 1000) - 24 * 60 * 60 }
-          }
-        })
+        // Log the number of swaps found
+        console.log(`Found ${swaps.length} swaps in recentTransactions query`)
+
+        // If no swaps were found, log this fact
+        if (swaps.length === 0) {
+          // Log a count of all swaps in the database to verify data exists
+          const totalSwaps = await prisma.swap.count()
+          console.log(`Total swaps in database: ${totalSwaps}`)
+        }
+
+        // Get total count
+        const totalCount = await prisma.swap.count()
 
         // Create pagination response
         const paginationResult = createCursorPagination(
-            swaps,
-            first,
-            after ? decodeCursor(after) : undefined
+          swaps,
+          first,
+          after ? decodeCursor(after) : undefined
         )
 
         return {

@@ -858,6 +858,7 @@ export function SwapInterface({
                     placeholder="0"
                     disabled={!tokenIn || !tokenOut}
                     className="flex w-full h-full text-4xl bg-[rgba(0,0,0,0)] focus:outline-0"
+                    autoFocus
                   />
                 </View>
 

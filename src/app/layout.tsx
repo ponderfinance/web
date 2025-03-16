@@ -47,9 +47,8 @@ export default function RootLayout({
       lang="en"
       data-rs-theme="ponder"
       data-rs-color-mode="dark"
-      // className={`${pirataOne.variable}`}
     >
-      <body>
+      <body style={{ fontFamily: "'Pathway Extreme', sans-serif" }}>
         <Providers>
           <Header />
           <View

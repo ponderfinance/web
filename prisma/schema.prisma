@@ -8,7 +8,6 @@ datasource db {
 }
 
 // Core token model
-// In schema.prisma
 model Token {
   id              String   @id @default(auto()) @map("_id") @db.ObjectId
   address         String   @unique
@@ -16,7 +15,7 @@ model Token {
   symbol          String?
   decimals        Int?
   imageURI        String?  // URI for the token image
-  // Add the new fields
+  // Price related fields
   priceUSD        String?  // Latest price in USD
   priceChange24h  Float?   // 24h price change percentage
   volumeUSD24h    String?  // 24h trading volume in USD
@@ -49,13 +48,11 @@ model Pair {
   liquidityPositions LiquidityPosition[]
   swaps              Swap[]
   priceSnapshots     PriceSnapshot[]
+  reserveSnapshots   PairReserveSnapshot[]
   // Timestamps
   createdAt          DateTime         @default(now())
   updatedAt          DateTime         @updatedAt
   lastBlockUpdate    Int
-
-  reserveSnapshots PairReserveSnapshot[]
-
 
   @@index([token0Id, token1Id])
 }
@@ -83,7 +80,7 @@ model Swap {
   pairId         String   @db.ObjectId
   txHash         String
   userAddress    String
-  contractSender String   // Added field for the contract that sent the event
+  contractSender String?   // Added field for the contract that sent the event
   recipient      String   // Added field for the recipient address
   amountIn0      String   // Amount of token0 in (can be 0)
   amountIn1      String   // Amount of token1 in (can be 0)
@@ -598,6 +595,7 @@ model OracleMetric {
   updatedAt               DateTime @updatedAt
 }
 
+// Reserve snapshots for tracking historical reserves
 model PairReserveSnapshot {
   id          String   @id @default(uuid()) @map("_id")
   pairId      String

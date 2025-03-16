@@ -185,20 +185,6 @@ type LiquidityPositionEdge {
   cursor: String!
 }
 
-# Swap Event
-type Swap {
-  id: ID!
-  pairId: String!
-  txHash: String!
-  userAddress: String!
-  amountIn0: String!
-  amountIn1: String!
-  amountOut0: String!
-  amountOut1: String!
-  blockNumber: Int!
-  timestamp: Int!
-}
-
 # Swap Connection
 type SwapConnection {
   edges: [SwapEdge!]!
@@ -423,4 +409,3 @@ type Swap {
   token1: Token
   valueUSD: String
 }
-
