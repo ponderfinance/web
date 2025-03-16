@@ -17,6 +17,7 @@ const tokensPageQuery = graphql`
         node {
           id
           address
+          imageURI
           name
           symbol
           priceUSD

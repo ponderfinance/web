@@ -1,8 +1,9 @@
 'use client'
 
 import React from 'react'
-import { View, Text, Actionable } from 'reshaped'
+import { View, Text, Actionable, Image } from 'reshaped'
 import { TokensPageQuery } from '@/src/__generated__/TokensPageQuery.graphql'
+import { getIpfsGateway } from '@/src/utils/ipfs'
 
 // Helper to format currency values
 const formatCurrency = (value: string | null | undefined): string => {
@@ -68,17 +69,14 @@ export const TokensDisplay: React.FC<TokensDisplayProps> = ({
         className={'border-0 border-b border-neutral-faded'}
       >
         <View.Item columns={1}>
+          <Text color="neutral-faded" weight="medium">
+            #
+          </Text>
+        </View.Item>
+        <View.Item columns={3}>
           <Actionable onClick={() => handleSort('symbol')}>
             <Text color="neutral-faded" weight="medium">
-              Symbol {orderBy === 'symbol' && (orderDirection === 'asc' ? '↑' : '↓')}
-            </Text>
-          </Actionable>
-        </View.Item>
-
-        <View.Item columns={3}>
-          <Actionable onClick={() => handleSort('name')}>
-            <Text color="neutral-faded" weight="medium">
-              Name {orderBy === 'name' && (orderDirection === 'asc' ? '↑' : '↓')}
+              Token Name {orderBy === 'symbol' && (orderDirection === 'asc' ? '↑' : '↓')}
             </Text>
           </Actionable>
         </View.Item>
@@ -122,11 +120,25 @@ export const TokensDisplay: React.FC<TokensDisplayProps> = ({
             align="center"
           >
             <View.Item columns={1}>
-              <Text>{node.symbol || '—'}</Text>
+              <Text color="neutral-faded" weight="medium">
+                {index + 1}
+              </Text>
             </View.Item>
-
             <View.Item columns={3}>
-              <Text>{node.name || node.address.slice(0, 10) + '...'}</Text>
+              <View direction="row" gap={2} align="center">
+                <Image
+                  src={getIpfsGateway(node.imageURI ?? '')}
+                  height={7}
+                  width={7}
+                  alt={'Selected Token Icon'}
+                />
+                <View direction="row" gap={1} align="center">
+                  <Text>{node.name || node.address.slice(0, 10) + '...'}</Text>
+                  <Text variant="caption-1" color="neutral-faded">
+                    {node.symbol || '—'}
+                  </Text>
+                </View>
+              </View>
             </View.Item>
 
             <View.Item columns={2}>

@@ -1,8 +1,9 @@
 import React from 'react'
-import { View, Text, Image } from 'reshaped'
+import { Image, Text, View } from 'reshaped'
 import { graphql, useFragment } from 'react-relay'
 import { shortenAddress } from '@/src/utils/numbers'
 import { TokenPairFragment$key } from '@/src/__generated__/TokenPairFragment.graphql'
+import { getIpfsGateway } from '@/src/utils/ipfs'
 
 interface TokenPairProps {
   tokenA?: TokenPairFragment$key | null
@@ -10,10 +11,6 @@ interface TokenPairProps {
   tokenAddressA?: `0x${string}`
   tokenAddressB?: `0x${string}`
   size?: 'small' | 'large'
-}
-
-export const getIpfsGateway = (uri: string): string => {
-  return uri?.replace('ipfs://', 'https://lucidhaus.infura-ipfs.io/ipfs/')
 }
 
 export const tokenFragment = graphql`
