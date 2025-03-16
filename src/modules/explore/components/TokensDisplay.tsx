@@ -4,6 +4,7 @@ import React from 'react'
 import { View, Text, Actionable, Image } from 'reshaped'
 import { TokensPageQuery } from '@/src/__generated__/TokensPageQuery.graphql'
 import { getIpfsGateway } from '@/src/utils/ipfs'
+import { roundDecimal } from '@/src/utils/numbers'
 
 // Helper to format currency values
 const formatCurrency = (value: string | null | undefined): string => {
@@ -11,7 +12,7 @@ const formatCurrency = (value: string | null | undefined): string => {
 
   const numValue = parseFloat(value)
 
-  if (numValue < 0.01) return '<$0.01'
+  if (numValue < 0.01) return `$${roundDecimal(numValue)}`
   if (numValue >= 1e9) return `$${(numValue / 1e9).toFixed(1)}B`
   if (numValue >= 1e6) return `$${(numValue / 1e6).toFixed(1)}M`
   if (numValue >= 1e3) return `$${(numValue / 1e3).toFixed(1)}K`
@@ -141,6 +142,7 @@ export const TokensDisplay: React.FC<TokensDisplayProps> = ({
               </View>
             </View.Item>
 
+            {console.log('no', node.priceUSD)}
             <View.Item columns={2}>
               <Text>{formatCurrency(node.priceUSD)}</Text>
             </View.Item>
