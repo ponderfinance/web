@@ -1,7 +1,11 @@
-// app/api/graphql/route.ts (update this file)
+// app/api/graphql/route.ts
 import { NextRequest, NextResponse } from 'next/server'
 import { executeGraphQL } from '@/src/lib/graphql/server'
 import { initBackgroundTasks } from '@/src/lib/backgroundTasks'
+import { getRedisClient } from '@/src/lib/redis/client'
+
+// Initialize Redis connection on server start
+const redis = getRedisClient()
 
 if (process.env.NODE_ENV === 'production') {
   initBackgroundTasks()

@@ -1,5 +1,7 @@
 import { PrismaClient } from '@prisma/client'
 import { calculateReservesUSD } from '@/src/lib/graphql/oracleUtils'
+import { cachePairReserveUSDBulk } from '@/src/lib/redis/pairCache'
+import {getRedisClient} from "@/src/lib/redis/client";
 
 export async function updatePairReserveSnapshots(prisma: PrismaClient): Promise<void> {
   console.log('Starting pair reserve snapshot update...')
@@ -8,6 +10,9 @@ export async function updatePairReserveSnapshots(prisma: PrismaClient): Promise<
     // Get all active pairs
     const pairs = await prisma.pair.findMany()
     console.log(`Found ${pairs.length} pairs to update...`)
+
+    // Array to collect pairs with their reserveUSD for bulk caching
+    const pairsToCache: Array<{ id: string; reserveUSD: string }> = []
 
     // Process each pair and calculate reserveUSD
     for (const pair of pairs) {
@@ -26,16 +31,40 @@ export async function updatePairReserveSnapshots(prisma: PrismaClient): Promise<
           },
         })
 
+        // Add to bulk cache array
+        pairsToCache.push({ id: pair.id, reserveUSD })
+
         console.log(`Updated reserveUSD for pair ${pair.id}: ${reserveUSD}`)
       } catch (error) {
         console.error(`Error updating pair ${pair.id}:`, error)
       }
     }
 
+    // Bulk update the cache with all computed values
+    if (pairsToCache.length > 0) {
+      console.log('About to cache the following pairs:', pairsToCache.map(p => `${p.id}:${p.reserveUSD}`).join(', '));
+
+      await cachePairReserveUSDBulk(pairsToCache)
+      console.log(`Cached reserveUSD values for ${pairsToCache.length} pairs`)
+    }
+
+    try {
+      const firstPairId = pairsToCache[0]?.id;
+      if (firstPairId) {
+        const key = `pair:${firstPairId}:reserveUSD`;
+        const redis = getRedisClient();
+        const cachedValue = await redis.get(key);
+        console.log(`Verification - Cached value for ${firstPairId}: ${cachedValue}`);
+      }
+    } catch (error) {
+      console.error('Cache verification failed:', error);
+    }
+
     console.log('Pair reserve snapshot update completed')
   } catch (error) {
     console.error('Error in updatePairReserveSnapshots:', error)
   }
+
 }
 
 // Function to clean up old snapshots (keep only the N most recent for each pair)
@@ -43,6 +72,7 @@ export async function cleanupOldSnapshots(
   prisma: PrismaClient,
   keepCount = 24
 ): Promise<void> {
+  // Existing code remains unchanged
   console.log('Starting cleanup of old pair reserve snapshots...')
 
   try {
