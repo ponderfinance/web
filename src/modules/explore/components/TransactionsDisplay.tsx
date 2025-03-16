@@ -4,6 +4,7 @@ import React from 'react'
 import { View, Text } from 'reshaped'
 import { TransactionsPageQuery } from '@/src/__generated__/TransactionsPageQuery.graphql'
 import { TokenPair } from '@/src/components/TokenPair'
+import {formatCryptoVal} from "@/src/utils/numbers";
 
 // Helper to format currency values
 const formatCurrency = (value: string | null | undefined): string => {
@@ -23,14 +24,10 @@ const formatCurrency = (value: string | null | undefined): string => {
 const formatTokenAmount = (amount: string, symbol: string | null | undefined): string => {
   if (!amount || amount === '0') return '0'
 
-  const numAmount = parseFloat(amount)
-  if (numAmount === 0) return '0'
-
-  // For very small amounts, use scientific notation
-  if (numAmount < 0.001) return `${numAmount.toExponential(2)} ${symbol || ''}`
+  const numAmount = formatCryptoVal(BigInt(amount))
 
   // For normal amounts, format with 3 significant digits max
-  return `${numAmount.toPrecision(4)} ${symbol || ''}`
+  return `${numAmount} ${symbol || ''}`
 }
 
 // Helper to format time ago

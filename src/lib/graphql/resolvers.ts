@@ -1260,19 +1260,22 @@ export const resolvers = {
 
         if (!token0 || !token1) return '0'
 
-        // Get token prices
+        // Get token prices in USD
         const token0Price = await loaders.tokenPriceLoader.load(token0.id)
         const token1Price = await loaders.tokenPriceLoader.load(token1.id)
 
-        // Calculate USD value based on the tokens involved
+        // Convert wei amounts to decimal values using token decimals
+        const decimals0 = token0.decimals || 18
+        const decimals1 = token1.decimals || 18
+
         const token0Amount = Math.max(
-          parseFloat(parent.amountIn0),
-          parseFloat(parent.amountOut0)
+          parseFloat(parent.amountIn0) / 10 ** decimals0,
+          parseFloat(parent.amountOut0) / 10 ** decimals0
         )
 
         const token1Amount = Math.max(
-          parseFloat(parent.amountIn1),
-          parseFloat(parent.amountOut1)
+          parseFloat(parent.amountIn1) / 10 ** decimals1,
+          parseFloat(parent.amountOut1) / 10 ** decimals1
         )
 
         // Calculate total value

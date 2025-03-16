@@ -53,7 +53,7 @@ function TransactionsContent() {
   const data = useLazyLoadQuery<TransactionsPageQuery>(
     transactionsPageQuery,
     {
-      first: 50,
+      first: 20,
     },
     {
       fetchPolicy: 'store-and-network',
