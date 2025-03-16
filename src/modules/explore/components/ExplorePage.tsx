@@ -1,7 +1,7 @@
 'use client'
 
-import React from 'react'
-import { graphql, useLazyLoadQuery } from 'react-relay'
+import React, { useEffect, useState, useTransition } from 'react'
+import { graphql, PreloadedQuery, useQueryLoader, usePreloadedQuery } from 'react-relay'
 import { ExplorePageQuery } from '@/src/__generated__/ExplorePageQuery.graphql'
 import { Explore } from '@/src/modules/explore/components/Explore'
 import { Text, View } from 'reshaped'
@@ -44,33 +44,87 @@ const explorePageQuery = graphql`
   }
 `
 
-export const ExplorePage = () => {
-  const [orderBy, setOrderBy] = React.useState<string>('reserveUSD')
-  const [orderDirection, setOrderDirection] = React.useState<string>('desc')
+export const ExplorePage = (): React.ReactElement | null => {
+  const [orderBy, setOrderBy] = useState<string>('reserveUSD')
+  const [orderDirection, setOrderDirection] = useState<string>('desc')
+  const [isPending, startTransition] = useTransition()
 
-  const data = useLazyLoadQuery<ExplorePageQuery>(
-    explorePageQuery,
-    {
+  // Create a query reference to store preloaded query
+  const [queryRef, loadQuery] = useQueryLoader<ExplorePageQuery>(explorePageQuery)
+
+  // Load the initial query when component mounts
+  useEffect(() => {
+    loadQuery({
       first: 50,
       orderBy: orderBy as any,
       orderDirection: orderDirection as any,
-    },
-    {
-      fetchPolicy: 'store-and-network',
-    }
+    })
+  }, [loadQuery, orderBy, orderDirection])
+
+  // Handle sorting changes
+  const handleSortChange = (newOrderBy: string, newOrderDirection: string): void => {
+    startTransition(() => {
+      setOrderBy(newOrderBy)
+      setOrderDirection(newOrderDirection)
+
+      // Reload query with new parameters
+      loadQuery({
+        first: 50,
+        orderBy: newOrderBy as any,
+        orderDirection: newOrderDirection as any,
+      })
+    })
+  }
+
+  // If we don't have a query reference yet, render nothing
+  // (the parent Suspense boundary will show the loading state)
+  if (!queryRef) {
+    return null
+  }
+
+  return (
+    <ExplorePageContent
+      queryRef={queryRef}
+      orderBy={orderBy}
+      orderDirection={orderDirection}
+      isPending={isPending}
+      onSortChange={handleSortChange}
+    />
   )
+}
+
+interface ExplorePageContentProps {
+  queryRef: PreloadedQuery<ExplorePageQuery>
+  orderBy: string
+  orderDirection: string
+  isPending: boolean
+  onSortChange: (orderBy: string, orderDirection: string) => void
+}
+
+// Separate component to use the preloaded query
+function ExplorePageContent({
+  queryRef,
+  orderBy,
+  orderDirection,
+  isPending,
+  onSortChange,
+}: ExplorePageContentProps): React.ReactElement {
+  // Use the preloaded query
+  const data = usePreloadedQuery<ExplorePageQuery>(explorePageQuery, queryRef)
 
   return (
     <View gap={2}>
-      <View>
+      <View direction="row" align="center" justify="space-between">
         <Text variant="featured-2">Pools</Text>
       </View>
       <Explore
         data={data}
         orderBy={orderBy}
         orderDirection={orderDirection}
-        setOrderBy={setOrderBy}
-        setOrderDirection={setOrderDirection}
+        setOrderBy={(newOrderBy: string) => onSortChange(newOrderBy, orderDirection)}
+        setOrderDirection={(newOrderDirection: string) =>
+          onSortChange(orderBy, newOrderDirection)
+        }
       />
     </View>
   )
