@@ -53,9 +53,6 @@ export const Header = () => {
                       >
                         ponder finance
                       </Text>
-                      {/*<View attributes={{ style: { transform: 'rotate(180deg)' } }}>*/}
-                      {/*  <Triangle size={10} />*/}
-                      {/*</View>*/}
                     </View>
                   </Button>
                 )}

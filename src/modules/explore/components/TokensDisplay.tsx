@@ -142,7 +142,6 @@ export const TokensDisplay: React.FC<TokensDisplayProps> = ({
               </View>
             </View.Item>
 
-            {console.log('no', node.priceUSD)}
             <View.Item columns={2}>
               <Text>{formatCurrency(node.priceUSD)}</Text>
             </View.Item>
