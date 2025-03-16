@@ -42,35 +42,21 @@ export async function getCachedPairReserveUSDBulk(
   if (pairIds.length === 0) return {}
 
   try {
-    console.log(`Attempting to fetch ${pairIds.length} pairs from Redis cache`)
     const redis = getRedisClient()
-    const pipeline = redis.pipeline()
-
+    // Use MGET instead of pipeline for better performance
     const keys = pairIds.map((id) => `${PREFIX}${id}:reserveUSD`)
-    for (const key of keys) {
-      pipeline.get(key)
-    }
+    const values = await redis.mget(...keys)
 
-    const results = await pipeline.exec()
+    const result: Record<string, string> = {}
+    pairIds.forEach((id, index) => {
+      if (values[index]) {
+        result[id] = values[index]
+      }
+    })
 
-    // Process results into a map of pairId -> reserveUSD
-    const cachedValues: Record<string, string> = {}
-    let hitCount = 0
-
-    if (results) {
-      results.forEach((result, index) => {
-        if (result[0] === null && result[1] !== null) {
-          const pairId = pairIds[index]
-          cachedValues[pairId] = result[1] as string
-          hitCount++
-        }
-      })
-    }
-
-    console.log(`Redis cache: ${hitCount}/${pairIds.length} hits`)
-    return cachedValues
+    return result
   } catch (error) {
-    console.error('Error getting bulk cached pair reserveUSD values:', error)
+    console.error('Redis bulk get error:', error)
     return {}
   }
 }
@@ -79,7 +65,8 @@ export async function getCachedPairReserveUSDBulk(
  * Cache multiple pair reserveUSD values in a single operation
  */
 export async function cachePairReserveUSDBulk(
-  pairs: Array<{ id: string; reserveUSD: string }>
+  pairs: Array<{ id: string; reserveUSD: string }>,
+  ttl = CACHE_TTL
 ): Promise<void> {
   if (pairs.length === 0) return
 
@@ -89,7 +76,7 @@ export async function cachePairReserveUSDBulk(
 
     for (const pair of pairs) {
       const key = `${PREFIX}${pair.id}:reserveUSD`
-      pipeline.set(key, pair.reserveUSD, 'EX', CACHE_TTL)
+      pipeline.set(key, pair.reserveUSD, 'EX', ttl)
     }
 
     await pipeline.exec()

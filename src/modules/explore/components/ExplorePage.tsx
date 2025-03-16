@@ -56,7 +56,7 @@ export const ExplorePage = () => {
       orderDirection: orderDirection as any,
     },
     {
-      fetchPolicy: 'network-only',
+      fetchPolicy: 'store-and-network',
     }
   )
 

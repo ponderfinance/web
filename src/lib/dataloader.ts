@@ -1,5 +1,6 @@
 import DataLoader from 'dataloader'
 import { PrismaClient, Token, Pair } from '@prisma/client'
+import { getCachedPairReserveUSDBulk } from '@/src/lib/redis/pairCache'
 
 export function createLoaders(prisma: PrismaClient) {
   return {
@@ -52,24 +53,45 @@ export function createLoaders(prisma: PrismaClient) {
     ),
 
     // Loader for latest reserve snapshots by pair ID
+    // In dataloader.ts, optimize the reserveUSDLoader
     reserveUSDLoader: new DataLoader<string, string>(
       async (pairIds: readonly string[]) => {
-        // For MongoDB, we need a different approach to get the latest snapshots
-        // We'll query the most recent snapshot for each pair ID
-        const latestSnapshots = await Promise.all(
-          [...pairIds].map(async (pairId) => {
-            return prisma.pairReserveSnapshot.findFirst({
-              where: { pairId },
-              orderBy: { timestamp: 'desc' },
-            })
-          })
+        // First try to get from cache in batch
+        const cachedValues = await getCachedPairReserveUSDBulk([...pairIds])
+
+        // Identify which IDs need to be fetched from DB
+        const missingIds = pairIds.filter((id) => !cachedValues[id])
+
+        if (missingIds.length === 0) {
+          // All values were in cache
+          return pairIds.map((id) => cachedValues[id] || '0')
+        }
+
+        // Get snapshots for missing IDs in one query
+        const snapshots = await prisma.pairReserveSnapshot.findMany({
+          where: { pairId: { in: [...missingIds] } },
+          orderBy: { timestamp: 'desc' },
+          distinct: ['pairId'],
+        })
+
+        // Create a map of snapshotted values
+        const snapshotValues = snapshots.reduce(
+          (acc, snapshot) => {
+            acc[snapshot.pairId] = snapshot.reserveUSD
+            return acc
+          },
+          {} as Record<string, string>
         )
 
-        // Map the results back to the original pairIds order
-        return pairIds.map((id) => {
-          const snapshot = latestSnapshots.find((s) => s?.pairId === id)
-          return snapshot ? snapshot.reserveUSD : '0'
-        })
+        // Return results in correct order
+        return pairIds.map((id) => cachedValues[id] || snapshotValues[id] || '0')
+      },
+      {
+        // Cache for 30 seconds in memory
+        maxBatchSize: 100,
+        cache: true,
+        cacheMap: new Map(),
+        cacheKeyFn: (key) => key,
       }
     ),
   }

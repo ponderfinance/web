@@ -5,9 +5,11 @@ import { CURRENT_CHAIN } from '@/src/constants/chains'
 import { http } from 'wagmi'
 import { Context } from './types'
 import {
+  cachePairReserveUSDBulk,
   getCachedPairReserveUSD,
   getCachedPairReserveUSDBulk,
-} from '@/src/lib/redis/pairCache' // Add this import
+} from '@/src/lib/redis/pairCache'
+import { getRedisClient } from '@/src/lib/redis/client' // Add this import
 
 // USDT address
 const USDT_ADDRESS = '0x7d984C24d2499D840eB3b7016077164e15E5faA6'
@@ -200,70 +202,112 @@ export const resolvers = {
             }
           }
 
-          // Query all pairs at once with token data to reduce roundtrips
+          // Query all pairs at once with minimal token data to reduce roundtrips
           const pairs = await prisma.pair.findMany({
             take: first * 2, // Get more than needed for efficient sorting
             ...paginationFilter,
             include: {
-              token0: true,
-              token1: true,
+              token0: {
+                select: { id: true, address: true, symbol: true, decimals: true },
+              },
+              token1: {
+                select: { id: true, address: true, symbol: true, decimals: true },
+              },
             },
           })
 
           // Get all pair IDs
           const pairIds = pairs.map((pair) => pair.id)
 
-          // NEW: Try to get reserveUSD values from Redis cache first
+          // Get reserveUSD values from Redis cache first in a single batch operation
           const cachedValues = await getCachedPairReserveUSDBulk(pairIds)
 
-          // Process all pairs and add reserveUSD
-          const pairsWithReserves = await Promise.all(
-            pairs.map(async (pair) => {
-              // 1. Check if we have a cached value
-              if (cachedValues[pair.id]) {
-                return {
-                  ...pair,
-                  reserveUSD: cachedValues[pair.id],
-                  tvl: parseFloat(cachedValues[pair.id]),
-                }
-              }
+          // Identify which pairs need snapshot data
+          const missingPairIds = pairIds.filter((id) => !cachedValues[id])
 
-              // 2. If not in cache, try to get from snapshot
-              try {
-                const snapshot = await prisma.pairReserveSnapshot.findFirst({
-                  where: { pairId: pair.id },
-                  orderBy: { timestamp: 'desc' },
-                })
-
-                if (snapshot) {
-                  return {
-                    ...pair,
-                    reserveUSD: snapshot.reserveUSD,
-                    tvl: parseFloat(snapshot.reserveUSD),
-                  }
-                }
-              } catch (error) {
-                console.error(`Error fetching snapshot for pair ${pair.id}:`, error)
-              }
-
-              // 3. If no snapshot exists, calculate on-demand (fallback)
-              try {
-                const reserveUSD = await calculateReservesUSD(pair, prisma)
-                return {
-                  ...pair,
-                  reserveUSD,
-                  tvl: parseFloat(reserveUSD),
-                }
-              } catch (error) {
-                console.error(`Error calculating reserveUSD for pair ${pair.id}:`, error)
-                return {
-                  ...pair,
-                  reserveUSD: '0',
-                  tvl: 0,
-                }
-              }
+          // Get snapshots for missing pairs in a single query
+          let snapshotValues: Record<string, string> = {}
+          if (missingPairIds.length > 0) {
+            // Find the latest snapshot for each missing pair in one query
+            const snapshots = await prisma.pairReserveSnapshot.findMany({
+              where: {
+                pairId: { in: missingPairIds },
+              },
+              orderBy: { timestamp: 'desc' },
+              distinct: ['pairId'],
             })
+
+            // Create a map of the snapshot values
+            snapshotValues = snapshots.reduce(
+              (acc, snapshot) => {
+                acc[snapshot.pairId] = snapshot.reserveUSD
+                return acc
+              },
+              {} as Record<string, string>
+            )
+          }
+
+          // Keep track of pairs needing calculation
+          const pairsNeedingCalculation = pairs.filter(
+            (pair) => !cachedValues[pair.id] && !snapshotValues[pair.id]
           )
+
+          // Calculate reserveUSD for remaining pairs in parallel
+          let calculatedValues: Record<string, string> = {}
+          if (pairsNeedingCalculation.length > 0) {
+            const calculations = await Promise.all(
+              pairsNeedingCalculation.map(async (pair) => {
+                try {
+                  const reserveUSD = await calculateReservesUSD(pair, prisma)
+                  return { pairId: pair.id, reserveUSD }
+                } catch (error) {
+                  console.error(
+                    `Error calculating reserveUSD for pair ${pair.id}:`,
+                    error
+                  )
+                  return { pairId: pair.id, reserveUSD: '0' }
+                }
+              })
+            )
+
+            // Convert to map
+            calculatedValues = calculations.reduce(
+              (acc, { pairId, reserveUSD }) => {
+                acc[pairId] = reserveUSD
+                return acc
+              },
+              {} as Record<string, string>
+            )
+
+            // Cache the newly calculated values for future use
+            const pairsToCache = calculations.map(({ pairId, reserveUSD }) => ({
+              id: pairId,
+              reserveUSD,
+            }))
+
+            if (pairsToCache.length > 0) {
+              // Don't await this to avoid blocking response
+              cachePairReserveUSDBulk(pairsToCache).catch((err) => {
+                console.error('Error caching calculated values:', err)
+              })
+            }
+          }
+
+          // Assemble all pairs with their reserveUSD values
+          const pairsWithReserves = pairs.map((pair) => {
+            // Use cached value, snapshot value, or calculated value (in that order of preference)
+            const reserveUSD =
+              cachedValues[pair.id] ||
+              snapshotValues[pair.id] ||
+              calculatedValues[pair.id] ||
+              '0'
+
+            return {
+              ...pair,
+              reserveUSD,
+              tvl: parseFloat(reserveUSD),
+            }
+          })
 
           // Sort by reserveUSD
           pairsWithReserves.sort((a, b) => {
@@ -275,12 +319,51 @@ export const resolvers = {
           // Apply pagination and take correct number of results
           const page = pairsWithReserves.slice(0, first + 1)
 
-          // Get total count
+          // Get total count (consider caching this if it's expensive)
           const totalCount = await prisma.pair.count()
 
           // Create pagination response
           const paginationResult = createCursorPagination(
             page,
+            first,
+            after ? decodeCursor(after) : undefined
+          )
+
+          return {
+            ...paginationResult,
+            totalCount,
+          }
+        } else {
+          // For all other orderBy fields, use standard Prisma query with pagination
+          const orderByParam = { [orderBy]: orderDirection }
+
+          // For pagination with cursor
+          let paginationFilter = {}
+          if (after) {
+            const cursorId = decodeCursor(after)
+            paginationFilter = {
+              cursor: { id: cursorId },
+              skip: 1, // Skip the cursor itself
+            }
+          }
+
+          // Fetch pairs directly with Prisma's built-in ordering and pagination
+          const pairs = await prisma.pair.findMany({
+            take: first + 1, // Take one extra to check for next page
+            orderBy: orderByParam,
+            ...paginationFilter,
+            include: {
+              token0: true,
+              token1: true,
+            },
+          })
+
+          // Get total count
+          const totalCount = await prisma.pair.count()
+
+          // Create pagination response
+          const paginationResult = createCursorPagination(
+            pairs,
             first,
             after ? decodeCursor(after) : undefined
           )
@@ -997,44 +1080,23 @@ export const resolvers = {
       return loaders.tokenLoader.load(parent.token1Id)
     },
     reserveUSD: async (parent: any, _: any, { loaders, prisma }: Context) => {
-      // If we already have the calculated value from a previous step, use it
+      // If we already have the calculated value, return it immediately
       if (parent.reserveUSD) return parent.reserveUSD
 
-      // 1. Try to get from Redis cache first (fastest path)
+      const cacheKey = `pair:${parent.id}:reserveUSD`
       try {
-        const cachedValue = await getCachedPairReserveUSD(parent.id)
-        if (cachedValue) {
-          return cachedValue
-        }
+        // Use a single Redis MGET operation for all cache lookups
+        const redis = getRedisClient()
+        const cachedValue = await redis.get(cacheKey)
+        if (cachedValue) return cachedValue
       } catch (error) {
-        console.error(`Error fetching cached reserveUSD for pair ${parent.id}:`, error)
-        // Continue to other methods if cache fails
+        // Just log and continue if cache fails
+        console.error(`Cache error for ${parent.id}:`, error)
       }
 
-      // 2. Try to get from the latest snapshot (second fastest)
-      try {
-        const snapshot = await prisma.pairReserveSnapshot.findFirst({
-          where: { pairId: parent.id },
-          orderBy: { timestamp: 'desc' },
-        })
-
-        if (snapshot) {
-          return snapshot.reserveUSD
-        }
-      } catch (error) {
-        console.error(`Error fetching snapshot for pair ${parent.id}:`, error)
-        // Continue to other methods if snapshot fetch fails
-      }
-
-      // 3. If no snapshot exists, calculate on-demand (fallback - slowest)
-      try {
-        return calculateReservesUSD(parent, prisma)
-      } catch (error) {
-        console.error(`Error calculating reserveUSD for pair ${parent.id}:`, error)
-        return '0'
-      }
+      // Use dataloader to batch snapshot queries
+      return loaders.reserveUSDLoader.load(parent.id)
     },
-
     // Now update the tvl resolver to be more efficient
     tvl: async (parent: any, _: any, { loaders, prisma }: Context) => {
       // If we already have the TVL value, use it
