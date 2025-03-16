@@ -4,7 +4,7 @@ import { PrismaClient } from '@prisma/client'
 
 // Constants
 export const USDT_ADDRESS = '0x7d984C24d2499D840eB3b7016077164e15E5faA6'.toLowerCase()
-export const KKUB_ADDRESS = '0x4d0fcc9b60e8a3ccb32a20f5d93480569ea3f6a1'.toLowerCase() // Replace with actual KKUB address
+export const KKUB_ADDRESS = '0x67eBD850304c70d983B2d1b93ea79c7CD6c3F6b5'.toLowerCase() // Replace with actual KKUB address
 export const ORACLE_ADDRESS = '0xcf814870800a3bcac4a6b858424a9370a64c75ad'
 
 // Oracle ABI for the functions we need

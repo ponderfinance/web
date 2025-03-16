@@ -1,14 +1,13 @@
-// src/modules/explore/components/ExplorePage.tsx
 'use client'
 
 import React, { Suspense, useState } from 'react'
 import { graphql, useLazyLoadQuery } from 'react-relay'
-import { ExplorePageQuery } from '@/src/__generated__/ExplorePageQuery.graphql'
-import { Explore } from '@/src/modules/explore/components/Explore'
-import { Text, View } from 'reshaped'
+import { PoolsPageQuery } from '@/src/__generated__/PoolsPageQuery.graphql'
+import { PoolsDisplay } from '@/src/modules/explore/components/PoolsDisplay'
+import { View, Text } from 'reshaped'
 
-const explorePageQuery = graphql`
-  query ExplorePageQuery(
+const poolsPageQuery = graphql`
+  query PoolsPageQuery(
     $first: Int!
     $orderBy: PairOrderBy!
     $orderDirection: OrderDirection!
@@ -46,12 +45,12 @@ const explorePageQuery = graphql`
 `
 
 // Loading component for suspense
-function ExploreLoading() {
+function PoolsLoading() {
   return <View align="center" justify="center" height="40vh"></View>
 }
 
 // Main content component that fetches data
-function ExploreContent({
+function PoolsContent({
   orderBy,
   orderDirection,
   setOrderBy,
@@ -62,8 +61,8 @@ function ExploreContent({
   setOrderBy: (value: string) => void
   setOrderDirection: (value: string) => void
 }) {
-  const data = useLazyLoadQuery<ExplorePageQuery>(
-    explorePageQuery,
+  const data = useLazyLoadQuery<PoolsPageQuery>(
+    poolsPageQuery,
     {
       first: 50,
       orderBy: orderBy as any,
@@ -76,7 +75,7 @@ function ExploreContent({
   )
 
   return (
-    <Explore
+    <PoolsDisplay
       data={data}
       orderBy={orderBy}
       orderDirection={orderDirection}
@@ -87,24 +86,14 @@ function ExploreContent({
 }
 
 // Exported page component
-export const ExplorePage = () => {
+export const PoolsPage = () => {
   const [orderBy, setOrderBy] = useState<string>('reserveUSD')
   const [orderDirection, setOrderDirection] = useState<string>('desc')
 
   return (
     <View gap={6}>
-      <View direction="row" gap={6}>
-        <Text variant="featured-2">Tokens</Text>
-        <Text variant="featured-2" color="neutral-faded">
-          Pools
-        </Text>
-        <Text variant="featured-2" color="neutral-faded">
-          Transactions
-        </Text>
-      </View>
-
-      <Suspense fallback={<ExploreLoading />}>
-        <ExploreContent
+      <Suspense fallback={<PoolsLoading />}>
+        <PoolsContent
           orderBy={orderBy}
           orderDirection={orderDirection}
           setOrderBy={setOrderBy}

@@ -1,39 +1,27 @@
-// src/modules/explore/components/ExplorePage.tsx
 'use client'
 
 import React, { Suspense, useState } from 'react'
 import { graphql, useLazyLoadQuery } from 'react-relay'
-import { ExplorePageQuery } from '@/src/__generated__/ExplorePageQuery.graphql'
-import { Explore } from '@/src/modules/explore/components/Explore'
-import { Text, View } from 'reshaped'
+import { TokensPageQuery } from '@/src/__generated__/TokensPageQuery.graphql'
+import { TokensDisplay } from '@/src/modules/explore/components/TokensDisplay'
+import { View, Text } from 'reshaped'
 
-const explorePageQuery = graphql`
-  query ExplorePageQuery(
+const tokensPageQuery = graphql`
+  query TokensPageQuery(
     $first: Int!
-    $orderBy: PairOrderBy!
+    $orderBy: TokenOrderBy!
     $orderDirection: OrderDirection!
   ) {
-    pairs(first: $first, orderBy: $orderBy, orderDirection: $orderDirection) {
+    tokens(first: $first, orderBy: $orderBy, orderDirection: $orderDirection) {
       edges {
         node {
           id
           address
-          token0 {
-            id
-            address
-            symbol
-            decimals
-            ...TokenPairFragment
-          }
-          token1 {
-            id
-            address
-            symbol
-            decimals
-            ...TokenPairFragment
-          }
-          tvl
-          reserveUSD
+          name
+          symbol
+          priceUSD
+          priceChange24h
+          volumeUSD24h
         }
       }
       pageInfo {
@@ -46,12 +34,12 @@ const explorePageQuery = graphql`
 `
 
 // Loading component for suspense
-function ExploreLoading() {
+function TokensLoading() {
   return <View align="center" justify="center" height="40vh"></View>
 }
 
 // Main content component that fetches data
-function ExploreContent({
+function TokensContent({
   orderBy,
   orderDirection,
   setOrderBy,
@@ -62,8 +50,8 @@ function ExploreContent({
   setOrderBy: (value: string) => void
   setOrderDirection: (value: string) => void
 }) {
-  const data = useLazyLoadQuery<ExplorePageQuery>(
-    explorePageQuery,
+  const data = useLazyLoadQuery<TokensPageQuery>(
+    tokensPageQuery,
     {
       first: 50,
       orderBy: orderBy as any,
@@ -76,7 +64,7 @@ function ExploreContent({
   )
 
   return (
-    <Explore
+    <TokensDisplay
       data={data}
       orderBy={orderBy}
       orderDirection={orderDirection}
@@ -87,24 +75,14 @@ function ExploreContent({
 }
 
 // Exported page component
-export const ExplorePage = () => {
-  const [orderBy, setOrderBy] = useState<string>('reserveUSD')
+export const TokensPage = () => {
+  const [orderBy, setOrderBy] = useState<string>('volumeUSD24h')
   const [orderDirection, setOrderDirection] = useState<string>('desc')
 
   return (
     <View gap={6}>
-      <View direction="row" gap={6}>
-        <Text variant="featured-2">Tokens</Text>
-        <Text variant="featured-2" color="neutral-faded">
-          Pools
-        </Text>
-        <Text variant="featured-2" color="neutral-faded">
-          Transactions
-        </Text>
-      </View>
-
-      <Suspense fallback={<ExploreLoading />}>
-        <ExploreContent
+      <Suspense fallback={<TokensLoading />}>
+        <TokensContent
           orderBy={orderBy}
           orderDirection={orderDirection}
           setOrderBy={setOrderBy}

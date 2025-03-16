@@ -171,16 +171,65 @@ export const Header = () => {
               </Popover.Content>
             </Popover>
 
-            <Link href="/explore">
-              <Button variant="ghost">
-                <Text
-                  variant="body-1"
-                  color={pathname === '/explore' ? 'neutral' : 'neutral-faded'}
-                >
-                  Explore
-                </Text>
-              </Button>
-            </Link>
+            <Popover triggerType="hover" padding={1}>
+              <Popover.Trigger>
+                {(attributes) => (
+                  <Link href="/explore">
+                    <Button attributes={attributes} variant="ghost">
+                      <Text
+                        variant="body-1"
+                        color={pathname === '/explore' ? 'neutral' : 'neutral-faded'}
+                      >
+                        Explore
+                      </Text>
+                    </Button>
+                  </Link>
+                )}
+              </Popover.Trigger>
+              <Popover.Content>
+                <View direction="column" gap={1}>
+                  <Button
+                    color="neutral"
+                    onClick={() => router.push('/explore/tokens')}
+                    attributes={{
+                      style: {
+                        justifyContent: 'start',
+                        paddingTop: 12,
+                        paddingBottom: 12,
+                      },
+                    }}
+                  >
+                    <Text variant="body-2">Tokens</Text>
+                  </Button>
+                  <Button
+                    color="neutral"
+                    onClick={() => router.push('/explore/pools')}
+                    attributes={{
+                      style: {
+                        justifyContent: 'start',
+                        paddingTop: 12,
+                        paddingBottom: 12,
+                      },
+                    }}
+                  >
+                    <Text variant="body-2">Pools</Text>
+                  </Button>
+                  <Button
+                    color="neutral"
+                    onClick={() => router.push('/explore/transactions')}
+                    attributes={{
+                      style: {
+                        justifyContent: 'start',
+                        paddingTop: 12,
+                        paddingBottom: 12,
+                      },
+                    }}
+                  >
+                    <Text variant="body-2">Transactions</Text>
+                  </Button>
+                </View>
+              </Popover.Content>
+            </Popover>
           </View>
         </Hidden>
       </View>

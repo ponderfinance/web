@@ -8,6 +8,7 @@ datasource db {
 }
 
 // Core token model
+// In schema.prisma
 model Token {
   id              String   @id @default(auto()) @map("_id") @db.ObjectId
   address         String   @unique
@@ -15,6 +16,11 @@ model Token {
   symbol          String?
   decimals        Int?
   imageURI        String?  // URI for the token image
+  // Add the new fields
+  priceUSD        String?  // Latest price in USD
+  priceChange24h  Float?   // 24h price change percentage
+  volumeUSD24h    String?  // 24h trading volume in USD
+  lastPriceUpdate DateTime? // When the price was last updated
   // Relationships
   pairsAsToken0   Pair[]   @relation("Token0")
   pairsAsToken1   Pair[]   @relation("Token1")

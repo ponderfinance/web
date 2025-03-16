@@ -27,7 +27,7 @@ input TokenWhereInput {
 type Query {
   # Tokens
   token(id: ID!): Token
-  tokens(first: Int, after: String, where: TokenWhereInput): TokenConnection!
+  tokens(first: Int, after: String, where: TokenWhereInput, orderBy: TokenOrderBy, orderDirection: OrderDirection): TokenConnection!
 
   # Pairs/Pools
   pair(id: ID!): Pair
@@ -73,6 +73,8 @@ type Query {
     timeframe: String = "1d"
     limit: Int = 100
   ): [ChartDataPoint!]!
+
+  recentTransactions(first: Int = 20, after: String): SwapConnection!
 }
 
 enum OrderDirection {
@@ -84,6 +86,15 @@ enum PairOrderBy {
   volumeUSD
   reserveUSD
   createdAt
+}
+
+enum TokenOrderBy {
+  priceUSD
+  volumeUSD24h
+  priceChange24h
+  createdAt
+  name
+  symbol
 }
 
 # Pagination types
@@ -102,10 +113,12 @@ type Token {
   symbol: String
   decimals: Int
   imageURI: String
+  priceUSD: String!
+  priceChange24h: Float
+  volumeUSD24h: String
   pairs0: [Pair!]!
   pairs1: [Pair!]!
 }
-
 # Token Connection
 type TokenConnection {
   edges: [TokenEdge!]!
@@ -393,3 +406,21 @@ type ContributionEdge {
   node: Contribution!
   cursor: String!
 }
+
+type Swap {
+  id: ID!
+  pairId: String!
+  pair: Pair
+  txHash: String!
+  userAddress: String!
+  amountIn0: String!
+  amountIn1: String!
+  amountOut0: String!
+  amountOut1: String!
+  blockNumber: Int!
+  timestamp: Int!
+  token0: Token
+  token1: Token
+  valueUSD: String
+}
+

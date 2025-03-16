@@ -1,6 +1,8 @@
 import DataLoader from 'dataloader'
 import { PrismaClient, Token, Pair } from '@prisma/client'
 import { getCachedPairReserveUSDBulk } from '@/src/lib/redis/pairCache'
+import { getCachedTokenPricesBulk, cacheTokenPrice } from '@/src/lib/redis/tokenCache'
+import { calculateTokenPriceUSD } from '@/src/lib/graphql/tokenUtils'
 
 export function createLoaders(prisma: PrismaClient) {
   return {
@@ -25,6 +27,79 @@ export function createLoaders(prisma: PrismaClient) {
           (address) =>
             tokens.find((token) => token.address === address.toLowerCase()) || null
         )
+      }
+    ),
+
+    // Loader for token prices by ID
+    tokenPriceLoader: new DataLoader<string, string>(
+      async (tokenIds: readonly string[]) => {
+        // First try to get from cache in batch
+        const cachedValues = await getCachedTokenPricesBulk([...tokenIds])
+
+        // Identify which tokens need price calculation
+        const missingIds = tokenIds.filter((id) => !cachedValues[id])
+
+        if (missingIds.length === 0) {
+          // All values were in cache
+          return tokenIds.map((id) => cachedValues[id] || '0')
+        }
+
+        // For tokens with missing prices, get token addresses
+        const missingTokens = await prisma.token.findMany({
+          where: { id: { in: [...missingIds] } },
+          select: { id: true, address: true },
+        })
+
+        // Create a map of token ID to token address
+        const tokenAddressMap = missingTokens.reduce(
+          (acc, token) => {
+            acc[token.id] = token.address
+            return acc
+          },
+          {} as Record<string, string>
+        )
+
+        // Calculate prices for missing tokens in parallel
+        const missingPricePromises = missingIds.map(async (id) => {
+          const address = tokenAddressMap[id]
+          if (!address) return { id, price: '0' }
+
+          try {
+            // Use our production-ready price calculation function
+            const price = await calculateTokenPriceUSD(id, address, prisma)
+
+            // Cache the price for future use
+            if (price !== '0') {
+              await cacheTokenPrice(id, price)
+            }
+
+            return { id, price }
+          } catch (error) {
+            console.error(`Error calculating price for token ${id}:`, error)
+            return { id, price: '0' }
+          }
+        })
+
+        const missingPrices = await Promise.all(missingPricePromises)
+
+        // Create a map of calculated prices
+        const calculatedPrices = missingPrices.reduce(
+          (acc, { id, price }) => {
+            acc[id] = price
+            return acc
+          },
+          {} as Record<string, string>
+        )
+
+        // Return results in correct order
+        return tokenIds.map((id) => cachedValues[id] || calculatedPrices[id] || '0')
+      },
+      {
+        // Cache for 30 seconds in memory
+        maxBatchSize: 100,
+        cache: true,
+        cacheMap: new Map(),
+        cacheKeyFn: (key) => key,
       }
     ),
 
@@ -53,7 +128,6 @@ export function createLoaders(prisma: PrismaClient) {
     ),
 
     // Loader for latest reserve snapshots by pair ID
-    // In dataloader.ts, optimize the reserveUSDLoader
     reserveUSDLoader: new DataLoader<string, string>(
       async (pairIds: readonly string[]) => {
         // First try to get from cache in batch
