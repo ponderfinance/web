@@ -23,6 +23,7 @@ const nextConfig = {
   experimental: {
     optimizePackageImports: ['reshaped'],
     esmExternals: 'loose', // Support for ESM dependencies
+    largeModuleExclude: [/@privy-io\/react-auth/]
   },
   // Disable SWC minify
   swcMinify: false,

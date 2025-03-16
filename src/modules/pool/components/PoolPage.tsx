@@ -7,7 +7,7 @@ import { Button, Text, View } from 'reshaped'
 import Link from 'next/link'
 import { Plus } from '@phosphor-icons/react'
 import { LiquidityPositionsList } from '@/src/components/LiquidityPositionsList'
-import React from 'react'
+import React, { Suspense, useState } from 'react'
 
 const userPositionsQuery = graphql`
   query PoolPageQuery($userAddress: String!) {
@@ -19,19 +19,31 @@ const userPositionsQuery = graphql`
   }
 `
 
-export const PoolPage = () => {
-  const account = useAccount()
+// Loading component for suspense
+function PoolLoading() {
+  return <View align="center" justify="center" height="40vh"></View>
+}
 
-  // Fetch data at the page level
+// Main content component that fetches data
+function PoolContent({ userAddress }: { userAddress: string }) {
+  // Fetch data at the content level
   const data = useLazyLoadQuery<PoolPageQuery>(
     userPositionsQuery,
     {
-      userAddress: account.address?.toLowerCase() || '',
+      userAddress: userAddress || '',
     },
     {
       fetchPolicy: 'network-only',
     }
   )
+
+  return <LiquidityPositionsList positionsData={data.userPositions} />
+}
+
+// Exported page component
+export const PoolPage = () => {
+  const account = useAccount()
+  const userAddress = account.address?.toLowerCase() || ''
 
   return (
     <View direction="column">
@@ -53,7 +65,9 @@ export const PoolPage = () => {
           </Link>
         </View>
 
-        <LiquidityPositionsList positionsData={data.userPositions} />
+        <Suspense fallback={<PoolLoading />}>
+          <PoolContent userAddress={userAddress} />
+        </Suspense>
       </View>
     </View>
   )
