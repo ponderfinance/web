@@ -1,7 +1,8 @@
+// src/modules/explore/components/ExplorePage.tsx
 'use client'
 
-import React, { useEffect, useState, useTransition } from 'react'
-import { graphql, PreloadedQuery, useQueryLoader, usePreloadedQuery } from 'react-relay'
+import React, { Suspense, useState } from 'react'
+import { graphql, useLazyLoadQuery } from 'react-relay'
 import { ExplorePageQuery } from '@/src/__generated__/ExplorePageQuery.graphql'
 import { Explore } from '@/src/modules/explore/components/Explore'
 import { Text, View } from 'reshaped'
@@ -44,88 +45,66 @@ const explorePageQuery = graphql`
   }
 `
 
-export const ExplorePage = (): React.ReactElement | null => {
-  const [orderBy, setOrderBy] = useState<string>('reserveUSD')
-  const [orderDirection, setOrderDirection] = useState<string>('desc')
-  const [isPending, startTransition] = useTransition()
+// Loading component for suspense
+function ExploreLoading() {
+  return <View align="center" justify="center" height="40vh"></View>
+}
 
-  // Create a query reference to store preloaded query
-  const [queryRef, loadQuery] = useQueryLoader<ExplorePageQuery>(explorePageQuery)
-
-  // Load the initial query when component mounts
-  useEffect(() => {
-    loadQuery({
+// Main content component that fetches data
+function ExploreContent({
+  orderBy,
+  orderDirection,
+  setOrderBy,
+  setOrderDirection,
+}: {
+  orderBy: string
+  orderDirection: string
+  setOrderBy: (value: string) => void
+  setOrderDirection: (value: string) => void
+}) {
+  const data = useLazyLoadQuery<ExplorePageQuery>(
+    explorePageQuery,
+    {
       first: 50,
       orderBy: orderBy as any,
       orderDirection: orderDirection as any,
-    })
-  }, [loadQuery, orderBy, orderDirection])
-
-  // Handle sorting changes
-  const handleSortChange = (newOrderBy: string, newOrderDirection: string): void => {
-    startTransition(() => {
-      setOrderBy(newOrderBy)
-      setOrderDirection(newOrderDirection)
-
-      // Reload query with new parameters
-      loadQuery({
-        first: 50,
-        orderBy: newOrderBy as any,
-        orderDirection: newOrderDirection as any,
-      })
-    })
-  }
-
-  // If we don't have a query reference yet, render nothing
-  // (the parent Suspense boundary will show the loading state)
-  if (!queryRef) {
-    return null
-  }
+    },
+    {
+      fetchPolicy: 'store-and-network',
+      fetchKey: orderBy + orderDirection, // Unique key when sort changes
+    }
+  )
 
   return (
-    <ExplorePageContent
-      queryRef={queryRef}
+    <Explore
+      data={data}
       orderBy={orderBy}
       orderDirection={orderDirection}
-      isPending={isPending}
-      onSortChange={handleSortChange}
+      setOrderBy={setOrderBy}
+      setOrderDirection={setOrderDirection}
     />
   )
 }
 
-interface ExplorePageContentProps {
-  queryRef: PreloadedQuery<ExplorePageQuery>
-  orderBy: string
-  orderDirection: string
-  isPending: boolean
-  onSortChange: (orderBy: string, orderDirection: string) => void
-}
-
-// Separate component to use the preloaded query
-function ExplorePageContent({
-  queryRef,
-  orderBy,
-  orderDirection,
-  isPending,
-  onSortChange,
-}: ExplorePageContentProps): React.ReactElement {
-  // Use the preloaded query
-  const data = usePreloadedQuery<ExplorePageQuery>(explorePageQuery, queryRef)
+// Exported page component
+export const ExplorePage = () => {
+  const [orderBy, setOrderBy] = useState<string>('reserveUSD')
+  const [orderDirection, setOrderDirection] = useState<string>('desc')
 
   return (
     <View gap={2}>
-      <View direction="row" align="center" justify="space-between">
+      <View>
         <Text variant="featured-2">Pools</Text>
       </View>
-      <Explore
-        data={data}
-        orderBy={orderBy}
-        orderDirection={orderDirection}
-        setOrderBy={(newOrderBy: string) => onSortChange(newOrderBy, orderDirection)}
-        setOrderDirection={(newOrderDirection: string) =>
-          onSortChange(orderBy, newOrderDirection)
-        }
-      />
+
+      <Suspense fallback={<ExploreLoading />}>
+        <ExploreContent
+          orderBy={orderBy}
+          orderDirection={orderDirection}
+          setOrderBy={setOrderBy}
+          setOrderDirection={setOrderDirection}
+        />
+      </Suspense>
     </View>
   )
 }
