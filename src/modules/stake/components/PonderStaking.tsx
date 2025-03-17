@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Text, View, Button } from 'reshaped'
+import { Text, View, Button, TextField } from 'reshaped'
 import { useAccount } from 'wagmi'
 import { formatUnits, parseUnits } from 'viem'
 import {
@@ -55,6 +55,14 @@ export function StakeInterface() {
     })
   }
 
+  const handleStakeAmountChange = ({ value }: { value: string }) => {
+    setStakeAmount(value)
+  }
+
+  const handleUnstakeAmountChange = ({ value }: { value: string }) => {
+    setUnstakeAmount(value)
+  }
+
   const currentStakeAmount = stakeAmount ? parseUnits(stakeAmount, 18) : BigInt(0)
 
   return (
@@ -62,27 +70,15 @@ export function StakeInterface() {
       <Text variant="title-6" weight="regular">
         Stake KOI
       </Text>
-      <View gap={8}>
+      <View gap={8} borderRadius="large" borderColor="neutral-faded" padding={4}>
         <View direction="row" justify="space-between">
           <Text>Total Staked</Text>
           <Text>{stakingInfo ? formatUnits(stakingInfo.totalStaked, 18) : '0'} KOI</Text>
         </View>
 
         <View direction="row" justify="space-between">
-          <Text>Exchange Rate</Text>
-          <Text>
-            1 xKOI = {stakingInfo ? stakingInfo.exchangeRate.toFixed(4) : '1'} KOI
-          </Text>
-        </View>
-
-        <View direction="row" justify="space-between">
           <Text>Your Stake</Text>
           <Text>{stakingInfo ? formatUnits(stakingInfo.userShares, 18) : '0'} xKOI</Text>
-        </View>
-
-        <View direction="row" justify="space-between">
-          <Text>Your Value</Text>
-          <Text>{stakingInfo ? formatUnits(stakingInfo.userBalance, 18) : '0'} KOI</Text>
         </View>
 
         <View direction="row" justify="space-between">
@@ -95,63 +91,73 @@ export function StakeInterface() {
         </View>
       </View>
 
-      <View gap={8}>
-        <View gap={4}>
-          <Text variant="title-4">Stake KOI</Text>
-          <View direction="row" gap={8}>
-            <input
-              value={stakeAmount}
-              onChange={(e) => setStakeAmount(e.target.value)}
-              placeholder="Amount to stake"
-              type="number"
-              className="flex-1"
-            />
-            <Button
-              onClick={handleStake}
-              disabled={
-                isStaking ||
-                !stakeAmount ||
-                !ponderBalance ||
-                currentStakeAmount > ponderBalance
-              }
-              loading={isStaking}
-              variant={!hasEnoughAllowance(currentStakeAmount) ? 'solid' : 'outline'}
-            >
-              {hasEnoughAllowance(currentStakeAmount) ? 'Stake' : 'Approve & Stake'}
-            </Button>
+      <View direction="row" gap={8}>
+        <View.Item columns={{ s: 12, m: 6 }}>
+          <View padding={4} gap={2} borderColor="neutral-faded" borderRadius="large">
+            <View gap={4}>
+              <Text variant="body-1">Stake KOI</Text>
+              <View gap={3}>
+                <TextField
+                  name="stakeAmount"
+                  value={stakeAmount}
+                  onChange={handleStakeAmountChange}
+                  placeholder="Amount to stake"
+                  inputAttributes={{ type: 'number' }}
+                />
+                <Button
+                  onClick={handleStake}
+                  disabled={
+                    isStaking ||
+                    !stakeAmount ||
+                    !ponderBalance ||
+                    currentStakeAmount > ponderBalance
+                  }
+                  loading={isStaking}
+                  variant={!hasEnoughAllowance(currentStakeAmount) ? 'solid' : 'outline'}
+                  fullWidth={false}
+                >
+                  {hasEnoughAllowance(currentStakeAmount) ? 'Stake' : 'Approve & Stake'}
+                </Button>
+              </View>
+            </View>
+            <Text variant="caption-1" color="neutral">
+              Balance: {ponderBalance ? formatUnits(ponderBalance, 18) : '0'} KOI
+            </Text>
           </View>
-          <Text variant="caption-1" color="neutral">
-            Balance: {ponderBalance ? formatUnits(ponderBalance, 18) : '0'} KOI
-          </Text>
-        </View>
+        </View.Item>
 
-        <View gap={4}>
-          <Text variant="title-4">Unstake KOI</Text>
-          <View direction="row" gap={8}>
-            <input
-              value={unstakeAmount}
-              onChange={(e) => setUnstakeAmount(e.target.value)}
-              placeholder="Amount to unstake"
-              type="number"
-              className="flex-1"
-            />
-            <Button
-              onClick={handleUnstake}
-              disabled={
-                isUnstaking ||
-                !unstakeAmount ||
-                !stakingInfo?.userShares ||
-                parseUnits(unstakeAmount, 18) > stakingInfo.userShares
-              }
-              loading={isUnstaking}
-            >
-              Unstake
-            </Button>
+        <View.Item columns={{ s: 12, m: 6 }}>
+          <View padding={4} borderColor="neutral-faded" borderRadius="large" gap={2}>
+            <View gap={4}>
+              <Text variant="body-1">Unstake KOI</Text>
+              <View direction="column" gap={2}>
+                <TextField
+                  name="unstakeAmount"
+                  value={unstakeAmount}
+                  onChange={handleUnstakeAmountChange}
+                  placeholder="Amount to unstake"
+                  inputAttributes={{ type: 'number' }}
+                />
+                <Button
+                  onClick={handleUnstake}
+                  disabled={
+                    isUnstaking ||
+                    !unstakeAmount ||
+                    !stakingInfo?.userShares ||
+                    parseUnits(unstakeAmount, 18) > stakingInfo.userShares
+                  }
+                  loading={isUnstaking}
+                >
+                  Unstake
+                </Button>
+              </View>
+            </View>
+
+            <Text variant="caption-1" color="neutral">
+              Balance: {stakingInfo ? formatUnits(stakingInfo.userShares, 18) : '0'} xKOI
+            </Text>
           </View>
-          <Text variant="caption-1" color="neutral">
-            Balance: {stakingInfo ? formatUnits(stakingInfo.userShares, 18) : '0'} xKOI
-          </Text>
-        </View>
+        </View.Item>
       </View>
     </View>
   )
