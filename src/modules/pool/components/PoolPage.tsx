@@ -3,7 +3,7 @@
 import { useAccount } from 'wagmi'
 import { graphql, useLazyLoadQuery } from 'react-relay'
 import { PoolPageQuery } from '@/src/__generated__/PoolPageQuery.graphql'
-import { Button, Text, View } from 'reshaped'
+import { Button, Skeleton, Text, View } from 'reshaped'
 import Link from 'next/link'
 import { Plus } from '@phosphor-icons/react'
 import { LiquidityPositionsList } from '@/src/components/LiquidityPositionsList'
@@ -21,7 +21,13 @@ const userPositionsQuery = graphql`
 
 // Loading component for suspense
 function PoolLoading() {
-  return <View align="center" justify="center" height="40vh"></View>
+  return (
+    <View direction="column" gap={16}>
+      <Skeleton height={'222px'} width="100%" borderRadius="large" />
+      <Skeleton height={'222px'} width="100%" borderRadius="large" />
+      <Skeleton height={'222px'} width="100%" borderRadius="large" />
+    </View>
+  )
 }
 
 // Main content component that fetches data
