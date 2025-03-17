@@ -296,7 +296,7 @@ export const Header = () => {
           <Button
             variant="ghost"
             onClick={() => {
-              router.push('/positions/creat')
+              router.push('/positions/create')
               deactivate()
             }}
           >
