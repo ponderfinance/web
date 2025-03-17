@@ -11,7 +11,7 @@ export default function Home() {
   return (
     <View direction="column">
       <View paddingBottom={16} textAlign="center" align="center" grow={true}>
-        <View paddingBottom={{ s: 2, m: 8 }} maxWidth={{ s: '200px', m: '380px' }}>
+        <View paddingBottom={{ s: 2, m: 8 }} maxWidth={{ s: '240px', m: '380px' }}>
           <Text variant={{ s: 'title-6', m: 'title-3' }} align="center" weight="regular">
             trade, pool, <em>and launch.</em>
           </Text>

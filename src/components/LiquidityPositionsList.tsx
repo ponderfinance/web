@@ -78,7 +78,6 @@ export function LiquidityPositionsList({ positionsData }: LiquidityPositionsList
 
       const needsApproval = routerAllowance < liquidityToRemove
 
-
       return needsApproval
     } catch (err) {
       console.error('Error checking approval:', err)
@@ -109,7 +108,6 @@ export function LiquidityPositionsList({ positionsData }: LiquidityPositionsList
         return
       }
 
-
       // Approve 5% more than needed to account for any calculation differences
       const approvalAmount = (liquidityToRemove * BigInt(105)) / BigInt(100)
 
@@ -121,7 +119,6 @@ export function LiquidityPositionsList({ positionsData }: LiquidityPositionsList
         account.address as Address,
         sdk.router.address
       )
-
 
       if (newAllowance >= liquidityToRemove) {
         setNeedsApproval(false)
@@ -251,7 +248,7 @@ export function LiquidityPositionsList({ positionsData }: LiquidityPositionsList
 
   // Return the component UI
   return (
-    <View gap={16}>
+    <View gap={{ s: 8, m: 16 }}>
       {positionsData.liquidityPositions.length === 0 && (
         <Text align="center">No liquidity positions found.</Text>
       )}
