@@ -175,7 +175,9 @@ export const Header = () => {
                     <Button attributes={attributes} variant="ghost">
                       <Text
                         variant="body-1"
-                        color={pathname === '/explore' ? 'neutral' : 'neutral-faded'}
+                        color={
+                          pathname.includes('/explore') ? 'neutral' : 'neutral-faded'
+                        }
                       >
                         Explore
                       </Text>
