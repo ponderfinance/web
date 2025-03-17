@@ -4,7 +4,7 @@ import React, { Suspense, useState } from 'react'
 import { graphql, useLazyLoadQuery } from 'react-relay'
 import { TokensPageQuery } from '@/src/__generated__/TokensPageQuery.graphql'
 import { TokensDisplay } from '@/src/modules/explore/components/TokensDisplay'
-import { View, Text } from 'reshaped'
+import { View, Text, Skeleton } from 'reshaped'
 
 const tokensPageQuery = graphql`
   query TokensPageQuery(
@@ -36,7 +36,11 @@ const tokensPageQuery = graphql`
 
 // Loading component for suspense
 function TokensLoading() {
-  return <View align="center" justify="center" height="40vh"></View>
+  return (
+    <View align="center" justify="center" height="40vh">
+      <Skeleton height="300px" />
+    </View>
+  )
 }
 
 // Main content component that fetches data
