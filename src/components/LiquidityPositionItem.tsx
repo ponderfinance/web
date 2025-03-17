@@ -216,7 +216,13 @@ function PositionContent({
   if (error || !position) return null
 
   return (
-    <View direction="column" gap={4} borderColor="neutral-faded" borderRadius="large">
+    <View
+      direction="column"
+      gap={4}
+      borderColor="neutral-faded"
+      borderRadius="large"
+      overflow="hidden"
+    >
       <View gap={4} padding={8} paddingBottom={4}>
         <TokenPair
           tokenA={fragmentData.pair.token0}
@@ -234,52 +240,52 @@ function PositionContent({
         padding={8}
         paddingInline={8}
       >
-        <View direction="row" gap={{ s: 4, m: 8 }}>
+        <View direction="row" gap={{ s: 4, m: 8 }} justify="center">
           <View.Item columns={{ s: 12, m: 4 }}>
             <View direction="column" width="100%" align="start">
-              <Text variant="body-1">Your Pool Share</Text>
-              <Text>{position.poolShare}%</Text>
+              <Text variant="body-1">{position.poolShare}%</Text>
+              <Text>Share of pool</Text>
             </View>
           </View.Item>
           <View.Item columns={{ s: 12, m: 4 }}>
             <View direction="column" width="100%" align="start">
-              <Text>Your Position:</Text>
-              <View gap={2} direction="column" align="end">
-                <Text>
+              <View gap={2} direction="row">
+                <Text variant="body-1">
                   {formatNumber(roundDecimal(position.token0Amount))}{' '}
                   {position.token0.symbol}
                 </Text>
-                <Text>
+                <Text variant="body-1">
                   {formatNumber(roundDecimal(position.token1Amount))}{' '}
                   {position.token1.symbol}
                 </Text>
               </View>
+              <Text>Deposited tokens</Text>
             </View>
           </View.Item>
           <View.Item columns={{ s: 12, m: 4 }}>
             <View direction="column" width="100%" align="start">
-              <Text>LP Tokens:</Text>
               <View gap={2} direction="column" align="end">
-                <Text>
+                <Text variant="body-1">
                   {formatNumber(roundDecimal(formatEther(position.userLPBalance)))}
                 </Text>
                 {position.stakedInFarm && <Text color="positive">Farming Active</Text>}
               </View>
+              <Text>Pool tokens</Text>
             </View>
           </View.Item>
         </View>
 
-        <Button
-          disabled={position.stakedInFarm}
-          color={position.stakedInFarm ? 'neutral' : 'primary'}
-          onClick={() => {
-            if (!position.stakedInFarm) {
-              onRemoveLiquidity(position)
-            }
-          }}
-        >
-          {position.stakedInFarm ? 'Unstake from Farm First' : 'Remove Liquidity'}
-        </Button>
+        {/*<Button*/}
+        {/*  disabled={position.stakedInFarm}*/}
+        {/*  color={position.stakedInFarm ? 'neutral' : 'primary'}*/}
+        {/*  onClick={() => {*/}
+        {/*    if (!position.stakedInFarm) {*/}
+        {/*      onRemoveLiquidity(position)*/}
+        {/*    }*/}
+        {/*  }}*/}
+        {/*>*/}
+        {/*  {position.stakedInFarm ? 'Unstake from Farm First' : 'Remove Liquidity'}*/}
+        {/*</Button>*/}
       </View>
     </View>
   )
