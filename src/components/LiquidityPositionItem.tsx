@@ -216,15 +216,8 @@ function PositionContent({
   if (error || !position) return null
 
   return (
-    <View
-      direction="column"
-      gap={4}
-      borderColor="neutral-faded"
-      borderRadius="large"
-      padding={8}
-    >
-      <View gap={4}>
-        {/* Pass token fragment data to TokenPair with fallback to just addresses */}
+    <View direction="column" gap={4} borderColor="neutral-faded" borderRadius="large">
+      <View gap={4} padding={8} paddingBottom={4}>
         <TokenPair
           tokenA={fragmentData.pair.token0}
           tokenB={fragmentData.pair.token1}
@@ -232,7 +225,6 @@ function PositionContent({
           tokenAddressB={position.token1.address}
           size="large"
         />
-        <Text variant="body-3">Pair: {position.pairAddress}</Text>
       </View>
 
       <View
@@ -241,7 +233,6 @@ function PositionContent({
         backgroundColor="elevation-base"
         padding={8}
         paddingInline={8}
-        borderRadius="large"
       >
         <View direction="row" gap={{ s: 4, m: 8 }}>
           <View.Item columns={{ s: 12, m: 4 }}>
