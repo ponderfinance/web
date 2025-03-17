@@ -841,12 +841,6 @@ const AddLiquidityStepper = ({
         </View.Item>
       </View>
 
-      {tokenA && tokenB && isPairCheckLoading && (
-        <View align="center" padding={2}>
-          <Text color="neutral-faded">Checking pair status...</Text>
-        </View>
-      )}
-
       {tokenA && tokenB && tokenA.toLowerCase() === tokenB.toLowerCase() && (
         <View
           backgroundColor="critical-faded"

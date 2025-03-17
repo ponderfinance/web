@@ -1,19 +1,61 @@
 import React, { useState, useEffect } from 'react'
-import { Modal, Button, View, Text, TextField, Actionable, Icon } from 'reshaped'
+import {
+  Modal,
+  Button,
+  View,
+  Text,
+  TextField,
+  Actionable,
+  Icon,
+  Image,
+  Skeleton,
+} from 'reshaped'
 import { useToggle } from 'reshaped'
-import Image from 'next/image'
 import { shortenAddress } from '@/src/utils/numbers'
 import { CaretDown } from '@phosphor-icons/react'
 import { CURRENT_CHAIN } from '@/src/constants/chains'
-import { KKUB_ADDRESS, KOI_ADDRESS } from '@/src/constants/addresses'
+import { KKUB_ADDRESS } from '@/src/constants/addresses'
 import { Address, isAddress } from 'viem'
 import { useTokenInfo } from '@ponderfinance/sdk'
+import { graphql, useLazyLoadQuery, useFragment } from 'react-relay'
+import { getIpfsGateway } from '@/src/utils/ipfs'
+import { TokenSelectorQuery } from '@/src/__generated__/TokenSelectorQuery.graphql'
+import { TokenSelectorTokenFragment$key } from '@/src/__generated__/TokenSelectorTokenFragment.graphql'
+
+// Define our GraphQL query for fetching tokens
+const tokenSelectorQuery = graphql`
+  query TokenSelectorQuery {
+    tokens(first: 50, orderBy: priceUSD, orderDirection: desc) {
+      edges {
+        node {
+          ...TokenSelectorTokenFragment
+        }
+      }
+    }
+  }
+`
+
+// Define a fragment for token data
+const tokenFragment = graphql`
+  fragment TokenSelectorTokenFragment on Token {
+    id
+    address
+    name
+    symbol
+    decimals
+    imageURI
+    priceUSD
+  }
+`
 
 interface Token {
+  id: string
   name: string
   symbol: string
   address: `0x${string}`
-  icon: string
+  decimals: number
+  imageURI?: string | null
+  priceUSD?: string
   isNative?: boolean
   isCustom?: boolean
 }
@@ -31,38 +73,21 @@ interface TokenItemProps {
   onSelect: () => void
 }
 
-// Updated token list to include Native KUB
-const predefinedTokens: Token[] = [
-  {
-    name: 'KOI',
-    symbol: 'KOI',
-    address: KOI_ADDRESS[CURRENT_CHAIN.id],
-    icon: '/tokens/xkoi.png',
-  },
-  {
-    name: 'KUB Coin',
-    symbol: 'KUB',
-    address: '0x0000000000000000000000000000000000000000',
-    icon: '/tokens/bitkub.png',
-    isNative: true,
-  },
-  {
-    name: 'Wrapped KUB Coin',
-    symbol: 'KKUB',
-    address: KKUB_ADDRESS[CURRENT_CHAIN.id],
-    icon: '/tokens/bitkub.png',
-  },
-  {
-    name: 'Bitkub-Peg USDT',
-    symbol: 'USDT',
-    address: '0x7d984C24d2499D840eB3b7016077164e15E5faA6',
-    icon: '/tokens/usdt.png',
-  },
-]
+// Native KUB token definition
+const NATIVE_KUB: Token = {
+  id: 'native-kub',
+  name: 'KUB Coin',
+  symbol: 'KUB',
+  address: '0x0000000000000000000000000000000000000000' as `0x${string}`,
+  decimals: 18,
+  imageURI: '/tokens/bitkub.png',
+  isNative: true,
+}
 
 // Function to find a token by address
 const findTokenByAddress = (
   address?: `0x${string}`,
+  tokens: Token[] = [],
   customTokens: Token[] = []
 ): Token | null => {
   if (!address) return null
@@ -70,8 +95,13 @@ const findTokenByAddress = (
   // Normalize addresses for comparison (case-insensitive)
   const normalizedAddress = address.toLowerCase()
 
-  // Search in both predefined and custom tokens
-  const allTokens = [...predefinedTokens, ...customTokens]
+  // Check if it's the native token
+  if (normalizedAddress === '0x0000000000000000000000000000000000000000') {
+    return NATIVE_KUB
+  }
+
+  // Search in both fetched and custom tokens
+  const allTokens = [...tokens, ...customTokens]
   const token = allTokens.find(
     (token) => token.address.toLowerCase() === normalizedAddress
   )
@@ -79,20 +109,105 @@ const findTokenByAddress = (
   return token || null
 }
 
-const TokenSelector: React.FC<TokenSelectorProps> = ({
+const TokenItem: React.FC<TokenItemProps> = ({ token, onSelect }) => {
+  // Get token icon source - use default if not available
+  const tokenIcon = token.imageURI ? getIpfsGateway(token.imageURI) : '/tokens/coin.svg'
+
+  return (
+    <View
+      direction="row"
+      justify="space-between"
+      align="center"
+      borderRadius="medium"
+      grow={true}
+      width="100%"
+    >
+      <Button
+        variant="ghost"
+        onClick={onSelect}
+        fullWidth={true}
+        attributes={{ style: { width: '100%' } }}
+      >
+        <View direction="row" align="center" gap={4} width="100%">
+          <View height="40px" width="40px" align="center" justify="center">
+            <Image
+              src={tokenIcon}
+              height={10}
+              width={10}
+              alt={token.symbol || 'Token Icon'}
+            />
+          </View>
+
+          <View align="start" grow={true}>
+            <Text variant="body-2">{token.name}</Text>
+            <View direction="row" gap={2} align="center">
+              <Text color="neutral">{token.symbol}</Text>
+              {!token.isNative && (
+                <Text color="neutral-faded" variant="body-3">
+                  {shortenAddress(token.address)}
+                </Text>
+              )}
+            </View>
+          </View>
+        </View>
+      </Button>
+    </View>
+  )
+}
+
+// Component to render with Relay data after mount
+const TokenSelectorWithData: React.FC<{
+  active: boolean
+  deactivate: () => void
+  activate: () => void
+  onSelectToken: (token: `0x${string}`) => void
+  disabled: boolean
+  isProcessing: boolean
+  tokenAddress?: `0x${string}`
+  otherSelectedToken?: `0x${string}`
+}> = ({
+  active,
+  deactivate,
+  activate,
   onSelectToken,
-  disabled = false,
-  isProcessing = false,
+  disabled,
+  isProcessing,
   tokenAddress,
   otherSelectedToken,
 }) => {
-  const { active, activate, deactivate } = useToggle(false)
   const [searchTerm, setSearchTerm] = useState<string>('')
   const [customTokens, setCustomTokens] = useState<Token[]>([])
   const [isSearchingToken, setIsSearchingToken] = useState<boolean>(false)
 
+  // Fetch tokens using the GraphQL query
+  const data = useLazyLoadQuery<TokenSelectorQuery>(
+    tokenSelectorQuery,
+    {},
+    {
+      fetchPolicy: 'network-only',
+    }
+  )
+
+  // Extract tokens from Relay data
+  const tokens: Token[] = data.tokens.edges.map(({ node }) => {
+    const tokenData = useFragment<TokenSelectorTokenFragment$key>(tokenFragment, node)
+
+    return {
+      id: tokenData.id,
+      name: tokenData.name || 'Unknown Token',
+      symbol: tokenData.symbol || '???',
+      address: tokenData.address as `0x${string}`,
+      decimals: tokenData.decimals || 18,
+      imageURI: tokenData.imageURI,
+      priceUSD: tokenData.priceUSD,
+    }
+  })
+
+  // Add Native KUB to the list
+  const allTokens = [NATIVE_KUB, ...tokens]
+
   // Find selected token based on address
-  const selectedToken = findTokenByAddress(tokenAddress as `0x${string}`, customTokens)
+  const selectedToken = findTokenByAddress(tokenAddress, allTokens, customTokens)
 
   // Get token info when search term is a valid address
   const isValidAddress = isAddress(searchTerm as Address)
@@ -106,14 +221,20 @@ const TokenSelector: React.FC<TokenSelectorProps> = ({
   // Effect to add custom token when found
   useEffect(() => {
     if (tokenInfo && isValidAddress && searchTerm) {
-      const existingToken = findTokenByAddress(searchTerm as `0x${string}`, customTokens)
+      const existingToken = findTokenByAddress(
+        searchTerm as `0x${string}`,
+        allTokens,
+        customTokens
+      )
 
       if (!existingToken) {
         const newCustomToken: Token = {
+          id: `custom-${searchTerm}`,
           name: tokenInfo.name || 'Unknown Token',
           symbol: tokenInfo.symbol || '???',
           address: searchTerm as `0x${string}`,
-          icon: '/tokens/coin.svg', // Default icon
+          decimals: tokenInfo.decimals || 18,
+          imageURI: '/tokens/coin.svg', // Default icon
           isCustom: true,
         }
 
@@ -132,7 +253,7 @@ const TokenSelector: React.FC<TokenSelectorProps> = ({
 
       setIsSearchingToken(false)
     }
-  }, [tokenInfo, isValidAddress, searchTerm, customTokens])
+  }, [tokenInfo, isValidAddress, searchTerm, allTokens, customTokens])
 
   // Handler for token selection with Uniswap-like token switching
   const handleTokenSelect = (token: Token) => {
@@ -142,10 +263,10 @@ const TokenSelector: React.FC<TokenSelectorProps> = ({
       token.address.toLowerCase() === otherSelectedToken.toLowerCase()
     ) {
       // Perform token switch logic (will be handled by the parent component)
-      onSelectToken(token.address as `0x${string}`)
+      onSelectToken(token.address)
     } else {
       // Regular token selection
-      onSelectToken(token.address as `0x${string}`)
+      onSelectToken(token.address)
     }
     deactivate()
   }
@@ -161,13 +282,13 @@ const TokenSelector: React.FC<TokenSelectorProps> = ({
 
   // Filter tokens based on search term
   const filteredTokens = searchTerm
-    ? [...predefinedTokens, ...customTokens].filter(
+    ? [...allTokens, ...customTokens].filter(
         (token) =>
           token.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
           token.symbol.toLowerCase().includes(searchTerm.toLowerCase()) ||
           token.address.toLowerCase().includes(searchTerm.toLowerCase())
       )
-    : [...predefinedTokens, ...customTokens]
+    : [...allTokens, ...customTokens]
 
   return (
     <>
@@ -180,12 +301,12 @@ const TokenSelector: React.FC<TokenSelectorProps> = ({
       >
         <View direction="row" gap={2} align="center" paddingInline={1}>
           <View insetStart={-2}>
-            {selectedToken?.icon && (
+            {selectedToken?.imageURI && (
               <Image
-                src={selectedToken.icon}
-                height={24}
-                width={24}
-                alt={'Selected Token Icon'}
+                src={getIpfsGateway(selectedToken.imageURI) || '/tokens/coin.svg'}
+                height={6}
+                width={6}
+                alt={selectedToken.symbol || 'Selected Token Icon'}
               />
             )}
           </View>
@@ -250,7 +371,7 @@ const TokenSelector: React.FC<TokenSelectorProps> = ({
           {isValidAddress &&
             !isTokenInfoLoading &&
             tokenInfo &&
-            !findTokenByAddress(searchTerm as `0x${string}`, customTokens) && (
+            !findTokenByAddress(searchTerm as `0x${string}`, allTokens, customTokens) && (
               <View
                 direction="row"
                 justify="space-between"
@@ -272,13 +393,15 @@ const TokenSelector: React.FC<TokenSelectorProps> = ({
                   color="positive"
                   onClick={() => {
                     const newToken: Token = {
+                      id: `custom-${searchTerm}`,
                       name: tokenInfo.name || 'Unknown Token',
                       symbol: tokenInfo.symbol || '???',
                       address: searchTerm as `0x${string}`,
-                      icon: '/tokens/coin.svg',
+                      decimals: tokenInfo.decimals || 18,
+                      imageURI: '/tokens/coin.svg',
                       isCustom: true,
                     }
-                    setCustomTokens((prev) => [...prev, newToken])
+                    setCustomTokens([...customTokens, newToken])
                     handleTokenSelect(newToken)
                   }}
                 >
@@ -300,7 +423,7 @@ const TokenSelector: React.FC<TokenSelectorProps> = ({
           )}
 
           {/* Token list */}
-          <View gap={2} maxHeight={'400px'} width="100%">
+          <View gap={2} maxHeight={'400px'} width="100%" overflow="auto">
             {filteredTokens.length > 0 ? (
               filteredTokens.map((token) => (
                 <TokenItem
@@ -321,42 +444,55 @@ const TokenSelector: React.FC<TokenSelectorProps> = ({
   )
 }
 
-// Token item component
-const TokenItem: React.FC<TokenItemProps> = ({ token, onSelect }) => {
-  return (
-    <View
-      direction="row"
-      justify="space-between"
-      align="center"
-      borderRadius="medium"
-      grow={true}
-      width="100%"
-    >
-      <Button
-        variant="ghost"
-        onClick={onSelect}
-        fullWidth={true}
-        attributes={{ style: { width: '100%' } }}
-      >
-        <View direction="row" align="center" gap={4} width="100%">
-          <View height="40px" width="40px" align="center" justify="center">
-            <Image src={token.icon} height={40} width={40} alt={'Token Image'} />
-          </View>
+// Main component with client-side data fetching
+const TokenSelector: React.FC<TokenSelectorProps> = (props) => {
+  const { active, activate, deactivate } = useToggle(false)
+  const [isMounted, setIsMounted] = useState<boolean>(false)
 
-          <View align="start" grow={true}>
-            <Text variant="body-2">{token.name}</Text>
-            <View direction="row" gap={2} align="center">
-              <Text color="neutral">{token.symbol}</Text>
-              {!token.isNative && (
-                <Text color="neutral-faded" variant="body-3">
-                  {shortenAddress(token.address)}
-                </Text>
-              )}
-            </View>
+  // Only run query after component is mounted (client-side)
+  useEffect(() => {
+    setIsMounted(true)
+  }, [])
+
+  // Simplified version before mounting
+  if (!isMounted) {
+    return (
+      <Button
+        onClick={activate}
+        variant="outline"
+        disabled={props.disabled}
+        rounded={true}
+        loading={props.isProcessing}
+      >
+        <View direction="row" gap={2} align="center" paddingInline={1}>
+          <View insetStart={-2}>
+            <Skeleton height={6} width={6} borderRadius="circular" />
           </View>
+          <View insetStart={-2}>
+            <Skeleton height={4} width={8} />
+          </View>
+          {!props.disabled && (
+            <View>
+              <Icon svg={CaretDown} size={4} color="neutral-faded" />
+            </View>
+          )}
         </View>
       </Button>
-    </View>
+    )
+  }
+
+  // Once mounted, render the full component with Relay data
+  return (
+    <TokenSelectorWithData
+      active={active}
+      activate={activate}
+      deactivate={deactivate}
+      onSelectToken={props.onSelectToken}
+      disabled={props.disabled || false}
+      isProcessing={props.isProcessing || false}
+      tokenAddress={props.tokenAddress}
+      otherSelectedToken={props.otherSelectedToken}
+    />
   )
 }
 
