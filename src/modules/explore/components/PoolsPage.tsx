@@ -4,7 +4,7 @@ import React, { Suspense, useState } from 'react'
 import { graphql, useLazyLoadQuery } from 'react-relay'
 import { PoolsPageQuery } from '@/src/__generated__/PoolsPageQuery.graphql'
 import { PoolsDisplay } from '@/src/modules/explore/components/PoolsDisplay'
-import { View, Text } from 'reshaped'
+import { View, Text, Skeleton } from 'reshaped'
 
 const poolsPageQuery = graphql`
   query PoolsPageQuery(
@@ -46,7 +46,11 @@ const poolsPageQuery = graphql`
 
 // Loading component for suspense
 function PoolsLoading() {
-  return <View align="center" justify="center" height="40vh"></View>
+  return (
+    <View>
+      <Skeleton height="300px" width="100%" />
+    </View>
+  )
 }
 
 // Main content component that fetches data

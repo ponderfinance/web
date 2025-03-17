@@ -37,8 +37,8 @@ const tokensPageQuery = graphql`
 // Loading component for suspense
 function TokensLoading() {
   return (
-    <View align="center" justify="center" height="40vh">
-      <Skeleton height="300px" />
+    <View>
+      <Skeleton height="300px" width="100%" />
     </View>
   )
 }

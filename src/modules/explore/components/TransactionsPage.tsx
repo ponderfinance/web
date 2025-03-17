@@ -4,7 +4,7 @@ import React, { Suspense } from 'react'
 import { graphql, useLazyLoadQuery } from 'react-relay'
 import { TransactionsPageQuery } from '@/src/__generated__/TransactionsPageQuery.graphql'
 import { TransactionsDisplay } from '@/src/modules/explore/components/TransactionsDisplay'
-import { View, Text } from 'reshaped'
+import { View, Text, Skeleton } from 'reshaped'
 
 const transactionsPageQuery = graphql`
   query TransactionsPageQuery($first: Int!) {
@@ -45,7 +45,11 @@ const transactionsPageQuery = graphql`
 
 // Loading component for suspense
 function TransactionsLoading() {
-  return <View align="center" justify="center" height="40vh"></View>
+  return (
+    <View>
+      <Skeleton height="300px" width="100%" />
+    </View>
+  )
 }
 
 // Main content component that fetches data
