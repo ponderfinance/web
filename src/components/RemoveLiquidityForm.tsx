@@ -212,7 +212,7 @@ export default function RemoveLiquidityForm() {
   return (
     <Card>
       <form onSubmit={handleSubmit(onSubmit)}>
-        <View gap={16}>
+        <View>
           <View gap={8}>
             <Text variant="title-3">Remove Liquidity</Text>
 
@@ -265,7 +265,6 @@ export default function RemoveLiquidityForm() {
               </View>
             )}
           </View>
-
           <Button
             type="submit"
             disabled={isLoading || isApproving}

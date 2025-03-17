@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState, useEffect, Suspense } from 'react'
-import { Text, View, Button, Skeleton } from 'reshaped'
+import { Text, View, Button, Skeleton, Popover } from 'reshaped'
 import { Address, formatEther, formatUnits, erc20Abi } from 'viem'
 import { TokenPair } from '@/src/components/TokenPair'
 import { formatNumber, roundDecimal } from '@/src/utils/numbers'
@@ -9,6 +9,7 @@ import { graphql, useFragment } from 'react-relay'
 import { LiquidityPositionItem_position$key } from '@/src/__generated__/LiquidityPositionItem_position.graphql'
 import { usePonderSDK } from '@ponderfinance/sdk'
 import { useAccount } from 'wagmi'
+import {DotsThree, Minus} from '@phosphor-icons/react'
 
 // Define the fragment for position data
 export const PositionFragment = graphql`
@@ -196,22 +197,6 @@ function PositionContent({
     return () => clearInterval(interval)
   }, [sdk, account.address, fragmentData])
 
-  // Show loading state
-  if (isLoading && !position) {
-    return (
-      <View
-        direction="column"
-        gap={4}
-        borderColor="neutral-faded"
-        borderRadius="large"
-        padding={8}
-      >
-        <Skeleton height={40} width="100%" borderRadius="large" />
-        <Skeleton height={100} width="100%" borderRadius="large" />
-      </View>
-    )
-  }
-
   // Show error state
   if (error || !position) return null
 
@@ -227,8 +212,6 @@ function PositionContent({
         <TokenPair
           tokenA={fragmentData.pair.token0}
           tokenB={fragmentData.pair.token1}
-          tokenAddressA={position.token0.address}
-          tokenAddressB={position.token1.address}
           size="large"
         />
       </View>
@@ -241,12 +224,6 @@ function PositionContent({
         paddingInline={8}
       >
         <View direction="row" gap={{ s: 4, m: 8 }} justify="center">
-          <View.Item columns={{ s: 12, m: 4 }}>
-            <View direction="column" width="100%" align="start">
-              <Text variant="body-1">{position.poolShare}%</Text>
-              <Text>Share of pool</Text>
-            </View>
-          </View.Item>
           <View.Item columns={{ s: 12, m: 4 }}>
             <View direction="column" width="100%" align="start">
               <View gap={2} direction="row">
@@ -273,20 +250,40 @@ function PositionContent({
               <Text>Pool tokens</Text>
             </View>
           </View.Item>
+          <View.Item columns={{ s: 12, m: 4 }}>
+            <View direction="column" width="100%" align="start">
+              <Text variant="body-1">{position.poolShare}%</Text>
+              <Text>Share of pool</Text>
+            </View>
+          </View.Item>
         </View>
-
-        {/*<Button*/}
-        {/*  disabled={position.stakedInFarm}*/}
-        {/*  color={position.stakedInFarm ? 'neutral' : 'primary'}*/}
-        {/*  onClick={() => {*/}
-        {/*    if (!position.stakedInFarm) {*/}
-        {/*      onRemoveLiquidity(position)*/}
-        {/*    }*/}
-        {/*  }}*/}
-        {/*>*/}
-        {/*  {position.stakedInFarm ? 'Unstake from Farm First' : 'Remove Liquidity'}*/}
-        {/*</Button>*/}
       </View>
+      <Popover>
+        <Popover.Trigger>
+          {(attributes) => (
+            <View position="absolute" insetEnd={4} insetTop={4}>
+              <Button attributes={attributes} variant="ghost">
+                <DotsThree size={24} />
+              </Button>
+            </View>
+          )}
+        </Popover.Trigger>
+        <Popover.Content>
+          <Button
+            disabled={position.stakedInFarm}
+            color={position.stakedInFarm ? 'neutral' : 'primary'}
+            fullWidth={true}
+            onClick={() => {
+              if (!position.stakedInFarm) {
+                onRemoveLiquidity(position)
+              }
+            }}
+          >
+            <Minus />
+            {position.stakedInFarm ? 'Unstake from Farm First' : 'Remove Liquidity'}
+          </Button>
+        </Popover.Content>
+      </Popover>
     </View>
   )
 }
@@ -294,20 +291,7 @@ function PositionContent({
 // Create a wrapper component that uses Suspense
 export default function LiquidityPositionItem(props: LiquidityPositionItemProps) {
   return (
-    <Suspense
-      fallback={
-        <View
-          direction="column"
-          gap={4}
-          borderColor="neutral-faded"
-          borderRadius="large"
-          padding={8}
-        >
-          <Skeleton height={40} width="100%" borderRadius="large" />
-          <Skeleton height={100} width="100%" borderRadius="large" />
-        </View>
-      }
-    >
+    <Suspense fallback={<Skeleton height={'222px'} width="100%" borderRadius="large" />}>
       <PositionContent {...props} />
     </Suspense>
   )

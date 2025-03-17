@@ -1,13 +1,14 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
-import { Text, View, Button, Modal } from 'reshaped'
+import React, { useState } from 'react'
+import { Text, View, Button, Modal, Slider } from 'reshaped'
 import { KKUB_ADDRESS, usePonderSDK, useRemoveLiquidity } from '@ponderfinance/sdk'
 import { useAccount } from 'wagmi'
 import { Address } from 'viem'
 import LiquidityPositionItem from './LiquidityPositionItem'
 import { PoolPageQuery } from '@/src/__generated__/PoolPageQuery.graphql'
 import { CURRENT_CHAIN } from '@/src/constants/chains'
+import { TokenPair } from './TokenPair'
 
 interface Position {
   id: string
@@ -58,13 +59,25 @@ export function LiquidityPositionsList({ positionsData }: LiquidityPositionsList
     try {
       const pair = sdk.getPair(selectedPosition.pairAddress)
 
+      // First verify the actual LP token balance
+      const lpBalance = await pair.balanceOf(account.address as Address)
+
+      // Calculate the amount we need to remove based on percentage
+      const percent = parseFloat(percentToRemove) || 0
+      const liquidityToRemove = (lpBalance * BigInt(Math.floor(percent))) / BigInt(100)
+
+      if (liquidityToRemove <= BigInt(0)) {
+        return false // No approval needed if we're not removing anything
+      }
+
       // Check router approval
       const routerAllowance = await pair.allowance(
         account.address as Address,
         sdk.router.address
       )
 
-      const needsApproval = routerAllowance < selectedPosition.userLPBalance
+      const needsApproval = routerAllowance < liquidityToRemove
+
 
       return needsApproval
     } catch (err) {
@@ -83,18 +96,45 @@ export function LiquidityPositionsList({ positionsData }: LiquidityPositionsList
 
       const pair = sdk.getPair(selectedPosition.pairAddress)
 
-      // Only approve router
-      const routerTx = await pair.approve(
-        sdk.router.address,
-        selectedPosition.userLPBalance
-      )
-      // await routerTx.wait()
-      // console.log('Router approval confirmed:', routerTx.hash)
+      // Get the actual balance from the contract
+      const lpBalance = await pair.balanceOf(account.address as Address)
 
-      setNeedsApproval(false)
+      // Calculate the amount we need to approve based on percentage
+      const percent = parseFloat(percentToRemove) || 0
+      const liquidityToRemove = (lpBalance * BigInt(Math.floor(percent))) / BigInt(100)
+
+      if (liquidityToRemove <= BigInt(0)) {
+        setError('No LP tokens to approve. Your balance may be zero.')
+        setIsApproving(false)
+        return
+      }
+
+
+      // Approve 5% more than needed to account for any calculation differences
+      const approvalAmount = (liquidityToRemove * BigInt(105)) / BigInt(100)
+
+      // Only approve router
+      await pair.approve(sdk.router.address, approvalAmount)
+
+      // Verify approval was successful
+      const newAllowance = await pair.allowance(
+        account.address as Address,
+        sdk.router.address
+      )
+
+
+      if (newAllowance >= liquidityToRemove) {
+        setNeedsApproval(false)
+      } else {
+        setError('Approval amount insufficient. Please try again or check your wallet.')
+      }
     } catch (err) {
       console.error('Approval error:', err)
-      setError('Failed to approve tokens. Please try again.')
+      if (err instanceof Error) {
+        setError(`Failed to approve tokens: ${err.message}`)
+      } else {
+        setError('Failed to approve tokens. Please try again.')
+      }
     } finally {
       setIsApproving(false)
     }
@@ -105,13 +145,26 @@ export function LiquidityPositionsList({ positionsData }: LiquidityPositionsList
     if (!selectedPosition || !sdk || !account.address) return
 
     try {
+      // First verify that we have the necessary approvals
+      const stillNeedsApproval = await checkApproval()
+      if (stillNeedsApproval) {
+        setError(
+          'LP tokens need to be approved before removing liquidity. Please approve first.'
+        )
+        setNeedsApproval(true)
+        return
+      }
+
       setIsRemoving(true)
       setError('')
 
-      // Calculate liquidity amount based on percentage
+      // Get the current balance directly from the contract
+      const pair = sdk.getPair(selectedPosition.pairAddress)
+      const lpBalance = await pair.balanceOf(account.address as Address)
+
+      // Calculate liquidity amount based on percentage and actual balance
       const percent = parseFloat(percentToRemove) || 0
-      const liquidityToRemove =
-        (selectedPosition.userLPBalance * BigInt(Math.floor(percent))) / BigInt(100)
+      const liquidityToRemove = (lpBalance * BigInt(Math.floor(percent))) / BigInt(100)
 
       // Calculate expected output with more precise calculations
       // We need to calculate based on the reserves and the proportion of liquidity
@@ -124,79 +177,15 @@ export function LiquidityPositionsList({ positionsData }: LiquidityPositionsList
       const safeMinToken0 = (expectedToken0 * BigInt(95)) / BigInt(100)
       const safeMinToken1 = (expectedToken1 * BigInt(95)) / BigInt(100)
 
-      console.log('Expected output amounts:', {
-        expectedToken0: expectedToken0.toString(),
-        expectedToken1: expectedToken1.toString(),
-        safeMinToken0: safeMinToken0.toString(),
-        safeMinToken1: safeMinToken1.toString(),
+      const result = await removeLiquidity.mutateAsync({
+        pairAddress: selectedPosition.pairAddress,
+        liquidity: liquidityToRemove,
+        token0Min: safeMinToken0,
+        token1Min: safeMinToken1,
+        deadline: BigInt(Math.floor(Date.now() / 1000) + 1200),
+        toAddress: account.address,
+        // Don't use isETHPair flag - treat all pairs as regular token pairs
       })
-
-      if (selectedPosition.isWETHPair) {
-        try {
-          const kkubAddress = await sdk.router.KKUB()
-          console.log('KKUB address:', kkubAddress)
-
-          // Determine which token is ETH
-          const isToken0KKUB =
-            selectedPosition.token0.address.toLowerCase() === kkubAddress.toLowerCase()
-
-          // Get the non-KKUB token address
-          const nonKKUBToken = isToken0KKUB
-            ? selectedPosition.token1.address
-            : selectedPosition.token0.address
-
-          // DEBUGGING: Use extremely low minimum values
-          const tokenMin = BigInt(1) // 1 wei
-          const ethMin = BigInt(1) // 1 wei
-
-          console.log('Final parameters for removeLiquidityETH:', {
-            tokenAddress: nonKKUBToken,
-            liquidity: liquidityToRemove.toString(),
-            amountTokenMin: tokenMin.toString(),
-            amountETHMin: ethMin.toString(),
-            to: account.address,
-            deadline: BigInt(Math.floor(Date.now() / 1000) + 1200).toString(),
-          })
-
-          // Try with minimal values first to see if the transaction will succeed
-          const result = await removeLiquidity.mutateAsync({
-            pairAddress: selectedPosition.pairAddress,
-            liquidity: liquidityToRemove,
-            token0Min: BigInt(0), // These are not used directly for ETH pairs
-            token1Min: BigInt(0), // These are not used directly for ETH pairs
-            isETHPair: true,
-            tokenAddress: nonKKUBToken,
-            amountTokenMin: tokenMin, // Use minimal values for debugging
-            amountETHMin: ethMin, // Use minimal values for debugging
-            deadline: BigInt(Math.floor(Date.now() / 1000) + 1200),
-            toAddress: account.address,
-          })
-
-          console.log('ETH pair removal result:', result)
-        } catch (err) {
-          console.error('Error in ETH pair removal:', err)
-          throw err
-        }
-      } else {
-        // Standard token pair handling remains the same
-        console.log('Standard pair removal params:', {
-          token0: selectedPosition.token0.address,
-          token1: selectedPosition.token1.address,
-          safeMinToken0: safeMinToken0.toString(),
-          safeMinToken1: safeMinToken1.toString(),
-        })
-
-        const result = await removeLiquidity.mutateAsync({
-          pairAddress: selectedPosition.pairAddress,
-          liquidity: liquidityToRemove,
-          token0Min: safeMinToken0,
-          token1Min: safeMinToken1,
-          deadline: BigInt(Math.floor(Date.now() / 1000) + 1200),
-          toAddress: account.address,
-        })
-
-        console.log('Standard pair removal result:', result)
-      }
 
       setIsModalActive(false)
     } catch (err) {
@@ -219,8 +208,13 @@ export function LiquidityPositionsList({ positionsData }: LiquidityPositionsList
     setIsModalActive(true)
 
     // Check if approval is needed
-    const needsApprove = await checkApproval()
-    setNeedsApproval(needsApprove)
+    try {
+      const needsApprove = await checkApproval()
+      setNeedsApproval(needsApprove)
+    } catch (err) {
+      console.error('Error checking approvals:', err)
+      setNeedsApproval(true)
+    }
   }
 
   // Format expected output amounts
@@ -274,14 +268,20 @@ export function LiquidityPositionsList({ positionsData }: LiquidityPositionsList
 
       {/* Remove Liquidity Modal */}
       <Modal active={isModalActive} onClose={() => setIsModalActive(false)}>
-        <View direction="column" gap={16}>
+        <View direction="column" gap={4}>
           <Modal.Title>Remove Liquidity</Modal.Title>
-
           {selectedPosition && (
             <View direction="column" gap={12}>
               <Modal.Subtitle>
-                {selectedPosition.token0.symbol}/{selectedPosition.token1.symbol} Pool
-                {selectedPosition.isWETHPair && ' (ETH Pair)'}
+                <View direction="row" align="center" gap={2}>
+                  {/* Use TokenPair component for token display */}
+                  <TokenPair
+                    tokenAddressA={selectedPosition.token0.address}
+                    tokenAddressB={selectedPosition.token1.address}
+                    size="small"
+                  />
+                  {selectedPosition.isWETHPair && <Text>(ETH Pair)</Text>}
+                </View>
               </Modal.Subtitle>
 
               <View direction="column" gap={8}>
@@ -295,27 +295,22 @@ export function LiquidityPositionsList({ positionsData }: LiquidityPositionsList
               </View>
 
               <View direction="column" gap={4}>
-                <Text>Percentage to remove:</Text>
-                <input
-                  value={percentToRemove}
-                  onChange={(e) => {
-                    const value = e.target.value
-                    const num = parseFloat(value)
-                    if (!isNaN(num)) {
-                      setPercentToRemove(Math.min(100, Math.max(0, num)).toString())
-                    } else if (value === '') {
-                      setPercentToRemove('')
-                    }
-                  }}
-                  type="number"
-                  min="0"
-                  max="100"
-                  style={{ width: '100%', padding: '8px' }}
-                />
+                <Text>Percentage to remove: {percentToRemove}%</Text>
+                {/* Use Reshaped Slider component */}
+                <View paddingBlock={4}>
+                  <Slider
+                    name="percentToRemove"
+                    min={0}
+                    max={100}
+                    step={1}
+                    value={parseInt(percentToRemove) || 0}
+                    onChange={(args) => setPercentToRemove(args.value.toString())}
+                  />
+                </View>
               </View>
 
               <View direction="column" gap={4}>
-                <Text>You will receive approximately:</Text>
+                <Text>You will receive approximately (minimum amounts):</Text>
                 <Text>
                   {formatExpectedOutput(selectedPosition).token0}{' '}
                   {selectedPosition.token0.symbol}
@@ -324,10 +319,7 @@ export function LiquidityPositionsList({ positionsData }: LiquidityPositionsList
                   {formatExpectedOutput(selectedPosition).token1}{' '}
                   {selectedPosition.token1.symbol}
                 </Text>
-                <Text color="neutral">(Amounts subject to price impact and fees)</Text>
               </View>
-
-              {error && <Text>{error}</Text>}
             </View>
           )}
 
@@ -351,9 +343,6 @@ export function LiquidityPositionsList({ positionsData }: LiquidityPositionsList
                 Remove Liquidity
               </Button>
             )}
-            <Button color="neutral" onClick={() => setIsModalActive(false)} fullWidth>
-              Cancel
-            </Button>
           </View>
         </View>
       </Modal>
