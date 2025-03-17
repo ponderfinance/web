@@ -285,6 +285,15 @@ export const Header = () => {
             <Text variant="body-1">Send</Text>
           </Button>
           <Button
+              variant="ghost"
+              onClick={() => {
+                router.push('/explore')
+                deactivate()
+              }}
+          >
+            <Text variant="body-1">Explore</Text>
+          </Button>
+          <Button
             variant="ghost"
             onClick={() => {
               router.push('/positions/creat')
