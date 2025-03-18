@@ -6,6 +6,7 @@ import { PrismaClient } from '@prisma/client'
 export const USDT_ADDRESS = '0x7d984C24d2499D840eB3b7016077164e15E5faA6'.toLowerCase()
 export const KKUB_ADDRESS = '0x67eBD850304c70d983B2d1b93ea79c7CD6c3F6b5'.toLowerCase() // Replace with actual KKUB address
 export const ORACLE_ADDRESS = '0xcf814870800a3bcac4a6b858424a9370a64c75ad'
+export const REASONABLE_PRICE_UPPER_BOUND = 100000 // $100,000 max price
 
 // Oracle ABI for the functions we need
 export const ORACLE_ABI = [
@@ -21,6 +22,17 @@ export const ORACLE_ABI = [
     stateMutability: 'view',
     type: 'function',
   },
+  {
+    inputs: [
+      { internalType: 'address', name: 'pair', type: 'address' },
+      { internalType: 'address', name: 'tokenIn', type: 'address' },
+      { internalType: 'uint256', name: 'amountIn', type: 'uint256' },
+    ],
+    name: 'getCurrentPrice',
+    outputs: [{ internalType: 'uint256', name: 'amountOut', type: 'uint256' }],
+    stateMutability: 'view',
+    type: 'function',
+  },
 ]
 
 // Create a client (or get it from a shared instance)
@@ -32,7 +44,7 @@ export const getPublicClient = (): PublicClient => {
 }
 
 /**
- * Get the price of a token from the oracle
+ * Get the price of a token from the oracle with fallback to spot price
  * @param params - Parameters for price lookup
  * @returns The price per token
  */
@@ -42,16 +54,16 @@ export async function getTokenPriceFromOracle(params: {
   amount?: bigint
   periodInSeconds?: number
 }): Promise<number> {
-  try {
-    const {
-      pairAddress,
-      tokenAddress,
-      amount = BigInt('1000000000000000000'),
-      periodInSeconds = 3600,
-    } = params
-    const publicClient = getPublicClient()
+  const {
+    pairAddress,
+    tokenAddress,
+    amount = BigInt('1000000000000000000'),
+    periodInSeconds = 3600,
+  } = params
+  const publicClient = getPublicClient()
 
-    // Call the oracle's consult function
+  // First try TWAP via consult
+  try {
     const amountOut = await publicClient.readContract({
       address: ORACLE_ADDRESS as `0x${string}`,
       abi: ORACLE_ABI,
@@ -64,15 +76,45 @@ export async function getTokenPriceFromOracle(params: {
       ],
     })
 
-    // Calculate the price per token
+    // Calculate and validate the price
     const pricePerToken = Number(amountOut) / Number(amount)
 
-    return pricePerToken
+    if (isNaN(pricePerToken) || pricePerToken > REASONABLE_PRICE_UPPER_BOUND) {
+      console.warn(
+        `TWAP oracle returned unreasonable price: ${pricePerToken} for ${tokenAddress}`
+      )
+      // Don't return this value, fall through to the spot price check
+    } else {
+      return pricePerToken
+    }
   } catch (error) {
-    console.error(
-      `Error getting price from oracle for ${params.tokenAddress} in pair ${params.pairAddress}:`,
-      error
-    )
+    // Log the TWAP error but don't return yet
+    console.warn(`TWAP oracle error for ${tokenAddress}: ${error}`)
+    // Don't return here, try the spot price as fallback
+  }
+
+  // Fallback to spot price if TWAP fails or returns unreasonable value
+  try {
+    const spotAmountOut = await publicClient.readContract({
+      address: ORACLE_ADDRESS as `0x${string}`,
+      abi: ORACLE_ABI,
+      functionName: 'getCurrentPrice',
+      args: [pairAddress as `0x${string}`, tokenAddress as `0x${string}`, amount],
+    })
+
+    // Calculate and validate the price
+    const spotPrice = Number(spotAmountOut) / Number(amount)
+
+    if (isNaN(spotPrice) || spotPrice > REASONABLE_PRICE_UPPER_BOUND) {
+      console.warn(
+        `Spot price check returned unreasonable value: ${spotPrice} for ${tokenAddress}`
+      )
+      return 0
+    }
+
+    return spotPrice
+  } catch (error) {
+    console.error(`Both TWAP and spot price checks failed for ${tokenAddress}: ${error}`)
     return 0
   }
 }
@@ -244,7 +286,7 @@ export async function calculateReservesUSD(
       token1PriceUSD = await getTokenPriceViaKKUB(token1.address, prisma)
     }
 
-    // If we still couldn't find prices for either token, use a mock value
+    // If we still couldn't find prices for either token, return zero
     if (token0PriceUSD === 0 && token1PriceUSD === 0) {
       return '0'
     }
@@ -257,13 +299,24 @@ export async function calculateReservesUSD(
       parseFloat(formatUnits(BigInt(pair.reserve1), token1.decimals || 18)) *
       token1PriceUSD
 
+    // Sanity check - prevent unreasonable values
+    const totalReservesUSD = reserve0USD + reserve1USD
+
+    if (
+      isNaN(totalReservesUSD) ||
+      !isFinite(totalReservesUSD) ||
+      totalReservesUSD > 1000000000
+    ) {
+      console.error(
+        `Calculated unreasonable reserve value: ${totalReservesUSD} for pair ${pair.id}`
+      )
+      return '0'
+    }
+
     // Return the total value
-    return (reserve0USD + reserve1USD).toString()
+    return totalReservesUSD.toString()
   } catch (error) {
     console.error('Error calculating reserves USD:', error)
-
-    // Return a mock value in case of error
-    const pairId = parseInt(pair.id, 16) % 1000
-    return (50000 + pairId * 1000).toString()
+    return '0' // Return 0 instead of a mock value
   }
 }
