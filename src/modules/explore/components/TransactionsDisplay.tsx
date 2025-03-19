@@ -4,7 +4,8 @@ import React from 'react'
 import { View, Text } from 'reshaped'
 import { TransactionsPageQuery } from '@/src/__generated__/TransactionsPageQuery.graphql'
 import { TokenPair } from '@/src/components/TokenPair'
-import {formatCryptoVal} from "@/src/utils/numbers";
+import { formatCryptoVal } from '@/src/utils/numbers'
+import Link from 'next/link'
 
 // Helper to format currency values
 const formatCurrency = (value: string | null | undefined): string => {
@@ -140,7 +141,11 @@ export const TransactionsDisplay: React.FC<TransactionsDisplayProps> = ({ data }
               align="center"
             >
               <View.Item columns={2}>
-                <Text color="primary">{formatTimeAgo(node.timestamp)}</Text>
+                <Text color="primary">
+                  <a href={`https://kubscan.com/tx/${node.txHash}`} target="_blank">
+                    {formatTimeAgo(node.timestamp)}
+                  </a>
+                </Text>
               </View.Item>
 
               <View.Item columns={1}>
@@ -150,13 +155,7 @@ export const TransactionsDisplay: React.FC<TransactionsDisplayProps> = ({ data }
               <View.Item columns={4}>
                 <View direction="row" align="center" gap={2}>
                   {node.token0 && node.token1 && (
-                    <TokenPair
-                      tokenA={node.token0}
-                      tokenB={node.token1}
-                      tokenAddressA={node.token0.address as `0x${string}`}
-                      tokenAddressB={node.token1.address as `0x${string}`}
-                      size="small"
-                    />
+                    <TokenPair tokenA={node.token0} tokenB={node.token1} size="small" />
                   )}
                   <Text>{swapDescription}</Text>
                 </View>
