@@ -1,5 +1,5 @@
 /**
- * @generated SignedSource<<76400f6fbb646abdf1bdc219440d63f3>>
+ * @generated SignedSource<<db045dba476c98b5cf7918a4f5c4217c>>
  * @lightSyntaxTransform
  * @nogrep
  */
@@ -10,11 +10,11 @@
 
 import { ConcreteRequest, Query } from 'relay-runtime';
 import { FragmentRefs } from "relay-runtime";
-export type pageCreatePositionsQuery$variables = {
-  kkubAddress: string;
-  koiAddress: string;
+export type TokenPairQuery$variables = {
+  addressA: string;
+  addressB: string;
 };
-export type pageCreatePositionsQuery$data = {
+export type TokenPairQuery$data = {
   readonly tokenA: {
     readonly " $fragmentSpreads": FragmentRefs<"TokenPairFragment">;
   } | null;
@@ -22,9 +22,9 @@ export type pageCreatePositionsQuery$data = {
     readonly " $fragmentSpreads": FragmentRefs<"TokenPairFragment">;
   } | null;
 };
-export type pageCreatePositionsQuery = {
-  response: pageCreatePositionsQuery$data;
-  variables: pageCreatePositionsQuery$variables;
+export type TokenPairQuery = {
+  response: TokenPairQuery$data;
+  variables: TokenPairQuery$variables;
 };
 
 const node: ConcreteRequest = (function(){
@@ -32,19 +32,19 @@ var v0 = [
   {
     "defaultValue": null,
     "kind": "LocalArgument",
-    "name": "kkubAddress"
+    "name": "addressA"
   },
   {
     "defaultValue": null,
     "kind": "LocalArgument",
-    "name": "koiAddress"
+    "name": "addressB"
   }
 ],
 v1 = [
   {
     "kind": "Variable",
-    "name": "id",
-    "variableName": "kkubAddress"
+    "name": "address",
+    "variableName": "addressA"
   }
 ],
 v2 = [
@@ -57,8 +57,8 @@ v2 = [
 v3 = [
   {
     "kind": "Variable",
-    "name": "id",
-    "variableName": "koiAddress"
+    "name": "address",
+    "variableName": "addressB"
   }
 ],
 v4 = [
@@ -110,14 +110,14 @@ return {
     "argumentDefinitions": (v0/*: any*/),
     "kind": "Fragment",
     "metadata": null,
-    "name": "pageCreatePositionsQuery",
+    "name": "TokenPairQuery",
     "selections": [
       {
         "alias": "tokenA",
         "args": (v1/*: any*/),
         "concreteType": "Token",
         "kind": "LinkedField",
-        "name": "token",
+        "name": "tokenByAddress",
         "plural": false,
         "selections": (v2/*: any*/),
         "storageKey": null
@@ -127,7 +127,7 @@ return {
         "args": (v3/*: any*/),
         "concreteType": "Token",
         "kind": "LinkedField",
-        "name": "token",
+        "name": "tokenByAddress",
         "plural": false,
         "selections": (v2/*: any*/),
         "storageKey": null
@@ -140,14 +140,14 @@ return {
   "operation": {
     "argumentDefinitions": (v0/*: any*/),
     "kind": "Operation",
-    "name": "pageCreatePositionsQuery",
+    "name": "TokenPairQuery",
     "selections": [
       {
         "alias": "tokenA",
         "args": (v1/*: any*/),
         "concreteType": "Token",
         "kind": "LinkedField",
-        "name": "token",
+        "name": "tokenByAddress",
         "plural": false,
         "selections": (v4/*: any*/),
         "storageKey": null
@@ -157,7 +157,7 @@ return {
         "args": (v3/*: any*/),
         "concreteType": "Token",
         "kind": "LinkedField",
-        "name": "token",
+        "name": "tokenByAddress",
         "plural": false,
         "selections": (v4/*: any*/),
         "storageKey": null
@@ -165,16 +165,16 @@ return {
     ]
   },
   "params": {
-    "cacheID": "0c311976b8849bd1a16fb5e11496fe9f",
+    "cacheID": "4810d856056d8852253edde8c6283a51",
     "id": null,
     "metadata": {},
-    "name": "pageCreatePositionsQuery",
+    "name": "TokenPairQuery",
     "operationKind": "query",
-    "text": "query pageCreatePositionsQuery(\n  $kkubAddress: ID!\n  $koiAddress: ID!\n) {\n  tokenA: token(id: $kkubAddress) {\n    ...TokenPairFragment\n    id\n  }\n  tokenB: token(id: $koiAddress) {\n    ...TokenPairFragment\n    id\n  }\n}\n\nfragment TokenPairFragment on Token {\n  id\n  address\n  name\n  symbol\n  decimals\n  imageURI\n}\n"
+    "text": "query TokenPairQuery(\n  $addressA: String!\n  $addressB: String!\n) {\n  tokenA: tokenByAddress(address: $addressA) {\n    ...TokenPairFragment\n    id\n  }\n  tokenB: tokenByAddress(address: $addressB) {\n    ...TokenPairFragment\n    id\n  }\n}\n\nfragment TokenPairFragment on Token {\n  id\n  address\n  name\n  symbol\n  decimals\n  imageURI\n}\n"
   }
 };
 })();
 
-(node as any).hash = "df239d319135de1320da9f62804be2f1";
+(node as any).hash = "e89ab370fb827dafc8dc4523955806c4";
 
 export default node;

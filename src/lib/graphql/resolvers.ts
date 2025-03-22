@@ -253,6 +253,28 @@ export const resolvers = {
         }
       }
     },
+    tokenByAddress: async (
+      _: any,
+      { address }: { address: string },
+      { prisma }: Context
+    ) => {
+      return prisma.token.findFirst({
+        where: { address: address.toLowerCase() },
+      })
+    },
+    pairByAddress: async (
+      _: any,
+      { address }: { address: string },
+      { prisma }: Context
+    ) => {
+      return prisma.pair.findFirst({
+        where: { address: address.toLowerCase() },
+        include: {
+          token0: true,
+          token1: true,
+        },
+      })
+    },
 
     // Pair resolvers
     pair: async (_: any, { id }: { id: string }, { prisma }: Context) => {

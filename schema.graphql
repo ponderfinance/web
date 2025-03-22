@@ -1,20 +1,18 @@
-# schema.graphql
-
 scalar DateTime
 scalar BigInt
 
 type ChartDataPoint {
-  time: Int!                # Unix timestamp
-  value: Float!             # Value at this point in time
+  time: Int! # Unix timestamp
+  value: Float! # Value at this point in time
 }
 
 # Volume chart data with additional volume metrics
 type VolumeChartData {
-  time: Int!                # Unix timestamp
-  value: Float!             # Primary value (usually volume in token0)
-  volume0: Float            # Volume in token0
-  volume1: Float            # Volume in token1
-  count: Int                # Number of transactions
+  time: Int! # Unix timestamp
+  value: Float! # Primary value (usually volume in token0)
+  volume0: Float # Volume in token0
+  volume1: Float # Volume in token1
+  count: Int # Number of transactions
 }
 
 # Input types for filtering
@@ -27,11 +25,24 @@ input TokenWhereInput {
 type Query {
   # Tokens
   token(id: ID!): Token
-  tokens(first: Int, after: String, where: TokenWhereInput, orderBy: TokenOrderBy, orderDirection: OrderDirection): TokenConnection!
+  tokenByAddress(address: String!): Token # New field to query token by address
+  tokens(
+    first: Int
+    after: String
+    where: TokenWhereInput
+    orderBy: TokenOrderBy
+    orderDirection: OrderDirection
+  ): TokenConnection!
 
   # Pairs/Pools
   pair(id: ID!): Pair
-  pairs(first: Int, after: String, orderBy: PairOrderBy, orderDirection: OrderDirection): PairConnection!
+  pairByAddress(address: String!): Pair # New field to query pair by address
+  pairs(
+    first: Int
+    after: String
+    orderBy: PairOrderBy
+    orderDirection: OrderDirection
+  ): PairConnection!
   topPairs(first: Int): PairConnection!
 
   # User data

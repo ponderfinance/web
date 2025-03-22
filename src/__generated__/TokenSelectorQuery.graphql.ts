@@ -1,5 +1,5 @@
 /**
- * @generated SignedSource<<d768977c9e643878d38ebf52db62a53d>>
+ * @generated SignedSource<<dd7ea09d25073cd537c730a85a2332d3>>
  * @lightSyntaxTransform
  * @nogrep
  */
@@ -30,7 +30,7 @@ var v0 = [
   {
     "kind": "Literal",
     "name": "first",
-    "value": 50
+    "value": 12
   },
   {
     "kind": "Literal",
@@ -86,7 +86,7 @@ return {
             "storageKey": null
           }
         ],
-        "storageKey": "tokens(first:50,orderBy:\"priceUSD\",orderDirection:\"desc\")"
+        "storageKey": "tokens(first:12,orderBy:\"priceUSD\",orderDirection:\"desc\")"
       }
     ],
     "type": "Query",
@@ -178,21 +178,21 @@ return {
             "storageKey": null
           }
         ],
-        "storageKey": "tokens(first:50,orderBy:\"priceUSD\",orderDirection:\"desc\")"
+        "storageKey": "tokens(first:12,orderBy:\"priceUSD\",orderDirection:\"desc\")"
       }
     ]
   },
   "params": {
-    "cacheID": "359971857ccd175b46b2267a3534dcd4",
+    "cacheID": "746f43f5eb26563e63ad6f90b4b64a00",
     "id": null,
     "metadata": {},
     "name": "TokenSelectorQuery",
     "operationKind": "query",
-    "text": "query TokenSelectorQuery {\n  tokens(first: 50, orderBy: priceUSD, orderDirection: desc) {\n    edges {\n      node {\n        ...TokenSelectorTokenFragment\n        id\n      }\n    }\n  }\n}\n\nfragment TokenSelectorTokenFragment on Token {\n  id\n  address\n  name\n  symbol\n  decimals\n  imageURI\n  priceUSD\n}\n"
+    "text": "query TokenSelectorQuery {\n  tokens(first: 12, orderBy: priceUSD, orderDirection: desc) {\n    edges {\n      node {\n        ...TokenSelectorTokenFragment\n        id\n      }\n    }\n  }\n}\n\nfragment TokenSelectorTokenFragment on Token {\n  id\n  address\n  name\n  symbol\n  decimals\n  imageURI\n  priceUSD\n}\n"
   }
 };
 })();
 
-(node as any).hash = "491c2da131bfb3b009ace5c5a07cf0ba";
+(node as any).hash = "70851f65ea99a2d785cf7023611b7a87";
 
 export default node;

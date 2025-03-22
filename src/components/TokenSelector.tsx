@@ -1,20 +1,8 @@
 import React, { useState, useEffect } from 'react'
-import {
-  Modal,
-  Button,
-  View,
-  Text,
-  TextField,
-  Actionable,
-  Icon,
-  Image,
-  Skeleton,
-} from 'reshaped'
+import { Modal, Button, View, Text, TextField, Icon, Image, Skeleton } from 'reshaped'
 import { useToggle } from 'reshaped'
 import { shortenAddress } from '@/src/utils/numbers'
 import { CaretDown } from '@phosphor-icons/react'
-import { CURRENT_CHAIN } from '@/src/constants/chains'
-import { KKUB_ADDRESS } from '@/src/constants/addresses'
 import { Address, isAddress } from 'viem'
 import { useTokenInfo } from '@ponderfinance/sdk'
 import { graphql, useLazyLoadQuery, useFragment } from 'react-relay'
@@ -25,7 +13,7 @@ import { TokenSelectorTokenFragment$key } from '@/src/__generated__/TokenSelecto
 // Define our GraphQL query for fetching tokens
 const tokenSelectorQuery = graphql`
   query TokenSelectorQuery {
-    tokens(first: 50, orderBy: priceUSD, orderDirection: desc) {
+    tokens(first: 12, orderBy: priceUSD, orderDirection: desc) {
       edges {
         node {
           ...TokenSelectorTokenFragment

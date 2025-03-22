@@ -877,6 +877,7 @@ const AddLiquidityStepper = ({
         borderRadius="large"
         padding={6}
         gap={4}
+        align="center"
       >
         <View>
           <TokenPair tokenAddressA={tokenA} tokenAddressB={tokenB} />
@@ -1167,7 +1168,7 @@ const AddLiquidityStepper = ({
             )}
           </DropdownMenu.Trigger>
           <DropdownMenu.Content>
-            <View gap={2}>
+            <View gap={2} padding={4} paddingTop={2}>
               <Text>Slippage Tolerance</Text>
               <View direction="row" gap={2}>
                 {[0.1, 0.5, 1.0].map((value) => (
