@@ -1,5 +1,5 @@
 import { PrismaClient } from '@prisma/client'
-import { createPublicClient, PublicClient } from 'viem'
+import { createPublicClient, formatUnits, parseUnits, PublicClient } from 'viem'
 import { calculateReservesUSD } from '@/src/lib/graphql/oracleUtils'
 import { CURRENT_CHAIN } from '@/src/constants/chains'
 import { http } from 'wagmi'
@@ -9,7 +9,8 @@ import {
   getCachedPairReserveUSD,
   getCachedPairReserveUSDBulk,
 } from '@/src/lib/redis/pairCache'
-import { getRedisClient } from '@/src/lib/redis/client' // Add this import
+import { getRedisClient } from '@/src/lib/redis/client'
+import { TokenPriceService } from '@/src/lib/services/tokenPriceService' // Add this import
 
 // USDT address
 const USDT_ADDRESS = '0x7d984C24d2499D840eB3b7016077164e15E5faA6'
@@ -550,11 +551,28 @@ export const resolvers = {
         // Find the pair
         const pair = await prisma.pair.findFirst({
           where: { address: pairAddress.toLowerCase() },
+          include: {
+            token0: true,
+            token1: true,
+          },
         })
 
         if (!pair) {
           throw new Error(`Pair not found: ${pairAddress}`)
         }
+
+        // Get token decimals
+        const token0Decimals = pair.token0.decimals || 18
+        const token1Decimals = pair.token1.decimals || 18
+
+        // Check if either token is a stablecoin
+        const stablecoinAddresses = TokenPriceService.getStablecoinAddresses()
+        const isToken0Stablecoin = stablecoinAddresses.includes(
+          pair.token0.address.toLowerCase()
+        )
+        const isToken1Stablecoin = stablecoinAddresses.includes(
+          pair.token1.address.toLowerCase()
+        )
 
         // Determine time window based on timeframe
         const now = Math.floor(Date.now() / 1000)
@@ -588,13 +606,146 @@ export const resolvers = {
             timestamp: { gte: startTime },
           },
           orderBy: { timestamp: 'asc' },
+          distinct: ['timestamp'],
         })
 
-        // Map the data to the format expected by TradingView
-        const chartData: ChartDataPoint[] = priceSnapshots.map((snapshot) => ({
-          time: snapshot.timestamp,
-          value: parseFloat(snapshot.token0Price),
-        }))
+        // Process the price snapshots to get properly formatted chart data
+        let chartData: ChartDataPoint[] = []
+
+        // Choose the correct display strategy based on the pair composition
+        if (isToken1Stablecoin) {
+          // If token1 is a stablecoin, we want to show token0's price in USD
+          chartData = priceSnapshots.map((snapshot) => {
+            // Get token0's price in terms of token1 (the stablecoin)
+            const rawPrice = snapshot.token0Price
+
+            try {
+              // Convert the raw price to a human-readable format using viem
+              // We need to account for the difference in token decimals
+              const decimalAdjustment = token1Decimals - token0Decimals
+
+              let price: number
+              if (decimalAdjustment !== 0) {
+                // Parse the raw price to a BigInt with the stablecoin's decimals precision
+                const rawPriceBigInt = parseUnits(rawPrice, token1Decimals)
+                // Format back to a number, adjusting for the decimal difference
+                price = parseFloat(
+                  formatUnits(rawPriceBigInt, token1Decimals - decimalAdjustment)
+                )
+              } else {
+                price = parseFloat(rawPrice)
+              }
+
+              return {
+                time: snapshot.timestamp,
+                value: price,
+              }
+            } catch (error) {
+              // Fallback for any parsing errors
+              return {
+                time: snapshot.timestamp,
+                value: parseFloat(rawPrice),
+              }
+            }
+          })
+        } else if (isToken0Stablecoin) {
+          // If token0 is a stablecoin, we want to show token1's price in USD
+          // We need to take the reciprocal of token0Price
+          chartData = priceSnapshots.map((snapshot) => {
+            // We need the reciprocal since we want token1's price in terms of token0
+            const rawPrice = snapshot.token0Price
+
+            try {
+              // First, convert the raw price to a proper number
+              const decimalAdjustment = token0Decimals - token1Decimals
+
+              let basePrice: number
+              if (decimalAdjustment !== 0) {
+                // Parse the raw price to a BigInt with token0's decimals precision
+                const rawPriceBigInt = parseUnits(rawPrice, token0Decimals)
+                // Format back to a number, adjusting for the decimal difference
+                basePrice = parseFloat(
+                  formatUnits(rawPriceBigInt, token0Decimals - decimalAdjustment)
+                )
+              } else {
+                basePrice = parseFloat(rawPrice)
+              }
+
+              // Now take the reciprocal to get token1's price in token0
+              // Avoid division by zero
+              const price = basePrice > 0 ? 1 / basePrice : 0
+
+              return {
+                time: snapshot.timestamp,
+                value: price,
+              }
+            } catch (error) {
+              // Fallback for any parsing errors
+              const price = parseFloat(rawPrice) > 0 ? 1 / parseFloat(rawPrice) : 0
+              return {
+                time: snapshot.timestamp,
+                value: price,
+              }
+            }
+          })
+        } else {
+          // If neither token is a stablecoin, we need to handle differently
+          // We'll use token0's price and try to get USD conversion
+          // This is more complex and would typically involve oracles
+          chartData = await Promise.all(
+            priceSnapshots.map(async (snapshot) => {
+              const rawPrice = snapshot.token0Price
+
+              try {
+                // First get a properly formatted token0 price in terms of token1
+                const decimalAdjustment = token1Decimals - token0Decimals
+
+                let basePrice: number
+                if (decimalAdjustment !== 0) {
+                  const rawPriceBigInt = parseUnits(rawPrice, token1Decimals)
+                  basePrice = parseFloat(
+                    formatUnits(rawPriceBigInt, token1Decimals - decimalAdjustment)
+                  )
+                } else {
+                  basePrice = parseFloat(rawPrice)
+                }
+
+                // For a production app, you'd use an oracle here to get token1's USD price
+                // Then multiply basePrice by token1's USD price
+                // This is a placeholder - in reality, you'd implement a proper price lookup
+                const token1UsdPrice = 1.0 // Replace with actual USD price lookup
+
+                return {
+                  time: snapshot.timestamp,
+                  value: basePrice * token1UsdPrice,
+                }
+              } catch (error) {
+                // Fallback for any parsing errors
+                return {
+                  time: snapshot.timestamp,
+                  value: parseFloat(rawPrice),
+                }
+              }
+            })
+          )
+        }
+
+        // Final pass to check for and fix any abnormal values
+        // These might occur if our decimal handling wasn't perfect
+        const values = chartData.map((point) => point.value)
+        const needsNormalization =
+          TokenPriceService.detectNeedsDecimalNormalization(values)
+
+        if (needsNormalization) {
+          // Use our dedicated service to normalize the values
+          return chartData.map((point) => ({
+            time: point.time,
+            value: TokenPriceService.normalizePrice(
+              point.value,
+              Math.max(token0Decimals, token1Decimals)
+            ),
+          }))
+        }
 
         return chartData
       } catch (error) {
@@ -621,10 +772,53 @@ export const resolvers = {
         // Find the pair
         const pair = await prisma.pair.findFirst({
           where: { address: pairAddress.toLowerCase() },
+          include: {
+            token0: true,
+            token1: true,
+          },
         })
 
         if (!pair) {
           throw new Error(`Pair not found: ${pairAddress}`)
+        }
+
+        // Get token decimals for proper conversion
+        const token0Decimals = pair.token0.decimals || 18
+        const token1Decimals = pair.token1.decimals || 18
+
+        // Determine if either token is a stablecoin for easier USD conversion
+        const stablecoinAddresses = TokenPriceService.getStablecoinAddresses()
+        const isToken0Stablecoin = stablecoinAddresses.includes(
+          pair.token0.address.toLowerCase()
+        )
+        const isToken1Stablecoin = stablecoinAddresses.includes(
+          pair.token1.address.toLowerCase()
+        )
+
+        // Get token prices in USD - we'll cache these to avoid repeated lookups
+        let token0PriceUSD: number = 0
+        let token1PriceUSD: number = 0
+
+        // If token0 is a stablecoin, its price is 1 USD
+        if (isToken0Stablecoin) {
+          token0PriceUSD = 1.0
+        } else {
+          // Get token0 price from the price service
+          token0PriceUSD = await TokenPriceService.getTokenPriceUSD(
+            pair.token0.id,
+            token0Decimals
+          )
+        }
+
+        // If token1 is a stablecoin, its price is 1 USD
+        if (isToken1Stablecoin) {
+          token1PriceUSD = 1.0
+        } else {
+          // Get token1 price from the price service
+          token1PriceUSD = await TokenPriceService.getTokenPriceUSD(
+            pair.token1.id,
+            token1Decimals
+          )
         }
 
         // Determine time window based on timeframe
@@ -635,24 +829,24 @@ export const resolvers = {
         switch (timeframe) {
           case '1h':
             timeWindow = 60 * 60 * limit
-            interval = 60 * 60 // 1 hour buckets
+            interval = 60 // 1 minute intervals for hourly view
             break
           case '4h':
             timeWindow = 4 * 60 * 60 * limit
-            interval = 4 * 60 * 60 // 4 hour buckets
+            interval = 60 * 5 // 5 minute intervals for 4h view
             break
           case '1w':
             timeWindow = 7 * 24 * 60 * 60 * limit
-            interval = 24 * 60 * 60 // 1 day buckets for weekly view
+            interval = 60 * 60 * 3 // 3 hour intervals for weekly view
             break
           case '1m':
             timeWindow = 30 * 24 * 60 * 60 * limit
-            interval = 24 * 60 * 60 // 1 day buckets for monthly view
+            interval = 60 * 60 * 12 // 12 hour intervals for monthly view
             break
           case '1d':
           default:
             timeWindow = 24 * 60 * 60 * limit
-            interval = 60 * 60 // 1 hour buckets for daily view
+            interval = 60 * 30 // 30 minute intervals for daily view
             break
         }
 
@@ -671,6 +865,7 @@ export const resolvers = {
         interface VolumeBucket {
           volume0: number
           volume1: number
+          volumeUSD: number
           count: number
         }
 
@@ -680,29 +875,59 @@ export const resolvers = {
           // Calculate which bucket this swap belongs to
           const bucketTime = Math.floor(swap.timestamp / interval) * interval
 
-          // Calculate total volume from both tokens
-          // This is a simplified approach - you might want to convert to USD
-          const volume0 = parseFloat(swap.amountIn0) + parseFloat(swap.amountOut0)
-          const volume1 = parseFloat(swap.amountIn1) + parseFloat(swap.amountOut1)
+          // Calculate properly formatted volumes using token decimals
+          let volume0: number
+          let volume1: number
 
+          try {
+            // Use viem to properly format the volumes
+            const amountIn0 = formatUnits(BigInt(swap.amountIn0), token0Decimals)
+            const amountOut0 = formatUnits(BigInt(swap.amountOut0), token0Decimals)
+            volume0 = parseFloat(amountIn0) + parseFloat(amountOut0)
+
+            const amountIn1 = formatUnits(BigInt(swap.amountIn1), token1Decimals)
+            const amountOut1 = formatUnits(BigInt(swap.amountOut1), token1Decimals)
+            volume1 = parseFloat(amountIn1) + parseFloat(amountOut1)
+          } catch (error) {
+            // Fallback if viem formatting fails
+            volume0 =
+              (parseFloat(swap.amountIn0) + parseFloat(swap.amountOut0)) /
+              Math.pow(10, token0Decimals)
+            volume1 =
+              (parseFloat(swap.amountIn1) + parseFloat(swap.amountOut1)) /
+              Math.pow(10, token1Decimals)
+          }
+
+          // Calculate USD value by multiplying by token prices
+          const volume0USD = volume0 * token0PriceUSD
+          const volume1USD = volume1 * token1PriceUSD
+
+          // Use the higher USD value to represent the swap's volume
+          // This reduces issues with imbalanced prices
+          const volumeUSD = Math.max(volume0USD, volume1USD)
+
+          // Check if we have existing records for this bucket
           if (!volumeBuckets[bucketTime]) {
             volumeBuckets[bucketTime] = {
-              volume0: volume0,
-              volume1: volume1,
+              volume0,
+              volume1,
+              volumeUSD,
               count: 1,
             }
           } else {
+            // Update existing bucket
             volumeBuckets[bucketTime].volume0 += volume0
             volumeBuckets[bucketTime].volume1 += volume1
+            volumeBuckets[bucketTime].volumeUSD += volumeUSD
             volumeBuckets[bucketTime].count += 1
           }
         }
 
-        // Convert to array for TradingView
+        // Convert to array for the chart
         const chartData: VolumeChartData[] = Object.entries(volumeBuckets).map(
           ([timeStr, data]) => ({
             time: parseInt(timeStr, 10),
-            value: data.volume0, // Using token0 volume as primary metric
+            value: data.volumeUSD, // Using proper USD volume as primary value
             volume0: data.volume0,
             volume1: data.volume1,
             count: data.count,
@@ -717,6 +942,7 @@ export const resolvers = {
       }
     },
 
+    // Get price chart data for a token across all its pairs
     // Get price chart data for a token across all its pairs
     tokenPriceChart: async (
       _: any,
@@ -740,6 +966,9 @@ export const resolvers = {
         if (!token) {
           throw new Error(`Token not found: ${tokenAddress}`)
         }
+
+        // Save token decimals for proper price normalization
+        const tokenDecimals = token.decimals || 18
 
         // Find all pairs where this token is token0 or token1
         const pairs = await prisma.pair.findMany({
@@ -781,12 +1010,29 @@ export const resolvers = {
 
         const startTime = now - timeWindow
 
-        // Collect price data from all pairs
+        // First, prioritize stablecoin pairs as they give direct USD price
+        const stablecoinAddresses = TokenPriceService.getStablecoinAddresses()
+        const stablecoinPairs = pairs.filter(
+          (pair) =>
+            stablecoinAddresses.includes(pair.token0.address.toLowerCase()) ||
+            stablecoinAddresses.includes(pair.token1.address.toLowerCase())
+        )
+
+        // If we have stablecoin pairs, prioritize those for price data
+        const pairsToUse = stablecoinPairs.length > 0 ? stablecoinPairs : pairs
+
+        // Collect price data from all selected pairs
         let allPriceData: ChartDataPoint[] = []
 
-        for (const pair of pairs) {
+        // Process each pair to get price data
+        for (const pair of pairsToUse) {
           // Determine if the token is token0 or token1 in this pair
           const isToken0 = pair.token0Id === token.id
+
+          // Determine if this is a stablecoin pair
+          const isStablecoinPair = isToken0
+            ? stablecoinAddresses.includes(pair.token1.address.toLowerCase())
+            : stablecoinAddresses.includes(pair.token0.address.toLowerCase())
 
           // Get price snapshots for this pair
           const snapshots = await prisma.priceSnapshot.findMany({
@@ -797,20 +1043,69 @@ export const resolvers = {
             orderBy: { timestamp: 'asc' },
           })
 
-          // Extract the appropriate price depending on whether token is token0 or token1
-          const pairPriceData: ChartDataPoint[] = snapshots.map((snapshot) => ({
-            time: snapshot.timestamp,
-            value: isToken0
-              ? parseFloat(snapshot.token0Price)
-              : parseFloat(snapshot.token1Price),
-          }))
+          // Get the counterpart token's decimals
+          const counterpartDecimals = isToken0
+            ? pair.token1.decimals || 18
+            : pair.token0.decimals || 18
 
+          // Process the price data for this pair
+          const pairPriceData = snapshots.map((snapshot) => {
+            // Get the raw price value
+            const rawPrice = isToken0 ? snapshot.token0Price : snapshot.token1Price
+
+            // Convert to human-readable number using proper decimal handling
+            let price: number
+            try {
+              // Adjust for difference in decimals between the tokens
+              const decimalAdjustment = counterpartDecimals - tokenDecimals
+
+              if (decimalAdjustment !== 0) {
+                // Use viem to handle decimal conversion correctly
+                const rawPriceBigInt = parseUnits(rawPrice, counterpartDecimals)
+                price = parseFloat(
+                  formatUnits(rawPriceBigInt, counterpartDecimals - decimalAdjustment)
+                )
+              } else {
+                price = parseFloat(rawPrice)
+              }
+            } catch (error) {
+              // Fallback for any parsing errors
+              price = parseFloat(rawPrice)
+            }
+
+            // For stablecoin pairs, we already have USD price
+            // For non-stablecoin pairs, we need to convert to USD if possible
+            let priceInUSD = price
+
+            // If it's not a stablecoin pair and we have the first data point,
+            // we can try to convert to USD using the service
+            if (!isStablecoinPair && allPriceData.length === 0) {
+              // This is expensive, so only do it for the first data point
+              // as a scale reference
+              // In a real implementation, you'd want to cache this or use an oracle
+              const counterpartToken = isToken0 ? pair.token1 : pair.token0
+              const counterpartTokenPrice = 1.0 // Placeholder for actual USD price lookup
+              priceInUSD = price * counterpartTokenPrice
+            }
+
+            return {
+              time: snapshot.timestamp,
+              value: isStablecoinPair ? price : priceInUSD,
+            }
+          })
+
+          // Add to all price data
           allPriceData = [...allPriceData, ...pairPriceData]
+
+          // If this is a stablecoin pair, we have good USD data, so we can stop here
+          if (isStablecoinPair && pairPriceData.length > 0) {
+            break
+          }
         }
 
-        // If we have multiple pairs, aggregate the prices by time period
-        // This is a simplified approach - in practice you might want to weight by pair liquidity
-        if (pairs.length > 1) {
+        // If we have multiple pairs and no stablecoin pair was processed,
+        // aggregate the prices by time period
+        if (stablecoinPairs.length === 0 && pairs.length > 1) {
           // Define intervals based on timeframe
           let interval: number
           switch (timeframe) {
@@ -865,7 +1160,7 @@ export const resolvers = {
           return chartData
         }
 
-        // If we only have one pair, return the data directly
+        // Sort by time before returning
         return allPriceData.sort((a, b) => a.time - b.time)
       } catch (error) {
         console.error('Error fetching token price chart data:', error)
@@ -1286,23 +1581,37 @@ export const resolvers = {
         const token0Price = await loaders.tokenPriceLoader.load(token0.id)
         const token1Price = await loaders.tokenPriceLoader.load(token1.id)
 
-        // Convert wei amounts to decimal values using token decimals
+        // Get token decimals
         const decimals0 = token0.decimals || 18
         const decimals1 = token1.decimals || 18
 
-        const token0Amount = Math.max(
-          parseFloat(parent.amountIn0) / 10 ** decimals0,
-          parseFloat(parent.amountOut0) / 10 ** decimals0
-        )
+        let token0Amount: number
+        let token1Amount: number
 
-        const token1Amount = Math.max(
-          parseFloat(parent.amountIn1) / 10 ** decimals1,
-          parseFloat(parent.amountOut1) / 10 ** decimals1
-        )
+        try {
+          // Use viem for proper decimal handling
+          const amountIn0 = formatUnits(BigInt(parent.amountIn0), decimals0)
+          const amountOut0 = formatUnits(BigInt(parent.amountOut0), decimals0)
+          token0Amount = Math.max(parseFloat(amountIn0), parseFloat(amountOut0))
+
+          const amountIn1 = formatUnits(BigInt(parent.amountIn1), decimals1)
+          const amountOut1 = formatUnits(BigInt(parent.amountOut1), decimals1)
+          token1Amount = Math.max(parseFloat(amountIn1), parseFloat(amountOut1))
+        } catch (error) {
+          // Fallback to standard decimal division if BigInt conversion fails
+          token0Amount = Math.max(
+            parseFloat(parent.amountIn0) / 10 ** decimals0,
+            parseFloat(parent.amountOut0) / 10 ** decimals0
+          )
+          token1Amount = Math.max(
+            parseFloat(parent.amountIn1) / 10 ** decimals1,
+            parseFloat(parent.amountOut1) / 10 ** decimals1
+          )
+        }
 
         // Calculate total value
-        const token0Value = token0Amount * parseFloat(token0Price)
-        const token1Value = token1Amount * parseFloat(token1Price)
+        const token0Value = token0Amount * parseFloat(token0Price || '0')
+        const token1Value = token1Amount * parseFloat(token1Price || '0')
 
         // Use the larger value (sometimes one token amount might be 0)
         const swapValue = Math.max(token0Value, token1Value)
@@ -1361,12 +1670,22 @@ export const resolvers = {
         const now = Math.floor(Date.now() / 1000)
         const oneDayAgo = now - 24 * 60 * 60
 
+        // Get token decimals
+        const token = await prisma.token.findUnique({
+          where: { id: parent.id },
+          select: { decimals: true },
+        })
+        const tokenDecimals = token?.decimals || 18
+
         // Find pairs where this token is token0 or token1
         const pairs = await prisma.pair.findMany({
           where: {
             OR: [{ token0Id: parent.id }, { token1Id: parent.id }],
           },
-          select: { id: true, token0Id: true, token1Id: true },
+          include: {
+            token0: true,
+            token1: true,
+          },
         })
 
         if (pairs.length === 0) {
@@ -1378,9 +1697,20 @@ export const resolvers = {
           await resolvers.Token.priceUSD(parent, _, { loaders: {} as any, prisma })
         )
 
+        // Prioritize stablecoin pairs for more accurate price change calculation
+        const stablecoinAddresses = TokenPriceService.getStablecoinAddresses()
+        const stablecoinPairs = pairs.filter(
+          (pair) =>
+            stablecoinAddresses.includes(pair.token0.address.toLowerCase()) ||
+            stablecoinAddresses.includes(pair.token1.address.toLowerCase())
+        )
+
+        // Use stablecoin pairs if available, otherwise use all pairs
+        const pairsToUse = stablecoinPairs.length > 0 ? stablecoinPairs : pairs
+
         // For each pair, find the latest snapshot from 24h ago
         const historicalSnapshots = await Promise.all(
-          pairs.map((pair) =>
+          pairsToUse.map((pair) =>
             prisma.priceSnapshot.findFirst({
               where: {
                 pairId: pair.id,
@@ -1394,11 +1724,11 @@ export const resolvers = {
         // Filter out null results
         const validSnapshots = historicalSnapshots
           .filter((snapshot, index): snapshot is NonNullable<typeof snapshot> => {
-            return snapshot !== null && pairs[index] !== undefined
+            return snapshot !== null && pairsToUse[index] !== undefined
           })
           .map((snapshot, index) => ({
             snapshot,
-            pair: pairs[index],
+            pair: pairsToUse[index],
           }))
 
         if (validSnapshots.length === 0) {
@@ -1414,10 +1744,45 @@ export const resolvers = {
         // Check if our token is token0 or token1 in the pair
         const isToken0 = pair.token0Id === parent.id
 
+        // Get the counterpart token's decimals
+        const counterpartDecimals = isToken0
+          ? pair.token1.decimals || 18
+          : pair.token0.decimals || 18
+
         // Get the appropriate price based on token position
-        const historicalPrice = parseFloat(
-          isToken0 ? snapshot.token0Price : snapshot.token1Price
-        )
+        const rawHistoricalPrice = isToken0 ? snapshot.token0Price : snapshot.token1Price
+
+        // Convert to human-readable number using proper decimal handling
+        let historicalPrice: number
+        try {
+          // Adjust for difference in decimals between the tokens
+          const decimalAdjustment = counterpartDecimals - tokenDecimals
+
+          if (decimalAdjustment !== 0) {
+            // Use viem to handle decimal conversion correctly
+            const rawPriceBigInt = parseUnits(rawHistoricalPrice, counterpartDecimals)
+            historicalPrice = parseFloat(
+              formatUnits(rawPriceBigInt, counterpartDecimals - decimalAdjustment)
+            )
+          } else {
+            historicalPrice = parseFloat(rawHistoricalPrice)
+          }
+        } catch (error) {
+          // Fallback to standard parsing if viem conversion fails
+          historicalPrice = parseFloat(rawHistoricalPrice)
+        }
+
+        // Check if the historical price is for a stablecoin pair
+        // If not, we might need to convert it to USD
+        const isStablecoinPair = isToken0
+          ? stablecoinAddresses.includes(pair.token1.address.toLowerCase())
+          : stablecoinAddresses.includes(pair.token0.address.toLowerCase())
+
+        // For non-stablecoin pairs, adjust historical price (if possible)
+        if (!isStablecoinPair) {
+          // This would be a more complex conversion in a production environment
+          // For simplicity, we're assuming historicalPrice is already in USD or equivalent
+        }
 
         if (historicalPrice === 0 || currentPrice === 0) {
           return 0 // Avoid division by zero
@@ -1443,7 +1808,10 @@ export const resolvers = {
           where: {
             OR: [{ token0Id: parent.id }, { token1Id: parent.id }],
           },
-          select: { id: true, token0Id: true, token1Id: true },
+          include: {
+            token0: true,
+            token1: true,
+          },
         })
 
         const pairIds = pairs.map((pair) => pair.id)
@@ -1477,13 +1845,35 @@ export const resolvers = {
 
           if (tokenPrice <= 0) continue // Skip if we can't determine price
 
-          // Calculate volume in USD
-          if (isToken0) {
-            volumeUSD +=
-              (parseFloat(swap.amountIn0) + parseFloat(swap.amountOut0)) * tokenPrice
-          } else {
-            volumeUSD +=
-              (parseFloat(swap.amountIn1) + parseFloat(swap.amountOut1)) * tokenPrice
+          // Get token decimals
+          const tokenDecimals = isToken0
+            ? pair.token0.decimals || 18
+            : pair.token1.decimals || 18
+
+          try {
+            // Calculate volume in USD using viem for proper decimal handling
+            if (isToken0) {
+              const amountIn0 = formatUnits(BigInt(swap.amountIn0), tokenDecimals)
+              const amountOut0 = formatUnits(BigInt(swap.amountOut0), tokenDecimals)
+              volumeUSD += (parseFloat(amountIn0) + parseFloat(amountOut0)) * tokenPrice
+            } else {
+              const amountIn1 = formatUnits(BigInt(swap.amountIn1), tokenDecimals)
+              const amountOut1 = formatUnits(BigInt(swap.amountOut1), tokenDecimals)
+              volumeUSD += (parseFloat(amountIn1) + parseFloat(amountOut1)) * tokenPrice
+            }
+          } catch (error) {
+            // Fallback to standard decimal division if BigInt conversion fails
+            if (isToken0) {
+              volumeUSD +=
+                (parseFloat(swap.amountIn0) / 10 ** tokenDecimals +
+                  parseFloat(swap.amountOut0) / 10 ** tokenDecimals) *
+                tokenPrice
+            } else {
+              volumeUSD +=
+                (parseFloat(swap.amountIn1) / 10 ** tokenDecimals +
+                  parseFloat(swap.amountOut1) / 10 ** tokenDecimals) *
+                tokenPrice
+            }
           }
         }
 

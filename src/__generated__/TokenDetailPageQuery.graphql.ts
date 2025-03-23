@@ -1,5 +1,5 @@
 /**
- * @generated SignedSource<<27a4b98bc37a09446666f7540e42e3e9>>
+ * @generated SignedSource<<d52fe047cfed06deb8d969f54e257565>>
  * @lightSyntaxTransform
  * @nogrep
  */
@@ -10,31 +10,25 @@
 
 import { ConcreteRequest, Query } from 'relay-runtime';
 import { FragmentRefs } from "relay-runtime";
-export type PairDetailPageQuery$variables = {
-  pairAddress: string;
+export type TokenDetailPageQuery$variables = {
+  tokenAddress: string;
 };
-export type PairDetailPageQuery$data = {
-  readonly pairByAddress: {
+export type TokenDetailPageQuery$data = {
+  readonly tokenByAddress: {
     readonly address: string;
+    readonly decimals: number | null;
     readonly id: string;
-    readonly reserve0: string;
-    readonly reserve1: string;
-    readonly token0: {
-      readonly address: string;
-      readonly id: string;
-      readonly symbol: string | null;
-    };
-    readonly token1: {
-      readonly address: string;
-      readonly id: string;
-      readonly symbol: string | null;
-    };
-    readonly " $fragmentSpreads": FragmentRefs<"PriceChartContainer_pair">;
+    readonly name: string | null;
+    readonly priceChange24h: number | null;
+    readonly priceUSD: string;
+    readonly symbol: string | null;
+    readonly volumeUSD24h: string | null;
+    readonly " $fragmentSpreads": FragmentRefs<"TokenPriceChartContainer_token">;
   } | null;
 };
-export type PairDetailPageQuery = {
-  response: PairDetailPageQuery$data;
-  variables: PairDetailPageQuery$variables;
+export type TokenDetailPageQuery = {
+  response: TokenDetailPageQuery$data;
+  variables: TokenDetailPageQuery$variables;
 };
 
 const node: ConcreteRequest = (function(){
@@ -42,14 +36,14 @@ var v0 = [
   {
     "defaultValue": null,
     "kind": "LocalArgument",
-    "name": "pairAddress"
+    "name": "tokenAddress"
   }
 ],
 v1 = [
   {
     "kind": "Variable",
     "name": "address",
-    "variableName": "pairAddress"
+    "variableName": "tokenAddress"
   }
 ],
 v2 = {
@@ -63,52 +57,49 @@ v3 = {
   "alias": null,
   "args": null,
   "kind": "ScalarField",
-  "name": "address",
+  "name": "name",
   "storageKey": null
 },
 v4 = {
   "alias": null,
   "args": null,
   "kind": "ScalarField",
-  "name": "reserve0",
+  "name": "symbol",
   "storageKey": null
 },
 v5 = {
   "alias": null,
   "args": null,
   "kind": "ScalarField",
-  "name": "reserve1",
+  "name": "address",
   "storageKey": null
 },
-v6 = [
-  (v2/*: any*/),
-  {
-    "alias": null,
-    "args": null,
-    "kind": "ScalarField",
-    "name": "symbol",
-    "storageKey": null
-  },
-  (v3/*: any*/)
-],
+v6 = {
+  "alias": null,
+  "args": null,
+  "kind": "ScalarField",
+  "name": "decimals",
+  "storageKey": null
+},
 v7 = {
   "alias": null,
   "args": null,
-  "concreteType": "Token",
-  "kind": "LinkedField",
-  "name": "token0",
-  "plural": false,
-  "selections": (v6/*: any*/),
+  "kind": "ScalarField",
+  "name": "priceUSD",
   "storageKey": null
 },
 v8 = {
   "alias": null,
   "args": null,
-  "concreteType": "Token",
-  "kind": "LinkedField",
-  "name": "token1",
-  "plural": false,
-  "selections": (v6/*: any*/),
+  "kind": "ScalarField",
+  "name": "priceChange24h",
+  "storageKey": null
+},
+v9 = {
+  "alias": null,
+  "args": null,
+  "kind": "ScalarField",
+  "name": "volumeUSD24h",
   "storageKey": null
 };
 return {
@@ -116,26 +107,28 @@ return {
     "argumentDefinitions": (v0/*: any*/),
     "kind": "Fragment",
     "metadata": null,
-    "name": "PairDetailPageQuery",
+    "name": "TokenDetailPageQuery",
     "selections": [
       {
         "alias": null,
         "args": (v1/*: any*/),
-        "concreteType": "Pair",
+        "concreteType": "Token",
         "kind": "LinkedField",
-        "name": "pairByAddress",
+        "name": "tokenByAddress",
         "plural": false,
         "selections": [
           (v2/*: any*/),
           (v3/*: any*/),
           (v4/*: any*/),
           (v5/*: any*/),
+          (v6/*: any*/),
           (v7/*: any*/),
           (v8/*: any*/),
+          (v9/*: any*/),
           {
             "args": null,
             "kind": "FragmentSpread",
-            "name": "PriceChartContainer_pair"
+            "name": "TokenPriceChartContainer_token"
           }
         ],
         "storageKey": null
@@ -148,38 +141,40 @@ return {
   "operation": {
     "argumentDefinitions": (v0/*: any*/),
     "kind": "Operation",
-    "name": "PairDetailPageQuery",
+    "name": "TokenDetailPageQuery",
     "selections": [
       {
         "alias": null,
         "args": (v1/*: any*/),
-        "concreteType": "Pair",
+        "concreteType": "Token",
         "kind": "LinkedField",
-        "name": "pairByAddress",
+        "name": "tokenByAddress",
         "plural": false,
         "selections": [
           (v2/*: any*/),
           (v3/*: any*/),
           (v4/*: any*/),
           (v5/*: any*/),
+          (v6/*: any*/),
           (v7/*: any*/),
-          (v8/*: any*/)
+          (v8/*: any*/),
+          (v9/*: any*/)
         ],
         "storageKey": null
       }
     ]
   },
   "params": {
-    "cacheID": "ab6c25f0b4bee0fb7937b9f87307952a",
+    "cacheID": "5b314bf251b776ecb5f4bfceb2fff86d",
     "id": null,
     "metadata": {},
-    "name": "PairDetailPageQuery",
+    "name": "TokenDetailPageQuery",
     "operationKind": "query",
-    "text": "query PairDetailPageQuery(\n  $pairAddress: String!\n) {\n  pairByAddress(address: $pairAddress) {\n    id\n    address\n    reserve0\n    reserve1\n    token0 {\n      id\n      symbol\n      address\n    }\n    token1 {\n      id\n      symbol\n      address\n    }\n    ...PriceChartContainer_pair\n  }\n}\n\nfragment PriceChartContainer_pair on Pair {\n  id\n  address\n  token0 {\n    id\n    symbol\n  }\n  token1 {\n    id\n    symbol\n  }\n}\n"
+    "text": "query TokenDetailPageQuery(\n  $tokenAddress: String!\n) {\n  tokenByAddress(address: $tokenAddress) {\n    id\n    name\n    symbol\n    address\n    decimals\n    priceUSD\n    priceChange24h\n    volumeUSD24h\n    ...TokenPriceChartContainer_token\n  }\n}\n\nfragment TokenPriceChartContainer_token on Token {\n  id\n  address\n  symbol\n  name\n  decimals\n}\n"
   }
 };
 })();
 
-(node as any).hash = "a5273aed187bc98dbaa17e569a00cb43";
+(node as any).hash = "a20584a6d3acf87b5faf332707b2ce50";
 
 export default node;

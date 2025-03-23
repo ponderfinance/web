@@ -4,6 +4,7 @@ import React from 'react'
 import { View, Text, Actionable } from 'reshaped'
 import { PoolsPageQuery } from '@/src/__generated__/PoolsPageQuery.graphql'
 import { TokenPair } from '@/src/components/TokenPair'
+import Link from 'next/link'
 
 // Helper to format currency values
 const formatCurrency = (value: number | string | null | undefined): string => {
@@ -102,17 +103,11 @@ export const PoolsDisplay: React.FC<PoolsDisplayProps> = ({
 
             <View.Item columns={3}>
               <View direction="row" align="center" gap={2}>
-                {/* Pass token fragments to TokenPair component */}
-                <TokenPair
-                  tokenA={node.token0}
-                  tokenB={node.token1}
-                  tokenAddressA={node.token0.address as `0x${string}`}
-                  tokenAddressB={node.token1.address as `0x${string}`}
-                  size="small"
-                />
+                {/*<Link href={`/explore/pools/${node.address}`}>*/}
+                <TokenPair tokenA={node.token0} tokenB={node.token1} size="small" />
+                {/*</Link>*/}
               </View>
             </View.Item>
-
             <View.Item columns={2}>
               <Text variant="body-2">{formatCurrency(node.tvl || node.reserveUSD)}</Text>
             </View.Item>

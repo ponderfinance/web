@@ -16,6 +16,15 @@ const nextConfig = {
       },
     })
 
+    config.resolve.fallback = {
+      ...config.resolve.fallback,
+      fs: false,
+      dns: false,
+      net: false,
+      tls: false,
+      child_process: false,
+    }
+
     return config
   },
   // Keep your existing transpilePackages and add problematic ones
@@ -23,7 +32,7 @@ const nextConfig = {
   experimental: {
     optimizePackageImports: ['reshaped'],
     esmExternals: 'loose', // Support for ESM dependencies
-    largeModuleExclude: [/@privy-io\/react-auth/]
+    largeModuleExclude: [/@privy-io\/react-auth/],
   },
   // Disable SWC minify
   swcMinify: false,
