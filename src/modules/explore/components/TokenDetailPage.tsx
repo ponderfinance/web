@@ -84,24 +84,9 @@ export default function TokenDetailPage({ params }: TokenDetailPageProps) {
   }
 
   return (
-    <TokenErrorBoundary
-      fallback={(error) => (
-        <View>
-          <View padding={16} direction="column" gap={8}>
-            <Text variant="title-3" align="center">
-              Error loading token details
-            </Text>
-            <Text color="neutral" align="center">
-              {error.message || 'Please try again later'}
-            </Text>
-          </View>
-        </View>
-      )}
-    >
-      <Suspense>
-        <TokenDetailContent tokenAddress={address} />
-      </Suspense>
-    </TokenErrorBoundary>
+    <Suspense>
+      <TokenDetailContent tokenAddress={address} />
+    </Suspense>
   )
 }
 

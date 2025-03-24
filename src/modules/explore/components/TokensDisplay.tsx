@@ -107,21 +107,21 @@ export const TokensDisplay: React.FC<TokensDisplayProps> = ({
       {/* Table Body */}
       <View direction="column" gap={0}>
         {data.tokens.edges.map(({ node }, index) => (
-          <View
-            key={node.id}
-            direction="row"
-            gap={0}
-            padding={4}
-            className={'border-0 border-neutral-faded'}
-            align="center"
-          >
-            <View.Item columns={1}>
-              <Text color="neutral-faded" weight="medium">
-                {index + 1}
-              </Text>
-            </View.Item>
-            <View.Item columns={3}>
-              <Link href={`/explore/tokens/${node.address}`}>
+          <Link href={`/explore/tokens/${node.address}`}>
+            <View
+              key={node.id}
+              direction="row"
+              gap={0}
+              padding={4}
+              className={'border-0 border-neutral-faded hover:bg-neutral-faded'}
+              align="center"
+            >
+              <View.Item columns={1}>
+                <Text color="neutral-faded" weight="medium">
+                  {index + 1}
+                </Text>
+              </View.Item>
+              <View.Item columns={3}>
                 <View direction="row" gap={2} align="center">
                   <Image
                     src={getIpfsGateway(node.imageURI ?? '')}
@@ -136,31 +136,31 @@ export const TokensDisplay: React.FC<TokensDisplayProps> = ({
                     </Text>
                   </View>
                 </View>
-              </Link>
-            </View.Item>
+              </View.Item>
 
-            <View.Item columns={2}>
-              <Text>{formatCurrency(node.priceUSD)}</Text>
-            </View.Item>
+              <View.Item columns={2}>
+                <Text>{formatCurrency(node.priceUSD)}</Text>
+              </View.Item>
 
-            {/*<View.Item columns={2}>*/}
-            {/*  <Text*/}
-            {/*    color={*/}
-            {/*      !node.priceChange24h*/}
-            {/*        ? 'neutral'*/}
-            {/*        : node.priceChange24h > 0*/}
-            {/*          ? 'positive'*/}
-            {/*          : 'critical'*/}
-            {/*    }*/}
-            {/*  >*/}
-            {/*    {formatPercent(node.priceChange24h)}*/}
-            {/*  </Text>*/}
-            {/*</View.Item>*/}
+              {/*<View.Item columns={2}>*/}
+              {/*  <Text*/}
+              {/*    color={*/}
+              {/*      !node.priceChange24h*/}
+              {/*        ? 'neutral'*/}
+              {/*        : node.priceChange24h > 0*/}
+              {/*          ? 'positive'*/}
+              {/*          : 'critical'*/}
+              {/*    }*/}
+              {/*  >*/}
+              {/*    {formatPercent(node.priceChange24h)}*/}
+              {/*  </Text>*/}
+              {/*</View.Item>*/}
 
-            {/*<View.Item columns={2}>*/}
-            {/*  <Text>{formatCurrency(node.volumeUSD24h)}</Text>*/}
-            {/*</View.Item>*/}
-          </View>
+              {/*<View.Item columns={2}>*/}
+              {/*  <Text>{formatCurrency(node.volumeUSD24h)}</Text>*/}
+              {/*</View.Item>*/}
+            </View>
+          </Link>
         ))}
       </View>
     </View>
