@@ -1,11 +1,22 @@
 'use client'
 
 import React, { Suspense, useState, useEffect, Component, ReactNode } from 'react'
-import { View, Text, Card, Grid, Skeleton, Button, Container, Divider } from 'reshaped'
+import {
+  View,
+  Text,
+  Card,
+  Grid,
+  Skeleton,
+  Button,
+  Container,
+  Divider,
+  Image,
+} from 'reshaped'
 import { graphql, useLazyLoadQuery } from 'react-relay'
 import TokenPriceChartContainer from './TokenPriceChartContainer'
 import type { TokenDetailPageQuery } from '@/src/__generated__/TokenDetailPageQuery.graphql'
 import { formatCurrency } from '@/src/lib/utils/tokePriceUtils'
+import { getIpfsGateway } from '@/src/utils/ipfs'
 
 // Define the query for the token detail page
 const TokenDetailQuery = graphql`
@@ -19,6 +30,7 @@ const TokenDetailQuery = graphql`
       priceUSD
       priceChange24h
       volumeUSD24h
+      imageURI
       ...TokenPriceChartContainer_token
     }
   }
@@ -142,6 +154,12 @@ function TokenDetailContent({ tokenAddress }: { tokenAddress: string }) {
       {/* Token header with logo and name */}
       <View direction="row" justify="space-between" align="center">
         <View direction="row" gap={3} align="center">
+          <Image
+            src={getIpfsGateway(token.imageURI ?? '')}
+            height={8}
+            width={8}
+            alt={`${token.name || token.address.slice(0, 10)} Token Image`}
+          />
           <Text variant="featured-2" weight="medium" color="neutral">
             {token.name ? `${token.name}` : ''}
           </Text>

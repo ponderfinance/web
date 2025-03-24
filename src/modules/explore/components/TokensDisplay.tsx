@@ -56,19 +56,14 @@ export const TokensDisplay: React.FC<TokensDisplayProps> = ({
   }
 
   return (
-    <View
-      borderRadius="medium"
-      backgroundColor="elevation-base"
-      borderColor="neutral-faded"
-      overflow="auto"
-      width="100%"
-    >
+    <View borderRadius="medium" borderColor="neutral-faded" overflow="auto" width="100%">
       {/* Table Header */}
       <View
         direction="row"
         gap={0}
         padding={4}
         className={'border-0 border-b border-neutral-faded'}
+        backgroundColor="elevation-base"
       >
         <View.Item columns={1}>
           <Text color="neutral-faded" weight="medium">
@@ -78,7 +73,7 @@ export const TokensDisplay: React.FC<TokensDisplayProps> = ({
         <View.Item columns={3}>
           <Actionable onClick={() => handleSort('symbol')}>
             <Text color="neutral-faded" weight="medium">
-              Token Name {orderBy === 'symbol' && (orderDirection === 'asc' ? '↑' : '↓')}
+              Token name {orderBy === 'symbol' && (orderDirection === 'asc' ? '↑' : '↓')}
             </Text>
           </Actionable>
         </View.Item>
@@ -117,8 +112,7 @@ export const TokensDisplay: React.FC<TokensDisplayProps> = ({
             direction="row"
             gap={0}
             padding={4}
-            backgroundColor="elevation-base"
-            className={'border-0 border-b border-neutral-faded'}
+            className={'border-0 border-neutral-faded'}
             align="center"
           >
             <View.Item columns={1}>

@@ -136,19 +136,22 @@ export default function PriceChart({
         fontSize: 12,
         fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, sans-serif',
       },
+      watermark: {
+        visible: false
+      },
       width: chartContainerRef.current.clientWidth,
       height: height,
       grid: {
-        vertLines: { color: '#1e1e1e', visible: true, style: 1 }, // Dotted style
-        horzLines: { color: '#1e1e1e', visible: true, style: 1 }, // Dotted style
+        vertLines: { color: 'var(--rs-color-foreground-neutral-faded)', visible: false, style: 4 }, // Dotted style
+        horzLines: { color: 'var(--rs-color-foreground-neutral-faded)', visible: false, style: 4 }, // Dotted style
       },
       timeScale: {
         timeVisible: true,
         secondsVisible: false,
-        borderColor: '#333333',
+        borderColor: '#1e1e1e',
       },
       rightPriceScale: {
-        borderColor: '#333333',
+        borderColor: '#1e1e1e',
         scaleMargins: {
           top: 0.1,
           bottom: 0.1,
@@ -163,7 +166,7 @@ export default function PriceChart({
         },
         vertLine: {
           color: 'rgba(255, 255, 255, 0.3)',
-          labelBackgroundColor: '#333333',
+          labelBackgroundColor: '#1e1e1e',
         },
       },
       handleScroll: {

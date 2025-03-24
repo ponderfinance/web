@@ -48,19 +48,13 @@ export const PoolsDisplay: React.FC<PoolsDisplayProps> = ({
   }
 
   return (
-    <View
-      borderRadius="medium"
-      backgroundColor="elevation-base"
-      borderColor="neutral-faded"
-      overflow="auto"
-      width="100%"
-    >
-      {/* Table Header */}
+    <View borderRadius="medium" borderColor="neutral-faded" overflow="auto" width="100%">
       <View
         direction="row"
         gap={0}
         padding={4}
         className={'border-0 border-b border-neutral-faded'}
+        backgroundColor="elevation-base"
       >
         <View.Item columns={1}>
           <Text color="neutral-faded" weight="medium">
@@ -93,7 +87,6 @@ export const PoolsDisplay: React.FC<PoolsDisplayProps> = ({
             direction="row"
             gap={0}
             padding={4}
-            backgroundColor="elevation-base"
             className={'border-0'}
             align="center"
           >

@@ -6,6 +6,7 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { KKUB_ADDRESS, KOI_ADDRESS } from '@/src/constants/addresses'
 import { CURRENT_CHAIN } from '@/src/constants/chains'
+import FarmList from "@/src/modules/farm/components/FarmList";
 
 export default function Home() {
   return (
@@ -48,7 +49,7 @@ export default function Home() {
       {/*/>*/}
 
       {/*<PairStatsCard pairAddress={'0xED64948DEE99eC4B38c93177B928B46edD778d1B'} />*/}
-      {/*<FarmList />*/}
+      <FarmList />
     </View>
   )
 }

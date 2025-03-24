@@ -1,5 +1,5 @@
 /**
- * @generated SignedSource<<d52fe047cfed06deb8d969f54e257565>>
+ * @generated SignedSource<<646544d856c4c67383dc22e201a72b01>>
  * @lightSyntaxTransform
  * @nogrep
  */
@@ -18,6 +18,7 @@ export type TokenDetailPageQuery$data = {
     readonly address: string;
     readonly decimals: number | null;
     readonly id: string;
+    readonly imageURI: string | null;
     readonly name: string | null;
     readonly priceChange24h: number | null;
     readonly priceUSD: string;
@@ -101,6 +102,13 @@ v9 = {
   "kind": "ScalarField",
   "name": "volumeUSD24h",
   "storageKey": null
+},
+v10 = {
+  "alias": null,
+  "args": null,
+  "kind": "ScalarField",
+  "name": "imageURI",
+  "storageKey": null
 };
 return {
   "fragment": {
@@ -125,6 +133,7 @@ return {
           (v7/*: any*/),
           (v8/*: any*/),
           (v9/*: any*/),
+          (v10/*: any*/),
           {
             "args": null,
             "kind": "FragmentSpread",
@@ -158,23 +167,24 @@ return {
           (v6/*: any*/),
           (v7/*: any*/),
           (v8/*: any*/),
-          (v9/*: any*/)
+          (v9/*: any*/),
+          (v10/*: any*/)
         ],
         "storageKey": null
       }
     ]
   },
   "params": {
-    "cacheID": "5b314bf251b776ecb5f4bfceb2fff86d",
+    "cacheID": "a377288c2b7e6bbca31dc7e79b70de33",
     "id": null,
     "metadata": {},
     "name": "TokenDetailPageQuery",
     "operationKind": "query",
-    "text": "query TokenDetailPageQuery(\n  $tokenAddress: String!\n) {\n  tokenByAddress(address: $tokenAddress) {\n    id\n    name\n    symbol\n    address\n    decimals\n    priceUSD\n    priceChange24h\n    volumeUSD24h\n    ...TokenPriceChartContainer_token\n  }\n}\n\nfragment TokenPriceChartContainer_token on Token {\n  id\n  address\n  symbol\n  name\n  decimals\n}\n"
+    "text": "query TokenDetailPageQuery(\n  $tokenAddress: String!\n) {\n  tokenByAddress(address: $tokenAddress) {\n    id\n    name\n    symbol\n    address\n    decimals\n    priceUSD\n    priceChange24h\n    volumeUSD24h\n    imageURI\n    ...TokenPriceChartContainer_token\n  }\n}\n\nfragment TokenPriceChartContainer_token on Token {\n  id\n  address\n  symbol\n  name\n  decimals\n}\n"
   }
 };
 })();
 
-(node as any).hash = "a20584a6d3acf87b5faf332707b2ce50";
+(node as any).hash = "f85bf1e15ba63299c4129512fff90170";
 
 export default node;

@@ -54,19 +54,14 @@ interface TransactionsDisplayProps {
 
 export const TransactionsDisplay: React.FC<TransactionsDisplayProps> = ({ data }) => {
   return (
-    <View
-      borderRadius="medium"
-      backgroundColor="elevation-base"
-      borderColor="neutral-faded"
-      overflow="auto"
-      width="100%"
-    >
+    <View borderRadius="medium" borderColor="neutral-faded" overflow="auto" width="100%">
       {/* Table Header */}
       <View
         direction="row"
         gap={0}
         padding={4}
         className={'border-0 border-b border-neutral-faded'}
+        backgroundColor="elevation-base"
       >
         <View.Item columns={2}>
           <Text color="neutral-faded" weight="medium">
@@ -136,8 +131,7 @@ export const TransactionsDisplay: React.FC<TransactionsDisplayProps> = ({ data }
               direction="row"
               gap={0}
               padding={4}
-              backgroundColor="elevation-base"
-              className={'border-0 border-b border-neutral-faded'}
+              className={'border-0 border-neutral-faded'}
               align="center"
             >
               <View.Item columns={2}>
