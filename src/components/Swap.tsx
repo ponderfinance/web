@@ -49,6 +49,7 @@ const kubTokenAbi = [
 interface SwapInterfaceProps {
   defaultTokenIn?: Address
   defaultTokenOut?: Address
+  defaultWidth?: string
   className?: string
 }
 
@@ -124,6 +125,7 @@ const KUB_ADDRESS = '0x0000000000000000000000000000000000000000'
 export function SwapInterface({
   defaultTokenIn,
   defaultTokenOut,
+  defaultWidth = '480px',
   className,
 }: SwapInterfaceProps) {
   const sdk = usePonderSDK()
@@ -832,8 +834,8 @@ export function SwapInterface({
   }
 
   return (
-    <View align="center" width="100%" className={className}>
-      <View width={{ s: '100%', m: '480px' }}>
+    <View align="center" className={className}>
+      <View width={{ s: '100%', m: defaultWidth }}>
         <View gap={2} borderRadius="large">
           <InterfaceTabs slippage={slippage} setSlippage={setSlippage} />
           <View maxHeight="600px" overflow="auto" gap={1}>

@@ -15,22 +15,28 @@ export default function ExploreLayout({ children }: { children: React.ReactNode 
 
   return (
     <View gap={6} padding={4}>
-      <View direction="row" gap={6}>
+      <View direction="row" gap={{ s: 4, m: 6 }}>
         <Link href="/explore/tokens">
-          <Text variant="featured-2" color={isTokensActive ? 'neutral' : 'neutral-faded'}>
+          <Text
+            variant={{ s: 'featured-3', m: 'featured-2' }}
+            color={isTokensActive ? 'neutral' : 'neutral-faded'}
+          >
             Tokens
           </Text>
         </Link>
 
         <Link href="/explore/pools">
-          <Text variant="featured-2" color={isPoolsActive ? 'neutral' : 'neutral-faded'}>
+          <Text
+            variant={{ s: 'featured-3', m: 'featured-2' }}
+            color={isPoolsActive ? 'neutral' : 'neutral-faded'}
+          >
             Pools
           </Text>
         </Link>
 
         <Link href="/explore/transactions">
           <Text
-            variant="featured-2"
+            variant={{ s: 'featured-3', m: 'featured-2' }}
             color={isTransactionsActive ? 'neutral' : 'neutral-faded'}
           >
             Transactions

@@ -17,6 +17,9 @@ import TokenPriceChartContainer from './TokenPriceChartContainer'
 import type { TokenDetailPageQuery } from '@/src/__generated__/TokenDetailPageQuery.graphql'
 import { formatCurrency } from '@/src/lib/utils/tokePriceUtils'
 import { getIpfsGateway } from '@/src/utils/ipfs'
+import SwapInterface from '@/src/components/Swap'
+import { KKUB_ADDRESS } from '@ponderfinance/sdk'
+import { CURRENT_CHAIN } from '@/src/constants/chains'
 
 // Define the query for the token detail page
 const TokenDetailQuery = graphql`
@@ -131,94 +134,105 @@ function TokenDetailContent({ tokenAddress }: { tokenAddress: string }) {
   }
 
   return (
-    <View direction="column" position="relative">
-      {/* Token header with logo and name */}
-      <View direction="row" justify="space-between" align="center">
-        <View direction="row" gap={3} align="center">
-          <Image
-            src={getIpfsGateway(token.imageURI ?? '')}
-            height={8}
-            width={8}
-            alt={`${token.name || token.address.slice(0, 10)} Token Image`}
-          />
-          <Text variant="featured-2" weight="medium" color="neutral">
-            {token.name ? `${token.name}` : ''}
-          </Text>
-          <Text variant="featured-2" weight="medium" color="neutral-faded">
-            {token.symbol}
-          </Text>
+    <View direction={{ s: 'column', m: 'row' }} gap={8}>
+      <View.Item columns={{ s: 12, m: 7 }}>
+        <View direction="column" position="relative">
+          {/* Token header with logo and name */}
+          <View direction="row" justify="space-between" align="center">
+            <View direction="row" gap={3} align="center">
+              <Image
+                src={getIpfsGateway(token.imageURI ?? '')}
+                height={8}
+                width={8}
+                alt={`${token.name || token.address.slice(0, 10)} Token Image`}
+              />
+              <Text variant="featured-2" weight="medium" color="neutral">
+                {token.name ? `${token.name}` : ''}
+              </Text>
+              <Text variant="featured-2" weight="medium" color="neutral-faded">
+                {token.symbol}
+              </Text>
+            </View>
+
+            {/* Action buttons */}
+            {/*  <View direction="row" gap={3}>*/}
+            {/*    <Button variant="ghost" color="neutral">*/}
+            {/*      <i className="fas fa-share-alt"></i>*/}
+            {/*    </Button>*/}
+            {/*  </View>*/}
+          </View>
+
+          {/* Price and percent change */}
+          <View
+            direction="column"
+            padding={0}
+            gap={1}
+            position="absolute"
+            insetTop={12}
+            zIndex={10}
+          >
+            <Text variant="title-6" weight="regular" color="neutral">
+              ${formatTokenPrice(priceUSD)}
+            </Text>
+            <Text color={priceChangeColor} variant="body-3">
+              {priceChangeDisplay}
+            </Text>
+          </View>
+
+          {/* Chart section */}
+          <View>
+            <TokenPriceChartContainer
+              tokenRef={token}
+              initialTimeframe={
+                activeTimeframe === '1H'
+                  ? '1h'
+                  : activeTimeframe === '1D'
+                    ? '1d'
+                    : activeTimeframe === '1W'
+                      ? '1w'
+                      : activeTimeframe === '1M'
+                        ? '1m'
+                        : '1d'
+              }
+              initialDisplayType="area"
+            />
+          </View>
+
+          {/* Timeframe controls */}
+          <View direction="row" justify="space-between" padding={4} gap={2}>
+            <View direction="row" gap={2}>
+              {['1H', '1D', '1W', '1M', '1Y'].map((timeframe) => (
+                <Button
+                  disabled={timeframe !== '1D'}
+                  key={timeframe}
+                  variant={activeTimeframe === timeframe ? 'solid' : 'ghost'}
+                  color={activeTimeframe === timeframe ? 'primary' : 'neutral'}
+                  onClick={() => setActiveTimeframe(timeframe)}
+                  size="small"
+                  attributes={{
+                    style: {
+                      backgroundColor:
+                        activeTimeframe === timeframe
+                          ? 'rgba(148, 224, 254, 0.2)'
+                          : 'transparent',
+                      color: activeTimeframe === timeframe ? brandColor : '#999999',
+                    },
+                  }}
+                >
+                  {timeframe}
+                </Button>
+              ))}
+            </View>
+          </View>
         </View>
-
-        {/* Action buttons */}
-        {/*  <View direction="row" gap={3}>*/}
-        {/*    <Button variant="ghost" color="neutral">*/}
-        {/*      <i className="fas fa-share-alt"></i>*/}
-        {/*    </Button>*/}
-        {/*  </View>*/}
-      </View>
-
-      {/* Price and percent change */}
-      <View
-        direction="column"
-        padding={0}
-        gap={1}
-        position="absolute"
-        insetTop={12}
-        zIndex={10}
-      >
-        <Text variant="title-6" weight="regular" color="neutral">
-          ${formatTokenPrice(priceUSD)}
-        </Text>
-        <Text color={priceChangeColor} variant="body-3">
-          {priceChangeDisplay}
-        </Text>
-      </View>
-
-      {/* Chart section */}
-      <View>
-        <TokenPriceChartContainer
-          tokenRef={token}
-          initialTimeframe={
-            activeTimeframe === '1H'
-              ? '1h'
-              : activeTimeframe === '1D'
-                ? '1d'
-                : activeTimeframe === '1W'
-                  ? '1w'
-                  : activeTimeframe === '1M'
-                    ? '1m'
-                    : '1d'
-          }
-          initialDisplayType="area"
+      </View.Item>
+      <View.Item columns={{ s: 12, m: 5 }}>
+        <SwapInterface
+          defaultTokenIn={KKUB_ADDRESS[CURRENT_CHAIN.id]}
+          defaultTokenOut={tokenAddress as `0x${string}`}
+          defaultWidth="100%"
         />
-      </View>
-
-      {/* Timeframe controls */}
-      <View direction="row" justify="space-between" padding={4} gap={2}>
-        <View direction="row" gap={2}>
-          {['1H', '1D', '1W', '1M', '1Y'].map((timeframe) => (
-            <Button
-              disabled={timeframe !== '1D'}
-              key={timeframe}
-              variant={activeTimeframe === timeframe ? 'solid' : 'ghost'}
-              color={activeTimeframe === timeframe ? 'primary' : 'neutral'}
-              onClick={() => setActiveTimeframe(timeframe)}
-              size="small"
-              attributes={{
-                style: {
-                  backgroundColor:
-                    activeTimeframe === timeframe
-                      ? 'rgba(148, 224, 254, 0.2)'
-                      : 'transparent',
-                  color: activeTimeframe === timeframe ? brandColor : '#999999',
-                },
-              }}
-            >
-              {timeframe}
-            </Button>
-          ))}
-        </View>
-      </View>
+      </View.Item>
     </View>
   )
 }
