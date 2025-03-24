@@ -86,23 +86,19 @@ export default function TokenDetailPage({ params }: TokenDetailPageProps) {
   return (
     <TokenErrorBoundary
       fallback={(error) => (
-        <Container>
-          <View padding={24}>
-            <Card>
-              <View padding={16} direction="column" gap={8}>
-                <Text variant="title-3" align="center">
-                  Error loading token details
-                </Text>
-                <Text color="neutral" align="center">
-                  {error.message || 'Please try again later'}
-                </Text>
-              </View>
-            </Card>
+        <View>
+          <View padding={16} direction="column" gap={8}>
+            <Text variant="title-3" align="center">
+              Error loading token details
+            </Text>
+            <Text color="neutral" align="center">
+              {error.message || 'Please try again later'}
+            </Text>
           </View>
-        </Container>
+        </View>
       )}
     >
-      <Suspense fallback={null}>
+      <Suspense>
         <TokenDetailContent tokenAddress={address} />
       </Suspense>
     </TokenErrorBoundary>
@@ -150,7 +146,7 @@ function TokenDetailContent({ tokenAddress }: { tokenAddress: string }) {
   }
 
   return (
-    <View direction="column" gap={0} padding={0}>
+    <View direction="column" position="relative">
       {/* Token header with logo and name */}
       <View direction="row" justify="space-between" align="center">
         <View direction="row" gap={3} align="center">
@@ -177,15 +173,21 @@ function TokenDetailContent({ tokenAddress }: { tokenAddress: string }) {
       </View>
 
       {/* Price and percent change */}
-      {/*<View direction="column" padding={4} gap={2}>*/}
-      {/*  <Text variant="body-1" weight="bold" color="neutral">*/}
-      {/*    ${formatTokenPrice(priceUSD)}*/}
-      {/*  </Text>*/}
-
-      {/*  <Text color={priceChangeColor} variant="title-3" weight="medium">*/}
-      {/*    {priceChangeDisplay}*/}
-      {/*  </Text>*/}
-      {/*</View>*/}
+      <View
+        direction="column"
+        padding={0}
+        gap={1}
+        position="absolute"
+        insetTop={12}
+        zIndex={10}
+      >
+        <Text variant="title-6" weight="regular" color="neutral">
+          ${formatTokenPrice(priceUSD)}
+        </Text>
+        <Text color={priceChangeColor} variant="body-3">
+          {priceChangeDisplay}
+        </Text>
+      </View>
 
       {/* Chart section */}
       <View>
@@ -207,34 +209,31 @@ function TokenDetailContent({ tokenAddress }: { tokenAddress: string }) {
       </View>
 
       {/* Timeframe controls */}
-      {/*<View direction="row" justify="space-between" padding={4} gap={2}>*/}
-      {/*  <View direction="row" gap={2}>*/}
-      {/*    {['1H', '1D', '1W', '1M', '1Y'].map((timeframe) => (*/}
-      {/*      <Button*/}
-      {/*        key={timeframe}*/}
-      {/*        variant={activeTimeframe === timeframe ? 'solid' : 'ghost'}*/}
-      {/*        color={activeTimeframe === timeframe ? 'primary' : 'neutral'}*/}
-      {/*        onClick={() => setActiveTimeframe(timeframe)}*/}
-      {/*        size="small"*/}
-      {/*        attributes={{*/}
-      {/*          style: {*/}
-      {/*            backgroundColor:*/}
-      {/*              activeTimeframe === timeframe*/}
-      {/*                ? 'rgba(148, 224, 254, 0.2)'*/}
-      {/*                : 'transparent',*/}
-      {/*            color: activeTimeframe === timeframe ? brandColor : '#999999',*/}
-      {/*          },*/}
-      {/*        }}*/}
-      {/*      >*/}
-      {/*        {timeframe}*/}
-      {/*      </Button>*/}
-      {/*    ))}*/}
-      {/*  </View>*/}
-
-      {/*<Button variant="ghost" color="neutral" size="small">*/}
-      {/*  Price*/}
-      {/*</Button>*/}
-      {/*</View>*/}
+      <View direction="row" justify="space-between" padding={4} gap={2}>
+        <View direction="row" gap={2}>
+          {['1H', '1D', '1W', '1M', '1Y'].map((timeframe) => (
+            <Button
+              disabled={timeframe !== '1D'}
+              key={timeframe}
+              variant={activeTimeframe === timeframe ? 'solid' : 'ghost'}
+              color={activeTimeframe === timeframe ? 'primary' : 'neutral'}
+              onClick={() => setActiveTimeframe(timeframe)}
+              size="small"
+              attributes={{
+                style: {
+                  backgroundColor:
+                    activeTimeframe === timeframe
+                      ? 'rgba(148, 224, 254, 0.2)'
+                      : 'transparent',
+                  color: activeTimeframe === timeframe ? brandColor : '#999999',
+                },
+              }}
+            >
+              {timeframe}
+            </Button>
+          ))}
+        </View>
+      </View>
     </View>
   )
 }
