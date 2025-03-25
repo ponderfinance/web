@@ -228,7 +228,11 @@ function TokenDetailContent({ tokenAddress }: { tokenAddress: string }) {
       </View.Item>
       <View.Item columns={{ s: 12, m: 5 }}>
         <SwapInterface
-          defaultTokenIn={KKUB_ADDRESS[CURRENT_CHAIN.id]}
+          defaultTokenIn={
+            KKUB_ADDRESS[CURRENT_CHAIN.id].toLowerCase() === tokenAddress.toLowerCase()
+              ? '0x0000000000000000000000000000000000000000'
+              : KKUB_ADDRESS[CURRENT_CHAIN.id]
+          }
           defaultTokenOut={tokenAddress as `0x${string}`}
           defaultWidth="100%"
         />

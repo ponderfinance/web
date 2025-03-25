@@ -309,7 +309,7 @@ export default function PriceChart({
         ref={chartContainerRef}
         style={{
           height: `${height}px`,
-          backgroundColor: '#121212',
+          backgroundColor: 'transparent',
           borderRadius: '8px',
         }}
       />
