@@ -6,7 +6,7 @@ import { graphql, useFragment, useLazyLoadQuery } from 'react-relay'
 import PriceChart from './PriceChart'
 import { TokenPriceChartContainer_token$key } from '@/src/__generated__/TokenPriceChartContainer_token.graphql'
 import { TokenPriceChartContainerQuery } from '@/src/__generated__/TokenPriceChartContainerQuery.graphql'
-import { processPriceHistoryData } from '@/src/lib/utils/tokePriceUtils'
+import { processPriceHistoryData } from '@/src/lib/utils/tokenPriceUtils'
 import { formatCurrency } from '@/src/utils/numbers'
 
 // Define the fragment for token chart data

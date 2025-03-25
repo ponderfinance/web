@@ -2,6 +2,8 @@ import { PrismaClient } from '@prisma/client'
 import { createPublicClient, formatUnits, parseUnits, PublicClient } from 'viem'
 import { calculateReservesUSD } from '@/src/lib/graphql/oracleUtils'
 import { CURRENT_CHAIN } from '@/src/constants/chains'
+import { KKUB_ADDRESS } from '@/src/constants/addresses'
+
 import { http } from 'wagmi'
 import { Context } from './types'
 import {
@@ -10,7 +12,7 @@ import {
   getCachedPairReserveUSDBulk,
 } from '@/src/lib/redis/pairCache'
 import { getRedisClient } from '@/src/lib/redis/client'
-import { TokenPriceService } from '@/src/lib/services/tokenPriceService' // Add this import
+import { TokenPriceService } from '@/src/lib/services/tokenPriceService'
 
 // USDT address
 const USDT_ADDRESS = '0x7d984C24d2499D840eB3b7016077164e15E5faA6'
@@ -42,6 +44,12 @@ const publicClient = createPublicClient({
 interface ChartDataPoint {
   time: number
   value: number
+}
+
+interface TokenPriceChartArgs {
+  tokenAddress: string
+  timeframe?: string
+  limit?: number
 }
 
 interface VolumeChartData extends ChartDataPoint {
@@ -943,18 +951,9 @@ export const resolvers = {
     },
 
     // Get price chart data for a token across all its pairs
-    // Get price chart data for a token across all its pairs
     tokenPriceChart: async (
       _: any,
-      {
-        tokenAddress,
-        timeframe = '1d',
-        limit = 100,
-      }: {
-        tokenAddress: string
-        timeframe?: string
-        limit?: number
-      },
+      { tokenAddress, timeframe = '1d', limit = 100 }: TokenPriceChartArgs,
       { prisma }: Context
     ): Promise<ChartDataPoint[]> => {
       try {
@@ -967,8 +966,14 @@ export const resolvers = {
           throw new Error(`Token not found: ${tokenAddress}`)
         }
 
-        // Save token decimals for proper price normalization
-        const tokenDecimals = token.decimals || 18
+        // Get token decimals
+        const tokenDecimals: number = token.decimals || 18
+
+        // Get stablecoin addresses for identification
+        const stablecoinAddresses: string[] = TokenPriceService.getStablecoinAddresses()
+        const isTokenStablecoin: boolean = stablecoinAddresses.includes(
+          token.address.toLowerCase()
+        )
 
         // Find all pairs where this token is token0 or token1
         const pairs = await prisma.pair.findMany({
@@ -986,53 +991,88 @@ export const resolvers = {
         }
 
         // Determine time window based on timeframe
-        const now = Math.floor(Date.now() / 1000)
+        const now: number = Math.floor(Date.now() / 1000)
         let timeWindow: number
 
         switch (timeframe) {
           case '1h':
-            timeWindow = 60 * 60 * limit // 1 hour × limit
+            timeWindow = 60 * 60 * limit
             break
           case '4h':
-            timeWindow = 4 * 60 * 60 * limit // 4 hours × limit
+            timeWindow = 4 * 60 * 60 * limit
             break
           case '1w':
-            timeWindow = 7 * 24 * 60 * 60 * limit // 1 week × limit
+            timeWindow = 7 * 24 * 60 * 60 * limit
             break
           case '1m':
-            timeWindow = 30 * 24 * 60 * 60 * limit // ~1 month × limit
+            timeWindow = 30 * 24 * 60 * 60 * limit
             break
           case '1d':
           default:
-            timeWindow = 24 * 60 * 60 * limit // 1 day × limit
+            timeWindow = 24 * 60 * 60 * limit
             break
         }
 
-        const startTime = now - timeWindow
+        const startTime: number = now - timeWindow
 
-        // First, prioritize stablecoin pairs as they give direct USD price
-        const stablecoinAddresses = TokenPriceService.getStablecoinAddresses()
-        const stablecoinPairs = pairs.filter(
-          (pair) =>
-            stablecoinAddresses.includes(pair.token0.address.toLowerCase()) ||
-            stablecoinAddresses.includes(pair.token1.address.toLowerCase())
-        )
+        // Prioritize pairs for best USD price derivation
+        let orderedPairs = []
 
-        // If we have stablecoin pairs, prioritize those for price data
-        const pairsToUse = stablecoinPairs.length > 0 ? stablecoinPairs : pairs
+        // For non-stablecoins, prioritize stablecoin pairs
+        if (!isTokenStablecoin) {
+          // Find pairs where counterpart is a stablecoin
+          const stablecoinPairs = pairs.filter((pair) => {
+            return pair.token0Id === token.id
+              ? stablecoinAddresses.includes(pair.token1.address.toLowerCase())
+              : stablecoinAddresses.includes(pair.token0.address.toLowerCase())
+          })
 
-        // Collect price data from all selected pairs
-        let allPriceData: ChartDataPoint[] = []
+          // Prioritize stablecoin pairs, then add remaining pairs
+          orderedPairs = [
+            ...stablecoinPairs,
+            ...pairs.filter((pair) => !stablecoinPairs.includes(pair)),
+          ]
+        }
+        // For stablecoins, prioritize pairs with other tokens to see market values
+        else {
+          // For stablecoins, prioritize pairs with major tokens
+          const majorTokenAddresses: string[] = [
+            KKUB_ADDRESS[CURRENT_CHAIN.id], // Replace with your KKUB address
+            // Add other major token addresses if relevant
+          ].map((addr) => addr.toLowerCase())
+
+          // Find pairs with major tokens
+          const majorTokenPairs = pairs.filter((pair) => {
+            return pair.token0Id === token.id
+              ? majorTokenAddresses.includes(pair.token1.address.toLowerCase())
+              : majorTokenAddresses.includes(pair.token0.address.toLowerCase())
+          })
+
+          // Prioritize major token pairs, then add remaining pairs
+          orderedPairs = [
+            ...majorTokenPairs,
+            ...pairs.filter((pair) => !majorTokenPairs.includes(pair)),
+          ]
+        }
+
+        // If no prioritization happened, use all pairs
+        if (orderedPairs.length === 0) {
+          orderedPairs = pairs
+        }
+
+        let priceSeries: ChartDataPoint[] = []
 
         // Process each pair to get price data
-        for (const pair of pairsToUse) {
+        for (const pair of orderedPairs) {
           // Determine if the token is token0 or token1 in this pair
-          const isToken0 = pair.token0Id === token.id
+          const isToken0: boolean = pair.token0Id === token.id
 
-          // Determine if this is a stablecoin pair
-          const isStablecoinPair = isToken0
-            ? stablecoinAddresses.includes(pair.token1.address.toLowerCase())
-            : stablecoinAddresses.includes(pair.token0.address.toLowerCase())
+          // Get counterpart token details
+          const counterpartToken = isToken0 ? pair.token1 : pair.token0
+          const counterpartDecimals: number = counterpartToken.decimals || 18
+          const isCounterpartStablecoin: boolean = stablecoinAddresses.includes(
+            counterpartToken.address.toLowerCase()
+          )
 
           // Get price snapshots for this pair
           const snapshots = await prisma.priceSnapshot.findMany({
@@ -1043,125 +1083,168 @@ export const resolvers = {
             orderBy: { timestamp: 'asc' },
           })
 
-          // Get the counterpart token's decimals
-          const counterpartDecimals = isToken0
-            ? pair.token1.decimals || 18
-            : pair.token0.decimals || 18
+          if (snapshots.length === 0) continue
 
-          // Process the price data for this pair
-          const pairPriceData = snapshots.map((snapshot) => {
-            // Get the raw price value
-            const rawPrice = isToken0 ? snapshot.token0Price : snapshot.token1Price
+          // Get current USD price of counterpart token if available
+          let counterpartUsdPrice: number | null = null
+          try {
+            // Check if the counterpart is a stablecoin
+            const isCounterpartStablecoin: boolean = stablecoinAddresses.includes(
+              counterpartToken.address.toLowerCase()
+            )
 
-            // Convert to human-readable number using proper decimal handling
-            let price: number
-            try {
-              // Adjust for difference in decimals between the tokens
-              const decimalAdjustment = counterpartDecimals - tokenDecimals
+            // Use the enhanced price service to get reliable counterpart price
+            counterpartUsdPrice = await TokenPriceService.getCounterpartTokenPrice(
+              {
+                id: counterpartToken.id,
+                address: counterpartToken.address,
+                decimals: counterpartDecimals,
+                symbol: counterpartToken.symbol || '',
+              },
+              isCounterpartStablecoin,
+              prisma
+            )
 
-              if (decimalAdjustment !== 0) {
-                // Use viem to handle decimal conversion correctly
-                const rawPriceBigInt = parseUnits(rawPrice, counterpartDecimals)
-                price = parseFloat(
-                  formatUnits(rawPriceBigInt, counterpartDecimals - decimalAdjustment)
-                )
-              } else {
-                price = parseFloat(rawPrice)
+            if (process.env.NODE_ENV === 'development') {
+              console.log(
+                `Counterpart token ${counterpartToken.symbol} price: $${counterpartUsdPrice}`
+              )
+            }
+          } catch (error) {
+            console.error(
+              `Error getting counterpart price for ${counterpartToken.symbol}:`,
+              error
+            )
+          }
+
+          // If we couldn't determine a price for non-stablecoin counterpart, try another pair if available
+          if (
+            (!counterpartUsdPrice || counterpartUsdPrice <= 0) &&
+            !isCounterpartStablecoin &&
+            orderedPairs.length > 1
+          ) {
+            console.log(
+              `No reliable price for ${counterpartToken.symbol}, skipping to next pair`
+            )
+            continue // Try next pair
+          }
+
+          // Final fallback - if we have no price and this is our only option, use 0
+          // This should rarely happen with our enhanced price service
+          if (counterpartUsdPrice === null || counterpartUsdPrice <= 0) {
+            counterpartUsdPrice = 0
+            console.warn(
+              `Unable to determine price for ${counterpartToken.symbol}, using 0`
+            )
+          }
+
+          // Now process the snapshots with the reliable counterpart price
+          const pairPriceData: ChartDataPoint[] = snapshots
+            .map((snapshot) => {
+              // Get the raw exchange rates from the snapshot
+              const token0PriceRaw: string = snapshot.token0Price
+              const token1PriceRaw: string = snapshot.token1Price
+
+              // Normalize blockchain-scale values if needed
+              let token0Price = parseFloat(token0PriceRaw)
+              let token1Price = parseFloat(token1PriceRaw)
+
+              // Normalize token0Price if needed
+              const token0Magnitude = Math.floor(Math.log10(Math.abs(token0Price || 1)))
+              if (token0Magnitude >= (counterpartDecimals || 18) - 4) {
+                token0Price = token0Price / Math.pow(10, counterpartDecimals || 18)
               }
-            } catch (error) {
-              // Fallback for any parsing errors
-              price = parseFloat(rawPrice)
-            }
 
-            // For stablecoin pairs, we already have USD price
-            // For non-stablecoin pairs, we need to convert to USD if possible
-            let priceInUSD = price
+              // Normalize token1Price if needed
+              const token1Magnitude = Math.floor(Math.log10(Math.abs(token1Price || 1)))
+              if (token1Magnitude >= (tokenDecimals || 18) - 4) {
+                token1Price = token1Price / Math.pow(10, tokenDecimals || 18)
+              }
 
-            // If it's not a stablecoin pair and we have the first data point,
-            // we can try to convert to USD using the service
-            if (!isStablecoinPair && allPriceData.length === 0) {
-              // This is expensive, so only do it for the first data point
-              // as a scale reference
-              // In a real implementation, you'd want to cache this or use an oracle
-              const counterpartToken = isToken0 ? pair.token1 : pair.token0
-              const counterpartTokenPrice = 1.0 // Placeholder for actual USD price lookup
-              priceInUSD = price * counterpartTokenPrice
-            }
+              // Debug logging for development only
+              if (process.env.NODE_ENV === 'development') {
+                console.log(
+                  `Processing ${isToken0 ? pair.token0.symbol : pair.token1.symbol}`
+                )
+                console.log(`Token position: ${isToken0 ? 'token0' : 'token1'}`)
+                console.log(`token0Price: ${token0Price}, token1Price: ${token1Price}`)
+                console.log(`Counterpart USD price: ${counterpartUsdPrice}`)
+              }
 
-            return {
-              time: snapshot.timestamp,
-              value: isStablecoinPair ? price : priceInUSD,
-            }
-          })
+              // Calculate USD price based on token position and pair relationship
+              let usdPrice: number
 
-          // Add to all price data
-          allPriceData = [...allPriceData, ...pairPriceData]
+              // CASE 1: Our token is token0 in the pair
+              if (isToken0) {
+                if (isCounterpartStablecoin) {
+                  // Counterpart (token1) is a stablecoin
+                  // token0Price directly represents "token1 per token0" which is the USD value
+                  usdPrice = token0Price
+                } else {
+                  // Counterpart (token1) is not a stablecoin
+                  // "token1 per token0" * (USD per token1) = USD per token0
+                  usdPrice = token0Price * counterpartUsdPrice
+                }
+              }
+              // CASE 2: Our token is token1 in the pair
+              else {
+                if (isCounterpartStablecoin) {
+                  // Counterpart (token0) is a stablecoin
+                  // token1Price is "token0 per token1", which is directly "USD per token1"
+                  usdPrice = token1Price
+                } else {
+                  // Counterpart (token0) is not a stablecoin
+                  // For token1 paired with non-stablecoin token0:
+                  // (USD per token0) * (token0 per token1) = USD per token1
+                  usdPrice = counterpartUsdPrice * token1Price
 
-          // If this is a stablecoin pair, we have good USD data, so we can stop here
-          if (isStablecoinPair && pairPriceData.length > 0) {
+                  // Add debug logging for specific tokens like KOI
+                  if (
+                    (pair.token1.symbol === 'KOI' || pair.token0.symbol === 'KOI') &&
+                    process.env.NODE_ENV === 'development'
+                  ) {
+                    console.log(
+                      `KOI calculation: Using multiplication formula: ${counterpartUsdPrice} * ${token1Price} = ${usdPrice}`
+                    )
+                    // Also calculate with division for comparison
+                    const altCalc =
+                      token1Price > 0 ? counterpartUsdPrice / token1Price : 0
+                    console.log(
+                      `Alternative division formula: ${counterpartUsdPrice} / ${token1Price} = ${altCalc}`
+                    )
+                  }
+                }
+              }
+
+              // Skip data points where we couldn't calculate a valid price
+              if (
+                usdPrice === null ||
+                usdPrice === undefined ||
+                isNaN(usdPrice) ||
+                !isFinite(usdPrice) ||
+                usdPrice <= 0
+              ) {
+                return null
+              }
+
+              return {
+                time: snapshot.timestamp,
+                value: usdPrice,
+              }
+            })
+            .filter((point) => point !== null)
+          // Add to our price series
+          priceSeries = [...priceSeries, ...pairPriceData]
+
+          // If we have data from a stablecoin pair and not a stablecoin token itself,
+          // this is the best source for USD price
+          if (isCounterpartStablecoin && !isTokenStablecoin && pairPriceData.length > 0) {
             break
           }
         }
 
-        // If we have multiple pairs and no stablecoin pair was processed,
-        // aggregate the prices by time period
-        if (stablecoinPairs.length === 0 && pairs.length > 1) {
-          // Define intervals based on timeframe
-          let interval: number
-          switch (timeframe) {
-            case '1h':
-              interval = 5 * 60 // 5 minute intervals
-              break
-            case '4h':
-              interval = 15 * 60 // 15 minute intervals
-              break
-            case '1w':
-              interval = 4 * 60 * 60 // 4 hour intervals
-              break
-            case '1m':
-              interval = 12 * 60 * 60 // 12 hour intervals
-              break
-            case '1d':
-            default:
-              interval = 60 * 60 // 1 hour intervals
-              break
-          }
-
-          // Group by time buckets
-          interface PriceAggregate {
-            sum: number
-            count: number
-          }
-
-          const aggregated: Record<number, PriceAggregate> = {}
-
-          for (const dataPoint of allPriceData) {
-            const bucketTime = Math.floor(dataPoint.time / interval) * interval
-
-            if (!aggregated[bucketTime]) {
-              aggregated[bucketTime] = {
-                sum: dataPoint.value,
-                count: 1,
-              }
-            } else {
-              aggregated[bucketTime].sum += dataPoint.value
-              aggregated[bucketTime].count += 1
-            }
-          }
-
-          // Calculate averages and format for chart
-          const chartData: ChartDataPoint[] = Object.entries(aggregated)
-            .map(([timeStr, data]) => ({
-              time: parseInt(timeStr, 10),
-              value: data.sum / data.count,
-            }))
-            .sort((a, b) => a.time - b.time)
-
-          return chartData
-        }
-
-        // Sort by time before returning
-        return allPriceData.sort((a, b) => a.time - b.time)
+        // Sort by time and return
+        return priceSeries.sort((a, b) => a.time - b.time)
       } catch (error) {
         console.error('Error fetching token price chart data:', error)
         return []

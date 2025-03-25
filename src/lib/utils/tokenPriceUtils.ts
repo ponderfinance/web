@@ -3,9 +3,7 @@ import { formatUnits, parseUnits } from 'viem'
 // Constants
 const STABLECOIN_ADDRESSES: string[] = [
   '0x7d984c24d2499d840eb3b7016077164e15e5faa6', // USDT
-  '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48', // USDC
-  '0xdac17f958d2ee523a2206206994597c13d831ec7', // USDT (Ethereum)
-  '0x6b175474e89094c44da98b954eedeac495271d0f', // DAI
+  '0x77071ad51ca93fc90e77BCdECE5aa6F1B40fcb21', // USDC
 ].map((address) => address.toLowerCase())
 
 /**

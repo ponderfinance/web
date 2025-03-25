@@ -14,7 +14,7 @@ import {
   UTCTimestamp,
   PriceFormat,
 } from 'lightweight-charts'
-import { formatCurrency } from '@/src/lib/utils/tokePriceUtils'
+import { formatCurrency } from '@/src/lib/utils/tokenPriceUtils'
 
 interface ChartDataPoint {
   time: number

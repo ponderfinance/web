@@ -15,7 +15,7 @@ import {
 import { graphql, useLazyLoadQuery } from 'react-relay'
 import TokenPriceChartContainer from './TokenPriceChartContainer'
 import type { TokenDetailPageQuery } from '@/src/__generated__/TokenDetailPageQuery.graphql'
-import { formatCurrency } from '@/src/lib/utils/tokePriceUtils'
+import { formatCurrency } from '@/src/lib/utils/tokenPriceUtils'
 import { getIpfsGateway } from '@/src/utils/ipfs'
 import SwapInterface from '@/src/components/Swap'
 import { KKUB_ADDRESS } from '@ponderfinance/sdk'
