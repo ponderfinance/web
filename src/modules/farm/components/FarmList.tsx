@@ -344,6 +344,7 @@ export default function FarmList() {
   const sdk = usePonderSDK()
   const { address } = useAccount()
   const [selectedPool, setSelectedPool] = useState<number | null>(null)
+  const [isModalOpen, setIsModalOpen] = useState(false)
   const [poolLength, setPoolLength] = useState<number>(0)
   const [positions, setPositions] = useState<Record<string, PoolPosition>>({})
   const [isLoading, setIsLoading] = useState(true)
@@ -479,6 +480,23 @@ export default function FarmList() {
     fetchPositions()
   }, [sdk, address, poolLength])
 
+  // Simplified modal handlers
+  const handleOpenModal = useCallback((pid: number) => {
+    setSelectedPool(pid)
+    // Set a small timeout to ensure the modal component is fully mounted
+    setTimeout(() => {
+      setIsModalOpen(true)
+    }, 10)
+  }, [])
+
+  const handleCloseModal = useCallback(() => {
+    setIsModalOpen(false)
+    // Don't reset selectedPool immediately to ensure proper modal animation
+    setTimeout(() => {
+      setSelectedPool(null)
+    }, 300) // Typical animation duration
+  }, [])
+
   if (!address) {
     return (
       <View align="center" justify="center" padding={8}>
@@ -498,18 +516,19 @@ export default function FarmList() {
             pid={pid}
             address={address}
             position={positions[pid] || null}
-            onManage={setSelectedPool}
+            onManage={handleOpenModal}
           />
         ))}
       </View>
 
       {selectedPool !== null && positions[selectedPool] && (
         <StakeModal
+          key={`stake-modal-${selectedPool}`}
           poolId={selectedPool}
           lpToken={positions[selectedPool].lpToken}
           position={positions[selectedPool]}
-          active={selectedPool !== null}
-          onClose={() => setSelectedPool(null)}
+          active={isModalOpen}
+          onClose={handleCloseModal}
         />
       )}
     </View>
