@@ -2040,7 +2040,7 @@ export const resolvers = {
         // Market cap = price * circulating supply
         const price = parseFloat(await resolvers.Token.priceUSD(parent, _, { loaders, prisma }))
         const circulatingSupply = parseFloat(
-          await resolvers.Token.circulatingSupply(parent, _, { prisma })
+          await resolvers.Token.circulatingSupply(parent, _, { prisma, loaders })
         )
         
         const marketCap = price * circulatingSupply
