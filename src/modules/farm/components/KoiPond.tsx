@@ -80,7 +80,7 @@ export default function KoiPond() {
         paddingInline={8}
         borderRadius="large"
       >
-        <Text variant="title-5" weight="regular">
+        <Text variant="title-5" weight="regular" align="center">
           KOI Pond
         </Text>
         <Text>
@@ -88,13 +88,13 @@ export default function KoiPond() {
           distribution rate.
         </Text>
         <FarmList />
-        <View position="absolute" insetTop={4} insetEnd={4}>
-          <Button onClick={activate}>Create Farm</Button>
-        </View>
+        {/*<View position="absolute" insetTop={4} insetEnd={4}>*/}
+        {/*  <Button onClick={activate}>Create Farm</Button>*/}
+        {/*</View>*/}
 
-        <Modal active={active} onClose={deactivate}>
-          <CreateFarm />
-        </Modal>
+        {/*<Modal active={active} onClose={deactivate}>*/}
+        {/*  <CreateFarm />*/}
+        {/*</Modal>*/}
       </View>
 
       {/* Modal overlay */}

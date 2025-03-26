@@ -221,6 +221,7 @@ export default function FeesPage() {
           direction={{ s: 'column', m: 'row' }}
           justify="space-between"
           align="center"
+          gap={4}
         >
           <View
             direction="column"
@@ -228,6 +229,7 @@ export default function FeesPage() {
             padding={5}
             borderRadius="medium"
             borderColor="neutral-faded"
+            width={{ s: '100%', m: 'auto' }}
           >
             <View gap={1}>
               <Text variant="caption-1" color="neutral-faded">
@@ -258,6 +260,7 @@ export default function FeesPage() {
             backgroundColor="elevation-overlay"
             padding={5}
             borderRadius="medium"
+            width={{ s: '100%', m: 'auto' }}
           >
             <View gap={1}>
               <Text variant="caption-1" color="neutral-faded">
