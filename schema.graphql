@@ -127,6 +127,11 @@ type Token {
   priceUSD: String!
   priceChange24h: Float
   volumeUSD24h: String
+  totalSupply: String
+  circulatingSupply: String
+  tvl: String
+  marketCap: String
+  fdv: String
   pairs0: [Pair!]!
   pairs1: [Pair!]!
 }

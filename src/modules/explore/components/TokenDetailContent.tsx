@@ -10,12 +10,12 @@ import {
 } from 'reshaped'
 import { graphql, useLazyLoadQuery } from 'react-relay'
 import TokenPriceChartContainer from './TokenPriceChartContainer'
-import { TokenDetailPageQuery } from '@/src/__generated__/TokenDetailPageQuery.graphql'
+import { TokenDetailContentQuery } from '@/src/__generated__/TokenDetailContentQuery.graphql'
 import { getIpfsGateway } from '@/src/utils/ipfs'
 
 // Define the query for the token detail page
 export const TokenDetailQuery = graphql`
-  query TokenDetailPageQuery($tokenAddress: String!) {
+  query TokenDetailContentQuery($tokenAddress: String!) {
     tokenByAddress(address: $tokenAddress) {
       id
       name
@@ -25,6 +25,9 @@ export const TokenDetailQuery = graphql`
       priceUSD
       priceChange24h
       volumeUSD24h
+      tvl
+      marketCap
+      fdv
       imageURI
       ...TokenPriceChartContainer_token
     }
@@ -36,7 +39,7 @@ export default function TokenDetailContent({ tokenAddress }: { tokenAddress: str
   const brandColor = '#94e0fe'
 
   // Fetch token data with proper typing
-  const data = useLazyLoadQuery<TokenDetailPageQuery>(
+  const data = useLazyLoadQuery<TokenDetailContentQuery>(
     TokenDetailQuery,
     { tokenAddress },
     { fetchPolicy: 'store-and-network' }
@@ -55,6 +58,28 @@ export default function TokenDetailContent({ tokenAddress }: { tokenAddress: str
   const priceChangeColor = (token.priceChange24h || 0) >= 0 ? 'positive' : 'critical'
   const priceChangePrefix = (token.priceChange24h || 0) >= 0 ? '+' : ''
   const priceChangeDisplay = `${priceChangePrefix}${(token.priceChange24h || 0).toFixed(2)}%`
+
+  // Format token metrics for display
+  const formatLargeNumber = (value: string | null | undefined): string => {
+    if (!value) return '$0'
+    const num = parseFloat(value)
+
+    if (num >= 1e9) {
+      return `$${(num / 1e9).toFixed(1)}B`
+    } else if (num >= 1e6) {
+      return `$${(num / 1e6).toFixed(1)}M`
+    } else if (num >= 1e3) {
+      return `$${(num / 1e3).toFixed(1)}K`
+    } else {
+      return `$${num.toFixed(2)}`
+    }
+  }
+
+  // Get formatted metrics
+  const tvl = formatLargeNumber(token.tvl)
+  const marketCap = formatLargeNumber(token.marketCap)
+  const fdv = formatLargeNumber(token.fdv)
+  const dayVolume = formatLargeNumber(token.volumeUSD24h)
 
   // Handle timeframe change
   const handleTimeframeChange = (newTimeframe: string) => {
@@ -117,7 +142,7 @@ export default function TokenDetailContent({ tokenAddress }: { tokenAddress: str
           {token.symbol || token.address.slice(0, 8)}
         </Text>
       </View>
-      
+
       <View direction="column" position="relative">
         {/* Token header with logo and name */}
         <View direction="row" justify="space-between" align="center">
@@ -159,8 +184,8 @@ export default function TokenDetailContent({ tokenAddress }: { tokenAddress: str
           <Suspense fallback={
             <View height={400} width="100%" attributes={{
               style: {
-                backgroundColor: 'rgba(30, 30, 30, 0.6)', 
-                borderRadius: 4 
+                backgroundColor: 'rgba(30, 30, 30, 0.6)',
+                borderRadius: 4
               }
             }} />
           }>
@@ -194,6 +219,47 @@ export default function TokenDetailContent({ tokenAddress }: { tokenAddress: str
           </View>
         </View>
       </View>
+
+      {/* Stats Section */}
+      <View direction="column" gap={4}>
+        <Text variant="featured-2" weight="medium" color="neutral">
+          Stats
+        </Text>
+        <View direction="row" wrap={true} gap={8} justify="space-between">
+          <View direction="column" gap={1}>
+            <Text variant="body-2" color="neutral-faded">
+              TVL
+            </Text>
+            <Text variant="featured-3" weight="medium" color="neutral">
+              {tvl}
+            </Text>
+          </View>
+          <View direction="column" gap={1}>
+            <Text variant="body-2" color="neutral-faded">
+              Market cap
+            </Text>
+            <Text variant="featured-3" weight="medium" color="neutral">
+              {marketCap}
+            </Text>
+          </View>
+          <View direction="column" gap={1}>
+            <Text variant="body-2" color="neutral-faded">
+              FDV
+            </Text>
+            <Text variant="featured-3" weight="medium" color="neutral">
+              {fdv}
+            </Text>
+          </View>
+          <View direction="column" gap={1}>
+            <Text variant="body-2" color="neutral-faded">
+              1 day volume
+            </Text>
+            <Text variant="featured-3" weight="medium" color="neutral">
+              {dayVolume}
+            </Text>
+          </View>
+        </View>
+      </View>
     </View>
   )
-} 
+}

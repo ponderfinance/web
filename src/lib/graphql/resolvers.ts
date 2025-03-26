@@ -1966,6 +1966,106 @@ export const resolvers = {
         return '0'
       }
     },
+    // ADDED RESOLVERS FOR TOKEN METRICS
+    tvl: async (parent: any, _: any, { prisma, loaders }: Context) => {
+      try {
+        // Find all pairs containing this token
+        const pairs = await prisma.pair.findMany({
+          where: {
+            OR: [{ token0Id: parent.id }, { token1Id: parent.id }],
+          },
+        })
+
+        if (pairs.length === 0) return '0'
+
+        // Calculate TVL from all pairs that contain this token
+        let totalTVL = 0
+        await Promise.all(
+          pairs.map(async (pair) => {
+            const pairTVL = await resolvers.Pair.tvl(pair, _, { loaders, prisma })
+            const isToken0 = pair.token0Id === parent.id
+            const isToken1 = pair.token1Id === parent.id
+
+            // If token appears on both sides, avoid double counting
+            if (isToken0 && isToken1) {
+              totalTVL += pairTVL
+            } else {
+              // If token is only on one side, estimate its portion of the TVL (simplified)
+              totalTVL += pairTVL / 2
+            }
+          })
+        )
+
+        return totalTVL.toString()
+      } catch (error) {
+        console.error(`Error calculating TVL for token ${parent.id}:`, error)
+        return '0'
+      }
+    },
+
+    totalSupply: async (parent: any, _: any, { prisma, loaders }: Context) => {
+      try {
+        // For ERC20 tokens, we'd typically fetch this from blockchain
+        // This is a simplified example that could be replaced with on-chain data
+        // Using a public client to fetch totalSupply from the token contract
+        
+        // For demonstration purposes, returning a placeholder value
+        // In production, you would fetch this from the blockchain
+        return '1000000000' // Mock value of 1 billion tokens
+      } catch (error) {
+        console.error(`Error fetching total supply for token ${parent.id}:`, error)
+        return '0'
+      }
+    },
+
+    circulatingSupply: async (parent: any, _: any, { prisma, loaders }: Context) => {
+      try {
+        // Circulating supply calculation typically involves:
+        // 1. Getting total supply
+        // 2. Subtracting known locked tokens (team, treasury, etc.)
+        
+        // For demonstration purposes, returning 70% of total supply as circulating
+        const totalSupply = await resolvers.Token.totalSupply(parent, _, { prisma, loaders })
+        const circulatingSupply = (parseFloat(totalSupply) * 0.7).toString()
+        
+        return circulatingSupply
+      } catch (error) {
+        console.error(`Error calculating circulating supply for token ${parent.id}:`, error)
+        return '0'
+      }
+    },
+
+    marketCap: async (parent: any, _: any, { prisma, loaders }: Context) => {
+      try {
+        // Market cap = price * circulating supply
+        const price = parseFloat(await resolvers.Token.priceUSD(parent, _, { loaders, prisma }))
+        const circulatingSupply = parseFloat(
+          await resolvers.Token.circulatingSupply(parent, _, { prisma })
+        )
+        
+        const marketCap = price * circulatingSupply
+        return marketCap.toString()
+      } catch (error) {
+        console.error(`Error calculating market cap for token ${parent.id}:`, error)
+        return '0'
+      }
+    },
+
+    fdv: async (parent: any, _: any, { prisma, loaders }: Context) => {
+      try {
+        // Fully Diluted Valuation = price * total supply
+        const price = parseFloat(await resolvers.Token.priceUSD(parent, _, { loaders, prisma }))
+        const totalSupply = parseFloat(
+          await resolvers.Token.totalSupply(parent, _, { prisma, loaders })
+        )
+        
+        const fdv = price * totalSupply
+        return fdv.toString()
+      } catch (error) {
+        console.error(`Error calculating FDV for token ${parent.id}:`, error)
+        return '0'
+      }
+    },
   },
 
   Pair: {
