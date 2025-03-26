@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState } from 'react'
-import { Text, View, Skeleton, Select } from 'reshaped'
+import { Text, View, Select } from 'reshaped'
 import { graphql, useFragment, useLazyLoadQuery } from 'react-relay'
 import PriceChart from './PriceChart'
 import { TokenPriceChartContainer_token$key } from '@/src/__generated__/TokenPriceChartContainer_token.graphql'
@@ -60,9 +60,16 @@ export default function TokenPriceChartContainer({
   initialTimeframe = '1d',
   initialDisplayType = 'area',
 }: TokenPriceChartContainerProps) {
-  const [timeframe, setTimeframe] = useState(initialTimeframe)
-  const [displayType, setDisplayType] = useState(initialDisplayType)
-
+  // Store timeframe in state to avoid remounting the component
+  const [timeframe, setTimeframe] = useState(() => initialTimeframe);
+  
+  // Update timeframe when prop changes
+  React.useEffect(() => {
+    if (timeframe !== initialTimeframe) {
+      setTimeframe(initialTimeframe);
+    }
+  }, [initialTimeframe, timeframe]);
+  
   // Extract token data from the fragment
   const token = useFragment(TokenChartFragment, tokenRef)
   const tokenAddress = token?.address
@@ -72,16 +79,20 @@ export default function TokenPriceChartContainer({
     return <Text>No token data available</Text>
   }
 
+  // Memoize the chart content to prevent unnecessary rerenders
+  const chartContent = React.useMemo(() => (
+    <TokenPriceChartContent
+      tokenAddress={tokenAddress}
+      tokenSymbol={token.symbol || 'Token'}
+      tokenDecimals={token.decimals ?? undefined}
+      timeframe={timeframe}
+      displayType={initialDisplayType as 'line' | 'area' | 'candle'}
+    />
+  ), [tokenAddress, token.symbol, token.decimals, timeframe, initialDisplayType]);
+
   return (
     <View direction="column" gap={16}>
-      {/* Chart content */}
-      <TokenPriceChartContent
-        tokenAddress={tokenAddress}
-        tokenSymbol={token.symbol || 'Token'}
-        tokenDecimals={token.decimals ?? undefined}
-        timeframe={timeframe}
-        displayType={displayType as 'line' | 'area' | 'candle'}
-      />
+      {chartContent}
     </View>
   )
 }
@@ -117,17 +128,8 @@ function TokenPriceChartContent({
 
   const tokenPriceChart = data.tokenPriceChart
 
-  // Loading state
-  if (!tokenPriceChart) {
-    return (
-      <View height={400}>
-        <Skeleton height="100%" width="100%" />
-      </View>
-    )
-  }
-
   // Empty state
-  if (tokenPriceChart.length === 0) {
+  if (!tokenPriceChart || tokenPriceChart.length === 0) {
     return (
       <View height={400} align="center" justify="center">
         <Text>No price data available</Text>
@@ -136,7 +138,6 @@ function TokenPriceChartContent({
   }
 
   // Process the chart data to ensure proper formatting
-  // Now using the utility function instead of the service
   const chartData = [...tokenPriceChart].map((point) => ({
     time: point.time,
     value: typeof point.value === 'string' ? parseFloat(point.value) : point.value,
