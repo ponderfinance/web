@@ -42,12 +42,7 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html
-      dir="ltr"
-      lang="en"
-      data-rs-theme="ponder"
-      data-rs-color-mode="dark"
-    >
+    <html dir="ltr" lang="en" data-rs-theme="ponder" data-rs-color-mode="dark">
       <body style={{ fontFamily: "'Pathway Extreme', sans-serif" }}>
         <Providers>
           <Header />
@@ -55,7 +50,6 @@ export default function RootLayout({
             maxWidth={{ s: '100%', m: '1032px' }}
             attributes={{ style: { margin: '0 auto' } }}
             insetTop={{ s: 16, m: 24 }}
-            padding={4}
           >
             {children}
           </View>
