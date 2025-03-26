@@ -124,7 +124,7 @@ export const TokensDisplay: React.FC<TokensDisplayProps> = ({
               <View.Item columns={3}>
                 <View direction="row" gap={2} align="center">
                   <Image
-                    src={getIpfsGateway(node.imageURI ?? '')}
+                    src={getIpfsGateway(node.imageURI ?? '/tokens/coin.svg')}
                     height={7}
                     width={7}
                     alt={'Selected Token Icon'}
