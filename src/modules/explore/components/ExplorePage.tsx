@@ -2,114 +2,58 @@
 'use client'
 
 import React, { Suspense, useState } from 'react'
-import { graphql, useLazyLoadQuery } from 'react-relay'
-import { ExplorePageQuery } from '@/src/__generated__/ExplorePageQuery.graphql'
-import { Explore } from '@/src/modules/explore/components/Explore'
-import { Text, View } from 'reshaped'
-
-const explorePageQuery = graphql`
-  query ExplorePageQuery(
-    $first: Int!
-    $orderBy: PairOrderBy!
-    $orderDirection: OrderDirection!
-  ) {
-    pairs(first: $first, orderBy: $orderBy, orderDirection: $orderDirection) {
-      edges {
-        node {
-          id
-          address
-          token0 {
-            id
-            address
-            symbol
-            decimals
-            ...TokenPairFragment
-          }
-          token1 {
-            id
-            address
-            symbol
-            decimals
-            ...TokenPairFragment
-          }
-          tvl
-          reserveUSD
-        }
-      }
-      pageInfo {
-        hasNextPage
-        endCursor
-      }
-      totalCount
-    }
-  }
-`
+import { View, Text, Actionable } from 'reshaped'
+import { TokensPage } from '@/src/modules/explore/components/TokensPage'
+import { PoolsPage } from '@/src/modules/explore/components/PoolsPage'
+import { TransactionsPage } from '@/src/modules/explore/components/TransactionsPage'
 
 // Loading component for suspense
 function ExploreLoading() {
   return <View align="center" justify="center" height="40vh"></View>
 }
 
-// Main content component that fetches data
-function ExploreContent({
-  orderBy,
-  orderDirection,
-  setOrderBy,
-  setOrderDirection,
-}: {
-  orderBy: string
-  orderDirection: string
-  setOrderBy: (value: string) => void
-  setOrderDirection: (value: string) => void
-}) {
-  const data = useLazyLoadQuery<ExplorePageQuery>(
-    explorePageQuery,
-    {
-      first: 50,
-      orderBy: orderBy as any,
-      orderDirection: orderDirection as any,
-    },
-    {
-      fetchPolicy: 'store-and-network',
-      fetchKey: orderBy + orderDirection, // Unique key when sort changes
-    }
-  )
-
-  return (
-    <Explore
-      data={data}
-      orderBy={orderBy}
-      orderDirection={orderDirection}
-      setOrderBy={setOrderBy}
-      setOrderDirection={setOrderDirection}
-    />
-  )
-}
-
 // Exported page component
 export const ExplorePage = () => {
-  const [orderBy, setOrderBy] = useState<string>('reserveUSD')
-  const [orderDirection, setOrderDirection] = useState<string>('desc')
+  const [activeTab, setActiveTab] = useState<'tokens' | 'pools' | 'transactions'>('tokens')
+
+  // Handle tab switching
+  const handleTabChange = (tab: 'tokens' | 'pools' | 'transactions') => {
+    setActiveTab(tab)
+  }
 
   return (
     <View gap={6}>
       <View direction="row" gap={6}>
-        <Text variant="featured-2">Tokens</Text>
-        <Text variant="featured-2" color="neutral-faded">
-          Pools
-        </Text>
-        <Text variant="featured-2" color="neutral-faded">
-          Transactions
-        </Text>
+        <Actionable onClick={() => handleTabChange('tokens')}>
+          <Text
+            variant="featured-2"
+            color={activeTab === 'tokens' ? 'neutral' : 'neutral-faded'}
+          >
+            Tokens
+          </Text>
+        </Actionable>
+        <Actionable onClick={() => handleTabChange('pools')}>
+          <Text
+            variant="featured-2"
+            color={activeTab === 'pools' ? 'neutral' : 'neutral-faded'}
+          >
+            Pools
+          </Text>
+        </Actionable>
+        <Actionable onClick={() => handleTabChange('transactions')}>
+          <Text
+            variant="featured-2"
+            color={activeTab === 'transactions' ? 'neutral' : 'neutral-faded'}
+          >
+            Transactions
+          </Text>
+        </Actionable>
       </View>
 
       <Suspense fallback={<ExploreLoading />}>
-        <ExploreContent
-          orderBy={orderBy}
-          orderDirection={orderDirection}
-          setOrderBy={setOrderBy}
-          setOrderDirection={setOrderDirection}
-        />
+        {activeTab === 'tokens' && <TokensPage />}
+        {activeTab === 'pools' && <PoolsPage />}
+        {activeTab === 'transactions' && <TransactionsPage />}
       </Suspense>
     </View>
   )

@@ -1,12 +1,12 @@
 'use client'
 
-import React, { Suspense, useState } from 'react'
+import React, { Suspense, useState, useEffect } from 'react'
 import { graphql, useLazyLoadQuery } from 'react-relay'
 import { TokensPageQuery } from '@/src/__generated__/TokensPageQuery.graphql'
 import { TokensDisplay } from '@/src/modules/explore/components/TokensDisplay'
 import { View, Text, Skeleton } from 'reshaped'
 
-const tokensPageQuery = graphql`
+export const tokensPageQuery = graphql`
   query TokensPageQuery(
     $first: Int!
     $orderBy: TokenOrderBy!
@@ -37,8 +37,58 @@ const tokensPageQuery = graphql`
 // Loading component for suspense
 function TokensLoading() {
   return (
-    <View>
-      <Skeleton height="300px" width="100%" />
+    <View borderRadius="medium" borderColor="neutral-faded" overflow="auto" width="100%">
+      {/* Table Header */}
+      <View
+        direction="row"
+        gap={0}
+        padding={4}
+        className={'border-0 border-b border-neutral-faded'}
+        backgroundColor="elevation-base"
+      >
+        <View.Item columns={1}>
+          <Text color="neutral-faded" weight="medium">
+            #
+          </Text>
+        </View.Item>
+        <View.Item columns={3}>
+          <Text color="neutral-faded" weight="medium">
+            Token name
+          </Text>
+        </View.Item>
+        <View.Item columns={2}>
+          <Text color="neutral-faded" weight="medium">
+            Price
+          </Text>
+        </View.Item>
+      </View>
+
+      {/* Skeleton Rows */}
+      {[...Array(10)].map((_, index) => (
+        <View
+          key={index}
+          direction="row"
+          gap={0}
+          padding={4}
+          className={'border-0 border-neutral-faded'}
+          align="center"
+        >
+          <View.Item columns={1}>
+            <Skeleton width="20px" height="24px" />
+          </View.Item>
+          <View.Item columns={3}>
+            <View direction="row" gap={2} align="center">
+              <Skeleton width="28px" height="28px" borderRadius="circular" />
+              <View direction="row" gap={1} align="center">
+                <Skeleton width="120px" height="24px" />
+              </View>
+            </View>
+          </View.Item>
+          <View.Item columns={2}>
+            <Skeleton width="80px" height="24px" />
+          </View.Item>
+        </View>
+      ))}
     </View>
   )
 }
@@ -83,6 +133,16 @@ function TokensContent({
 export const TokensPage = () => {
   const [orderBy, setOrderBy] = useState<string>('volumeUSD24h')
   const [orderDirection, setOrderDirection] = useState<string>('desc')
+  const [mounted, setMounted] = useState(false)
+
+  // Only render the query component after mounting on the client
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  if (!mounted) {
+    return null
+  }
 
   return (
     <View gap={6}>
