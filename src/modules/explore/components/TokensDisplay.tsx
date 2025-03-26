@@ -61,6 +61,7 @@ export const TokensDisplay: React.FC<TokensDisplayProps> = ({
       <View
         direction="row"
         gap={0}
+        padding={4}
         className={'border-0 border-b border-neutral-faded'}
         backgroundColor="elevation-base"
       >
