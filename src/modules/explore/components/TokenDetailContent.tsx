@@ -1,13 +1,7 @@
 'use client'
 
 import React, { useState, Suspense } from 'react'
-import {
-  View,
-  Text,
-  Image,
-  Button,
-  Link,
-} from 'reshaped'
+import { View, Text, Image, Button, Link } from 'reshaped'
 import { graphql, useLazyLoadQuery } from 'react-relay'
 import TokenPriceChartContainer from './TokenPriceChartContainer'
 import { TokenDetailContentQuery } from '@/src/__generated__/TokenDetailContentQuery.graphql'
@@ -83,8 +77,8 @@ export default function TokenDetailContent({ tokenAddress }: { tokenAddress: str
 
   // Handle timeframe change
   const handleTimeframeChange = (newTimeframe: string) => {
-    setActiveTimeframe(newTimeframe);
-  };
+    setActiveTimeframe(newTimeframe)
+  }
 
   // Get price format based on value
   const formatTokenPrice = (price: number) => {
@@ -103,24 +97,33 @@ export default function TokenDetailContent({ tokenAddress }: { tokenAddress: str
   // Map UI timeframe format to API timeframe format
   const getChartTimeframe = () => {
     switch (activeTimeframe) {
-      case '1H': return '1h';  // 1 hour
-      case '1D': return '1d';  // 1 day (24 hours)
-      case '1W': return '1w';  // 1 week (7 days)
-      case '1M': return '1m';  // 1 month (30 days)
-      case '1Y': return '1y';  // 1 year (365 days)
-      default: return '1m';    // Default to 1 month
+      case '1H':
+        return '1h' // 1 hour
+      case '1D':
+        return '1d' // 1 day (24 hours)
+      case '1W':
+        return '1w' // 1 week (7 days)
+      case '1M':
+        return '1m' // 1 month (30 days)
+      case '1Y':
+        return '1y' // 1 year (365 days)
+      default:
+        return '1m' // Default to 1 month
     }
-  };
+  }
 
   // Memoize the chart component to prevent unnecessary re-renders
-  const timeframeForChart = getChartTimeframe();
-  const chartComponent = React.useMemo(() => (
-    <TokenPriceChartContainer
-      tokenRef={token}
-      initialTimeframe={timeframeForChart}
-      initialDisplayType="area"
-    />
-  ), [token, timeframeForChart]);
+  const timeframeForChart = getChartTimeframe()
+  const chartComponent = React.useMemo(
+    () => (
+      <TokenPriceChartContainer
+        tokenRef={token}
+        initialTimeframe={timeframeForChart}
+        initialDisplayType="area"
+      />
+    ),
+    [token, timeframeForChart]
+  )
 
   return (
     <View direction="column" gap={6}>
@@ -168,7 +171,7 @@ export default function TokenDetailContent({ tokenAddress }: { tokenAddress: str
           padding={0}
           gap={1}
           position="absolute"
-          insetTop={12}
+          insetTop={{ s: 16, m: 12 }}
           zIndex={10}
         >
           <Text variant="title-6" weight="regular" color="neutral">
@@ -181,14 +184,20 @@ export default function TokenDetailContent({ tokenAddress }: { tokenAddress: str
 
         {/* Chart section */}
         <View>
-          <Suspense fallback={
-            <View height={400} width="100%" attributes={{
-              style: {
-                backgroundColor: 'rgba(30, 30, 30, 0.6)',
-                borderRadius: 4
-              }
-            }} />
-          }>
+          <Suspense
+            fallback={
+              <View
+                height={400}
+                width="100%"
+                attributes={{
+                  style: {
+                    backgroundColor: 'rgba(30, 30, 30, 0.6)',
+                    borderRadius: 4,
+                  },
+                }}
+              />
+            }
+          >
             {chartComponent}
           </Suspense>
         </View>
