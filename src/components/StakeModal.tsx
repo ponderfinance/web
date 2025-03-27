@@ -65,20 +65,20 @@ export default function StakeModal({
     try {
       setError(null)
       const parsedAmount = parseEther(amount)
-      
+
       // Prevent double approvals
       setApprovalRequested(true)
-      
+
       // Execute approval
       await approve.mutateAsync({
         token: lpToken,
         spender: sdk.masterChef.address,
         amount: parsedAmount,
       })
-      
+
       // Force allowance to refresh after approval
       await allowance.refetch()
-      
+
     } catch (err) {
       if (err instanceof Error && err.message === 'Already approved') {
         // If already approved, mark as successful
@@ -102,13 +102,31 @@ export default function StakeModal({
       setError(null)
       const parsedAmount = parseEther(amount)
 
+      // Additional validation to prevent submitting with zero tokens
+      if (parsedAmount <= BigInt(0)) {
+        setError('Amount must be greater than 0')
+        return
+      }
+
       if (isStaking) {
+        // Check if user has LP tokens to stake
+        if (position.userLPBalance <= BigInt(0)) {
+          setError('You have no LP tokens to stake')
+          return
+        }
+
+        // Make sure amount is not greater than available balance
+        if (parsedAmount > position.userLPBalance) {
+          setError('Insufficient LP balance')
+          return
+        }
+
         // Always double-check approval directly
         if (!isApproved(parsedAmount)) {
           setError('Token approval required first')
           return
         }
-        
+
         // Use callback pattern instead of await
         stake(
           {
@@ -119,7 +137,7 @@ export default function StakeModal({
             onSuccess: () => {
               setAmount('')
               onClose()
-              
+
               // Show success toast
               const id = toast.show({
                 color: 'positive',
@@ -139,6 +157,18 @@ export default function StakeModal({
           }
         )
       } else {
+        // Check if user has staked LP tokens to unstake
+        if (!stakeInfo?.amount || stakeInfo.amount <= BigInt(0)) {
+          setError('You have no staked LP tokens to unstake')
+          return
+        }
+
+        // Make sure amount is not greater than staked balance
+        if (parsedAmount > stakeInfo.amount) {
+          setError('Insufficient staked LP balance')
+          return
+        }
+
         // Use callback pattern instead of await
         unstake(
           {
@@ -149,7 +179,7 @@ export default function StakeModal({
             onSuccess: () => {
               setAmount('')
               onClose()
-              
+
               // Show success toast
               const id = toast.show({
                 color: 'positive',
@@ -200,15 +230,20 @@ export default function StakeModal({
   }, [])
 
   const parsedAmount = amount ? parseEther(amount) : BigInt(0)
-  
+
   // Simple check if current amount is approved
   const amountIsApproved = isApproved && parsedAmount > BigInt(0) && isApproved(parsedAmount);
-  
+
   // Need approval if staking and not approved (unless we just requested approval)
   const needsApproval = isStaking && parsedAmount > BigInt(0) && !amountIsApproved && !approvalRequested;
-  
+
   const isLoading = isStakeLoading || isUnstakeLoading || approve.isPending
-  const isValid = amount && parsedAmount <= maxAmount
+
+  // Improved validation to check if user actually has tokens
+  const isValid = amount &&
+    parsedAmount > BigInt(0) &&
+    parsedAmount <= maxAmount &&
+    (isStaking ? position.userLPBalance > BigInt(0) : stakeInfo?.amount && stakeInfo.amount > BigInt(0))
 
   // Reset states when modal opens/closes
   useEffect(() => {
@@ -217,13 +252,23 @@ export default function StakeModal({
       setTimeout(() => {
         inputRef.current?.focus()
       }, 100)
+
+      // Set initial staking mode based on token availability
+      if (position.userLPBalance <= BigInt(0) && stakeInfo?.amount && stakeInfo.amount > BigInt(0)) {
+        // If no LP tokens but has staked tokens, select unstake tab
+        setIsStaking(false);
+      } else if (position.userLPBalance > BigInt(0) && (!stakeInfo?.amount || stakeInfo.amount <= BigInt(0))) {
+        // If has LP tokens but no staked tokens, select stake tab
+        setIsStaking(true);
+      }
+      // Otherwise keep current selection
     } else {
       // Clear states when modal closes
       setAmount('')
       setError(null)
       setApprovalRequested(false)
     }
-  }, [active])
+  }, [active, position.userLPBalance, stakeInfo?.amount])
 
   // Log for debugging
   useEffect(() => {
@@ -260,6 +305,7 @@ export default function StakeModal({
             <Button
               variant={isStaking ? 'solid' : 'outline'}
               onClick={() => handleStakingModeChange(true)}
+              disabled={position.userLPBalance <= BigInt(0)}
               fullWidth
             >
               Stake
@@ -267,6 +313,7 @@ export default function StakeModal({
             <Button
               variant={!isStaking ? 'solid' : 'outline'}
               onClick={() => handleStakingModeChange(false)}
+              disabled={!stakeInfo?.amount || stakeInfo.amount <= BigInt(0)}
               fullWidth
             >
               Unstake
@@ -292,28 +339,32 @@ export default function StakeModal({
                   pattern: '^[0-9]*[.,]?[0-9]*$',
                 }}
               />
-              <Button variant="outline" onClick={handleMaxClick}>
+              <Button variant="outline" onClick={handleMaxClick} disabled={maxAmount <= BigInt(0)}>
                 MAX
               </Button>
             </View>
           </View>
 
-          {error && <Text variant="caption-1" color="critical">{error}</Text>}
+          {isStaking && position.userLPBalance <= BigInt(0) && (
+            <Text variant="caption-1" color="critical" align="center">
+              You don't have any LP tokens to stake
+            </Text>
+          )}
 
-          {isStaking && (approvalRequested || amountIsApproved) && amount && (
-            <Text variant="caption-1" color="positive" align="center">
-              LP Token approved for staking
+          {!isStaking && (!stakeInfo?.amount || stakeInfo.amount <= BigInt(0)) && (
+            <Text variant="caption-1" color="critical" align="center">
+              You don't have any staked LP tokens to unstake
             </Text>
           )}
 
           <Button
             onClick={needsApproval ? handleApprove : handleSubmit}
-            disabled={!isValid || isLoading}
+            disabled={!isValid || isLoading || maxAmount <= BigInt(0)}
             loading={isLoading}
             fullWidth
           >
-            {needsApproval 
-              ? 'Approve LP Token' 
+            {needsApproval
+              ? 'Approve LP Token'
               : (isStaking ? 'Stake LP' : 'Unstake LP')
             }
           </Button>
