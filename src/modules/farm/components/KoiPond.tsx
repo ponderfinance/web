@@ -21,20 +21,19 @@ export default function KoiPond() {
         borderRadius="large"
       >
         <Text variant="title-5" weight="regular" align="center">
-          KOI Pond
+          FARM
         </Text>
-        <Text>
-          Provide liquidity and stake LP tokens to receive KOI. Lock KOI to amplify your
-          distribution rate.
+        <Text align="center">
+          Provide liquidity and stake LP tokens to receive KOI.
         </Text>
         <FarmList />
-        {/*<View position="absolute" insetTop={4} insetEnd={4}>*/}
-        {/*  <Button onClick={activate}>Create Farm</Button>*/}
-        {/*</View>*/}
+        <View position="absolute" insetTop={4} insetEnd={4}>
+          <Button onClick={activate}>Create Farm</Button>
+        </View>
 
-        {/*<Modal active={active} onClose={deactivate}>*/}
-        {/*  <CreateFarm />*/}
-        {/*</Modal>*/}
+        <Modal active={active} onClose={deactivate}>
+          <CreateFarm />
+        </Modal>
       </View>
     </View>
   )
