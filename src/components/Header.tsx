@@ -311,6 +311,15 @@ export const Header = () => {
           >
             <Text variant="body-1">View positions</Text>
           </Button>
+          <Button
+              variant="ghost"
+              onClick={() => {
+                router.push('/xkoi')
+                deactivate()
+              }}
+          >
+            <Text variant="body-1">Farm</Text>
+          </Button>
         </View>
       </Modal>
     </View>
