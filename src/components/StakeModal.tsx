@@ -1,5 +1,5 @@
-import { useState, useCallback, useRef } from 'react'
-import { Modal, View, Text, TextField, Button, useToggle, Dismissible } from 'reshaped'
+import { useState, useCallback, useRef, useEffect } from 'react'
+import { Modal, View, Text, TextField, Button, Dismissible, Icon, useToast } from 'reshaped'
 import { formatEther, parseEther, type Address } from 'viem'
 import {
   usePonderSDK,
@@ -10,6 +10,7 @@ import {
   useTokenApproval,
 } from '@ponderfinance/sdk'
 import { useAccount } from 'wagmi'
+import { X } from '@phosphor-icons/react'
 
 interface StakeModalProps {
   poolId: number
@@ -33,11 +34,13 @@ export default function StakeModal({
   const sdk = usePonderSDK()
   const { address } = useAccount()
   const inputRef = useRef<HTMLInputElement>(null)
-  const { toggle } = useToggle(active)
+  const toast = useToast()
 
   const [amount, setAmount] = useState('')
   const [isStaking, setIsStaking] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  // Track explicit approval requests for this amount to avoid infinite loops
+  const [approvalRequested, setApprovalRequested] = useState(false)
 
   const { data: stakeInfo } = useStakeInfo(poolId, address)
   const { allowance, approve, isApproved } = useTokenApproval(
@@ -46,6 +49,48 @@ export default function StakeModal({
   )
   const { mutate: stake, isPending: isStakeLoading } = useStake()
   const { mutate: unstake, isPending: isUnstakeLoading } = useUnstake()
+
+  // Reset approval requested state when amount changes
+  useEffect(() => {
+    setApprovalRequested(false);
+  }, [amount]);
+
+  // Simplified approval handler - only handles the approval transaction
+  const handleApprove = useCallback(async () => {
+    if (!amount || !address) {
+      setError('Please enter an amount')
+      return
+    }
+
+    try {
+      setError(null)
+      const parsedAmount = parseEther(amount)
+      
+      // Prevent double approvals
+      setApprovalRequested(true)
+      
+      // Execute approval
+      await approve.mutateAsync({
+        token: lpToken,
+        spender: sdk.masterChef.address,
+        amount: parsedAmount,
+      })
+      
+      // Force allowance to refresh after approval
+      await allowance.refetch()
+      
+    } catch (err) {
+      if (err instanceof Error && err.message === 'Already approved') {
+        // If already approved, mark as successful
+        setApprovalRequested(true)
+      } else {
+        console.error('Failed to approve:', err)
+        setError(err instanceof Error ? err.message : 'Approval failed')
+        // Reset approval requested flag on error
+        setApprovalRequested(false)
+      }
+    }
+  }, [amount, address, approve, allowance, lpToken, sdk.masterChef.address])
 
   const handleSubmit = useCallback(async () => {
     if (!amount || !address) {
@@ -58,54 +103,93 @@ export default function StakeModal({
       const parsedAmount = parseEther(amount)
 
       if (isStaking) {
+        // Always double-check approval directly
         if (!isApproved(parsedAmount)) {
-          try {
-            await approve.mutate({
-              token: lpToken,
-              spender: sdk.masterChef.address,
-              amount: parsedAmount,
-            })
-          } catch (err) {
-            setError('Approval failed')
-            return
-          }
+          setError('Token approval required first')
+          return
         }
-
-        await stake({
-          poolId,
-          amount: parsedAmount,
-        })
+        
+        // Use callback pattern instead of await
+        stake(
+          {
+            poolId,
+            amount: parsedAmount,
+          },
+          {
+            onSuccess: () => {
+              setAmount('')
+              onClose()
+              
+              // Show success toast
+              const id = toast.show({
+                color: 'positive',
+                title: 'Stake successful',
+                text: 'You have successfully staked your LP tokens.',
+                actionsSlot: (
+                  <Button onClick={() => toast.hide(id)} variant="ghost">
+                    <Icon svg={X} />
+                  </Button>
+                ),
+              })
+            },
+            onError: (err) => {
+              console.error('Failed to stake:', err)
+              setError(err instanceof Error ? err.message : 'Transaction failed')
+            },
+          }
+        )
       } else {
-        await unstake({
-          poolId,
-          amount: parsedAmount,
-        })
+        // Use callback pattern instead of await
+        unstake(
+          {
+            poolId,
+            amount: parsedAmount,
+          },
+          {
+            onSuccess: () => {
+              setAmount('')
+              onClose()
+              
+              // Show success toast
+              const id = toast.show({
+                color: 'positive',
+                title: 'Unstake successful',
+                text: 'You have successfully unstaked your LP tokens.',
+                actionsSlot: (
+                  <Button onClick={() => toast.hide(id)} variant="ghost">
+                    <Icon svg={X} />
+                  </Button>
+                ),
+              })
+            },
+            onError: (err) => {
+              console.error('Failed to unstake:', err)
+              setError(err instanceof Error ? err.message : 'Transaction failed')
+            },
+          }
+        )
       }
-
-      setAmount('')
-      onClose()
     } catch (err) {
       console.error('Failed to stake/unstake:', err)
       setError(err instanceof Error ? err.message : 'Transaction failed')
     }
-  }, [
-    amount,
-    address,
-    isStaking,
-    isApproved,
-    approve,
-    stake,
-    unstake,
-    lpToken,
-    sdk.masterChef.address,
-    poolId,
-    onClose,
-  ])
+  }, [amount, address, isStaking, stake, unstake, poolId, onClose, isApproved, toast])
+
+  // Handle switching between stake/unstake modes
+  const handleStakingModeChange = useCallback((staking: boolean) => {
+    if (staking !== isStaking) {
+      setAmount('')
+      setError(null)
+      setApprovalRequested(false)
+    }
+    setIsStaking(staking)
+  }, [isStaking])
 
   const maxAmount = isStaking ? position.userLPBalance : stakeInfo?.amount || BigInt(0)
 
   const handleMaxClick = useCallback(() => {
     setAmount(formatEther(maxAmount))
+    setApprovalRequested(false)
   }, [maxAmount])
 
   const handleAmountChange = useCallback(({ value }: { value: string }) => {
@@ -116,21 +200,49 @@ export default function StakeModal({
   }, [])
 
   const parsedAmount = amount ? parseEther(amount) : BigInt(0)
-  const needsApproval = isStaking && !isApproved(parsedAmount)
+  
+  // Simple check if current amount is approved
+  const amountIsApproved = isApproved && parsedAmount > BigInt(0) && isApproved(parsedAmount);
+  
+  // Need approval if staking and not approved (unless we just requested approval)
+  const needsApproval = isStaking && parsedAmount > BigInt(0) && !amountIsApproved && !approvalRequested;
+  
   const isLoading = isStakeLoading || isUnstakeLoading || approve.isPending
-
   const isValid = amount && parsedAmount <= maxAmount
 
-  const handleOpen = useCallback(() => {
-    setError(null)
-    inputRef.current?.focus()
-  }, [])
+  // Reset states when modal opens/closes
+  useEffect(() => {
+    if (active) {
+      // Focus the input field when modal opens
+      setTimeout(() => {
+        inputRef.current?.focus()
+      }, 100)
+    } else {
+      // Clear states when modal closes
+      setAmount('')
+      setError(null)
+      setApprovalRequested(false)
+    }
+  }, [active])
+
+  // Log for debugging
+  useEffect(() => {
+    if (amount && isApproved) {
+      const parsedAmt = parseEther(amount);
+      console.log('Current approval state:', {
+        amount,
+        approvalRequested,
+        isApproved: isApproved(parsedAmt),
+        needsApproval,
+        allowanceData: allowance.data ? formatEther(allowance.data) : 'none'
+      });
+    }
+  }, [amount, approvalRequested, isApproved, needsApproval, allowance.data]);
 
   return (
     <Modal
       active={active}
       onClose={onClose}
-      onOpen={handleOpen}
       size="400px"
       padding={6}
       ariaLabel={`${isStaking ? 'Stake' : 'Unstake'} LP tokens`}
@@ -147,14 +259,14 @@ export default function StakeModal({
           <Button.Group>
             <Button
               variant={isStaking ? 'solid' : 'outline'}
-              onClick={() => setIsStaking(true)}
+              onClick={() => handleStakingModeChange(true)}
               fullWidth
             >
               Stake
             </Button>
             <Button
               variant={!isStaking ? 'solid' : 'outline'}
-              onClick={() => setIsStaking(false)}
+              onClick={() => handleStakingModeChange(false)}
               fullWidth
             >
               Unstake
@@ -186,15 +298,24 @@ export default function StakeModal({
             </View>
           </View>
 
-          {error && <Text variant="caption-1">{error}</Text>}
+          {error && <Text variant="caption-1" color="critical">{error}</Text>}
+
+          {isStaking && (approvalRequested || amountIsApproved) && amount && (
+            <Text variant="caption-1" color="positive" align="center">
+              LP Token approved for staking
+            </Text>
+          )}
 
           <Button
-            onClick={handleSubmit}
+            onClick={needsApproval ? handleApprove : handleSubmit}
             disabled={!isValid || isLoading}
             loading={isLoading}
             fullWidth
           >
-            {needsApproval ? 'Approve LP Token' : isStaking ? 'Stake LP' : 'Unstake LP'}
+            {needsApproval 
+              ? 'Approve LP Token' 
+              : (isStaking ? 'Stake LP' : 'Unstake LP')
+            }
           </Button>
         </View>
       </View>

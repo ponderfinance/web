@@ -11,7 +11,7 @@ export default function Farm() {
         paddingBottom={12}
       >
         <FeesPage />
-        {/*<KoiPond />*/}
+        <KoiPond />
       </View>
     </View>
   )
