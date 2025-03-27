@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
-import { Modal, View, Text, TextField, Button, Dismissible } from 'reshaped'
+import { Modal, View, Text, TextField, Button, Dismissible, Icon, useToast } from 'reshaped'
 import { formatEther, parseEther, type Address } from 'viem'
 import {
   usePonderSDK,
@@ -10,6 +10,7 @@ import {
   useTokenApproval,
 } from '@ponderfinance/sdk'
 import { useAccount } from 'wagmi'
+import { X } from '@phosphor-icons/react'
 
 interface StakeModalProps {
   poolId: number
@@ -33,6 +34,7 @@ export default function StakeModal({
   const sdk = usePonderSDK()
   const { address } = useAccount()
   const inputRef = useRef<HTMLInputElement>(null)
+  const toast = useToast()
 
   const [amount, setAmount] = useState('')
   const [isStaking, setIsStaking] = useState(true)
@@ -107,25 +109,71 @@ export default function StakeModal({
           return
         }
         
-        await stake({
-          poolId,
-          amount: parsedAmount,
-        })
+        // Use callback pattern instead of await
+        stake(
+          {
+            poolId,
+            amount: parsedAmount,
+          },
+          {
+            onSuccess: () => {
+              setAmount('')
+              onClose()
+              
+              // Show success toast
+              const id = toast.show({
+                color: 'positive',
+                title: 'Stake successful',
+                text: 'You have successfully staked your LP tokens.',
+                actionsSlot: (
+                  <Button onClick={() => toast.hide(id)} variant="ghost">
+                    <Icon svg={X} />
+                  </Button>
+                ),
+              })
+            },
+            onError: (err) => {
+              console.error('Failed to stake:', err)
+              setError(err instanceof Error ? err.message : 'Transaction failed')
+            },
+          }
+        )
       } else {
-        await unstake({
-          poolId,
-          amount: parsedAmount,
-        })
+        // Use callback pattern instead of await
+        unstake(
+          {
+            poolId,
+            amount: parsedAmount,
+          },
+          {
+            onSuccess: () => {
+              setAmount('')
+              onClose()
+              
+              // Show success toast
+              const id = toast.show({
+                color: 'positive',
+                title: 'Unstake successful',
+                text: 'You have successfully unstaked your LP tokens.',
+                actionsSlot: (
+                  <Button onClick={() => toast.hide(id)} variant="ghost">
+                    <Icon svg={X} />
+                  </Button>
+                ),
+              })
+            },
+            onError: (err) => {
+              console.error('Failed to unstake:', err)
+              setError(err instanceof Error ? err.message : 'Transaction failed')
+            },
+          }
+        )
       }
-
-      // Only close modal after transaction succeeds
-      setAmount('')
-      onClose()
     } catch (err) {
       console.error('Failed to stake/unstake:', err)
       setError(err instanceof Error ? err.message : 'Transaction failed')
     }
-  }, [amount, address, isStaking, stake, unstake, poolId, onClose, isApproved])
+  }, [amount, address, isStaking, stake, unstake, poolId, onClose, isApproved, toast])
 
   // Handle switching between stake/unstake modes
   const handleStakingModeChange = useCallback((staking: boolean) => {
