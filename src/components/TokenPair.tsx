@@ -56,6 +56,7 @@ export interface TokenPairProps {
   tokenAddressA?: `0x${string}`
   tokenAddressB?: `0x${string}`
   size?: 'small' | 'large'
+  showSymbols?: boolean
   tokenAInfo?: {
     symbol: string
     name: string
@@ -163,6 +164,7 @@ const BaseTokenPair: React.FC<TokenPairProps> = ({
   tokenAInfo,
   tokenBInfo,
   size = 'small',
+  showSymbols = true,
 }) => {
   // Check if the tokens are native KUB (address 0x0...)
   const isTokenANative = tokenAddressA === '0x0000000000000000000000000000000000000000'
@@ -361,9 +363,11 @@ const BaseTokenPair: React.FC<TokenPairProps> = ({
             </View>
           </View>
         </View>
-        <Text variant={size === 'small' ? 'body-2' : 'body-1'}>
-          {firstTokenDisplay.symbol} / {secondTokenDisplay.symbol}
-        </Text>
+        {showSymbols && (
+          <Text variant={size === 'small' ? 'body-2' : 'body-1'}>
+            {firstTokenDisplay.symbol} / {secondTokenDisplay.symbol}
+          </Text>
+        )}
       </View>
     </View>
   )

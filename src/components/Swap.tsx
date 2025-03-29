@@ -1,8 +1,9 @@
-import { useState, useEffect, useMemo, useCallback } from 'react'
-import { Text, Button, View, Actionable, Icon, useToast } from 'reshaped'
+import { useState, useEffect, useMemo, useCallback, Suspense } from 'react'
+import { Text, Button, View, Actionable, Icon, useToast, Image } from 'reshaped'
 import { type Address, formatUnits, parseUnits } from 'viem'
 import { useAccount, useBalance } from 'wagmi'
 import { useQuery } from '@tanstack/react-query'
+import { useLazyLoadQuery } from 'react-relay'
 import {
   useGasEstimate,
   useSwap,
@@ -22,7 +23,10 @@ import { TokenBalanceDisplay } from '@/src/modules/swap/components/TokenBalanceD
 import TokenSelector from '@/src/components/TokenSelector'
 import { CURRENT_CHAIN } from '@/src/constants/chains'
 import { formatNumber, roundDecimal } from '@/src/utils/numbers'
-import { TokenPair } from '@/src/components/TokenPair'
+import { TokenPair, tokenByAddressQuery } from '@/src/components/TokenPair'
+import { RelayEnvironmentProvider } from 'react-relay'
+import { environment } from '@/src/relay/environment'
+import { getClientEnvironment } from '@/src/lib/relay/environment'
 
 const kubTokenAbi = [
   {
@@ -512,6 +516,73 @@ export function SwapInterface({
     }
   }, [route, account, tokenIn, approve, sdk, refetchAllowance])
 
+  const showSuccessToast = (swappedAmountIn: bigint, swappedAmountOut: bigint, txHash: string) => {
+    // Format amounts with proper decimals and round to reasonable decimal places
+    const formattedAmountIn = isNativeKUB(tokenIn) 
+      ? formatNumber(roundDecimal(formatUnits(swappedAmountIn || BigInt(0), 18), 4))
+      : tokenInInfo 
+        ? formatNumber(roundDecimal(formatUnits(swappedAmountIn || BigInt(0), tokenInInfo.decimals), 4))
+        : '0';
+
+    const formattedAmountOut = isNativeKUB(tokenOut)
+      ? formatNumber(roundDecimal(formatUnits(swappedAmountOut || BigInt(0), 18), 4))
+      : tokenOutInfo
+        ? formatNumber(roundDecimal(formatUnits(swappedAmountOut || BigInt(0), tokenOutInfo.decimals), 4))
+        : '0';
+
+    const environment = getClientEnvironment()
+    if (!environment) return
+
+    const id = toast.show({
+      color: 'neutral',
+      actionsSlot: (
+        <RelayEnvironmentProvider environment={environment}>
+          <Suspense>
+            <Actionable 
+              onClick={() => window.open(`${CURRENT_CHAIN.blockExplorers.default.url}/tx/${txHash}`, '_blank')}
+            >
+              <View 
+                direction="row"
+                align="start"
+                gap={3}
+                padding={4}
+                position="relative"
+              >
+                <TokenPair
+                  tokenAddressA={tokenIn}
+                  tokenAddressB={tokenOut}
+                  size="small"
+                  showSymbols={false}
+                />
+                <View direction="column" gap={1}>
+                  <Text variant="body-2">Swapped</Text>
+                  <Text variant="body-2" color="neutral-faded">
+                    {formattedAmountIn} {tokenInInfo?.symbol || 'KUB'} for {formattedAmountOut} {tokenOutInfo?.symbol || 'KUB'}
+                  </Text>
+                </View>
+                <Button
+                  onClick={(e) => { e.stopPropagation(); toast.hide(id); }} 
+                  variant="ghost"
+                  size="small"
+                  attributes={{
+                    style: {
+                      position: 'absolute',
+                      top: '8px',
+                      right: '8px'
+                    }
+                  }}
+                >
+                  <Icon svg={X} />
+                </Button>
+              </View>
+            </Actionable>
+          </Suspense>
+        </RelayEnvironmentProvider>
+      ),
+      timeout: 0,
+    })
+  }
+
   const handleSwap = async () => {
     if (!route || !account || !minimumReceived?.raw || !sdk) return
     setError(null)
@@ -552,16 +623,23 @@ export function SwapInterface({
             account,
           })
 
+          if (!hash) throw new Error('Failed to get transaction hash')
+          
           setTxHash(hash)
-          setAmountIn('')
 
           await sdk.publicClient.waitForTransactionReceipt({
             hash: hash as `0x${string}`,
             confirmations: 1,
           })
 
+          showSuccessToast(parsedAmountIn, parsedAmountIn, hash as string)
+          
           // Refresh balances immediately
           await refreshAllBalances()
+          
+          setAmountIn('')
+          setTxHash(undefined)
+          setError(null)
 
           return
         } catch (err: any) {
@@ -714,13 +792,23 @@ export function SwapInterface({
       }
 
       const result = await swap(swapParams)
+      if (!result.hash) throw new Error('Failed to get transaction hash')
+      
       setTxHash(result.hash)
-      setAmountIn('')
 
       await sdk.publicClient.waitForTransactionReceipt({
         hash: result.hash,
         confirmations: 1,
       })
+
+      showSuccessToast(parsedAmountIn, route.amountOut, result.hash as string)
+      
+      // Refresh balances after a successful swap
+      await refreshAllBalances()
+      
+      setAmountIn('')
+      setTxHash(undefined)
+      setError(null)
     } catch (err: any) {
       console.error('Swap error:', err)
       setError(parseSwapError(err))
@@ -762,103 +850,6 @@ export function SwapInterface({
     return `Swap failed: ${message}`
   }
 
-  // Reset on successful transaction
-  useEffect(() => {
-    if (txStatus?.state === 'confirmed') {
-      // Format amounts with proper decimals and round to reasonable decimal places
-      const formattedAmountIn = isNativeKUB(tokenIn) 
-        ? formatNumber(roundDecimal(formatUnits(parsedAmountIn || BigInt(0), 18), 4))
-        : tokenInInfo 
-          ? formatNumber(roundDecimal(formatUnits(parsedAmountIn || BigInt(0), tokenInInfo.decimals), 4))
-          : amountIn;
-
-      const formattedAmountOut = isNativeKUB(tokenOut)
-        ? formatNumber(roundDecimal(formatUnits(expectedOutput?.raw || BigInt(0), 18), 4))
-        : tokenOutInfo && expectedOutput?.raw
-          ? formatNumber(roundDecimal(formatUnits(expectedOutput.raw, tokenOutInfo.decimals), 4))
-          : expectedOutput?.formatted || '0';
-
-      // Show success toast
-      const id = toast.show({
-        color: 'neutral',
-        title: 'Swapped',
-        text: `${formattedAmountIn} ${tokenInInfo?.symbol || 'KUB'} for ${formattedAmountOut} ${tokenOutInfo?.symbol || 'KUB'}`,
-        actionsSlot: (
-          <Actionable 
-            onClick={() => window.open(`${CURRENT_CHAIN.blockExplorers.default.url}/tx/${txHash}`, '_blank')}
-          >
-            <View 
-              direction="row" 
-              gap={2} 
-              align="center" 
-              justify="space-between"
-            >
-              <TokenPair 
-                tokenAddressA={tokenIn}
-                tokenAddressB={tokenOut}
-                size="small"
-                tokenAInfo={tokenInInfo ? {
-                  symbol: tokenInInfo.symbol,
-                  name: tokenInInfo.name
-                } : isNativeKUB(tokenIn) ? {
-                  symbol: 'KUB',
-                  name: 'Native KUB'
-                } : undefined}
-                tokenBInfo={tokenOutInfo ? {
-                  symbol: tokenOutInfo.symbol,
-                  name: tokenOutInfo.name
-                } : isNativeKUB(tokenOut) ? {
-                  symbol: 'KUB',
-                  name: 'Native KUB'
-                } : undefined}
-              />
-              <Button onClick={(e) => { e.stopPropagation(); toast.hide(id); }} variant="ghost" size="small">
-                <Icon svg={X} />
-              </Button>
-            </View>
-          </Actionable>
-        ),
-      })
-
-      // Refresh all balances after a successful swap
-      refreshAllBalances()
-
-      setAmountIn('')
-      setTxHash(undefined)
-      setError(null)
-    }
-  }, [txStatus, tokenIn, tokenOut, amountIn, expectedOutput?.formatted, tokenInInfo, tokenOutInfo, parsedAmountIn, txHash])
-
-  useEffect(() => {
-    if (error) {
-      const id = toast.show({
-        color: 'critical',
-        title: '',
-        text: error,
-        actionsSlot: (
-          <Button onClick={() => toast.hide(id)} variant="ghost">
-            <Icon svg={X} />
-          </Button>
-        ),
-      })
-    }
-  }, [error])
-
-  // Validate amounts on route changes
-  useEffect(() => {
-    if (route && (tokenInInfo || isNativeKUB(tokenIn)) && amountIn) {
-      try {
-        const decimals = isNativeKUB(tokenIn) ? 18 : tokenInInfo!.decimals
-        const parsedAmount = parseUnits(amountIn, decimals)
-        if (parsedAmount !== BigInt(route.amountIn)) {
-          setAmountIn(formatUnits(BigInt(route.amountIn), decimals))
-        }
-      } catch (err) {
-        console.error('Amount validation failed:', err)
-      }
-    }
-  }, [route, tokenInInfo, amountIn, tokenIn])
-
   // Handle token selection with Uniswap-like swap behavior
   const handleTokenSelect = (position: 'in' | 'out', address: Address) => {
     if (position === 'in') {
@@ -888,6 +879,22 @@ export function SwapInterface({
     setAmountIn('')
     setError(null)
   }
+
+  // Remove the useEffect for transaction status since we're handling it in the swap function
+  useEffect(() => {
+    if (error) {
+      const id = toast.show({
+        color: 'critical',
+        title: '',
+        text: error,
+        actionsSlot: (
+          <Button onClick={() => toast.hide(id)} variant="ghost">
+            <Icon svg={X} />
+          </Button>
+        ),
+      })
+    }
+  }, [error])
 
   return (
     <View align="center" className={className}>

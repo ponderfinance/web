@@ -46,7 +46,7 @@ const SUPPORTED_TOKENS: {
       icon: '/tokens/usdc.png',
     },
     {
-      address: '0x67eBD850304c70d983B2d1b93ea79c7CD6c3F6b5' as `0x${string}`, // KUB
+      address: '0x0649cef6d11ed6f88535462e147304d3fe5ae14d' as `0x${string}`, // KUB
       symbol: 'KUB',
       decimals: 18,
       icon: '/tokens/bitkub.png',
