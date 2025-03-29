@@ -56,6 +56,16 @@ export interface TokenPairProps {
   tokenAddressA?: `0x${string}`
   tokenAddressB?: `0x${string}`
   size?: 'small' | 'large'
+  tokenAInfo?: {
+    symbol: string
+    name: string
+    imageURI?: string
+  }
+  tokenBInfo?: {
+    symbol: string
+    name: string
+    imageURI?: string
+  }
 }
 
 export const tokenFragment = graphql`
@@ -150,6 +160,8 @@ const BaseTokenPair: React.FC<TokenPairProps> = ({
   tokenB,
   tokenAddressA,
   tokenAddressB,
+  tokenAInfo,
+  tokenBInfo,
   size = 'small',
 }) => {
   // Check if the tokens are native KUB (address 0x0...)
@@ -162,14 +174,14 @@ const BaseTokenPair: React.FC<TokenPairProps> = ({
   const [isLoadingContractA, setIsLoadingContractA] = useState(false)
   const [isLoadingContractB, setIsLoadingContractB] = useState(false)
 
-  // Fetch token data from GraphQL if we only have addresses
-  const shouldFetchFromRelay = (!tokenA || !tokenB) && (tokenAddressA || tokenAddressB)
+  // Only fetch from Relay if we don't have direct token info
+  const shouldFetchFromRelay = (!tokenA || !tokenB) && (tokenAddressA || tokenAddressB) && !tokenAInfo && !tokenBInfo
 
   // Normalize addresses for the query
   const normalizedAddressA = tokenAddressA || '0x0000000000000000000000000000000000000000'
   const normalizedAddressB = tokenAddressB || '0x0000000000000000000000000000000000000000'
 
-  // Query token data from GraphQL
+  // Query token data from GraphQL only if needed
   const tokenData = shouldFetchFromRelay
     ? useLazyLoadQuery<TokenPairQuery>(
         tokenByAddressQuery,
@@ -258,30 +270,30 @@ const BaseTokenPair: React.FC<TokenPairProps> = ({
   const firstTokenDisplay = {
     symbol: isTokenANative
       ? 'KUB'
-      : tokenAData?.symbol ||
+      : tokenAInfo?.symbol || tokenAData?.symbol ||
         contractTokenA?.symbol ||
         (tokenAddressA ? shortenAddress(tokenAddressA) : 'Token A'),
     icon: isTokenANative
       ? NATIVE_KUB_ICON
-      : getIpfsGateway(tokenAData?.imageURI || '') || DEFAULT_TOKEN_ICON,
+      : getIpfsGateway(tokenAInfo?.imageURI || tokenAData?.imageURI || '') || DEFAULT_TOKEN_ICON,
     name: isTokenANative
       ? 'Native KUB'
-      : tokenAData?.name || contractTokenA?.name || 'Unknown Token',
+      : tokenAInfo?.name || tokenAData?.name || contractTokenA?.name || 'Unknown Token',
   }
 
   // Determine second token display information
   const secondTokenDisplay = {
     symbol: isTokenBNative
       ? 'KUB'
-      : tokenBData?.symbol ||
+      : tokenBInfo?.symbol || tokenBData?.symbol ||
         contractTokenB?.symbol ||
         (tokenAddressB ? shortenAddress(tokenAddressB) : 'Token B'),
     icon: isTokenBNative
       ? NATIVE_KUB_ICON
-      : getIpfsGateway(tokenBData?.imageURI || '') || DEFAULT_TOKEN_ICON,
+      : getIpfsGateway(tokenBInfo?.imageURI || tokenBData?.imageURI || '') || DEFAULT_TOKEN_ICON,
     name: isTokenBNative
       ? 'Native KUB'
-      : tokenBData?.name || contractTokenB?.name || 'Unknown Token',
+      : tokenBInfo?.name || tokenBData?.name || contractTokenB?.name || 'Unknown Token',
   }
 
   // Debug logging

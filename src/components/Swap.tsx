@@ -22,6 +22,7 @@ import { TokenBalanceDisplay } from '@/src/modules/swap/components/TokenBalanceD
 import TokenSelector from '@/src/components/TokenSelector'
 import { CURRENT_CHAIN } from '@/src/constants/chains'
 import { formatNumber, roundDecimal } from '@/src/utils/numbers'
+import { TokenPair } from '@/src/components/TokenPair'
 
 const kubTokenAbi = [
   {
@@ -764,6 +765,61 @@ export function SwapInterface({
   // Reset on successful transaction
   useEffect(() => {
     if (txStatus?.state === 'confirmed') {
+      // Format amounts with proper decimals and round to reasonable decimal places
+      const formattedAmountIn = isNativeKUB(tokenIn) 
+        ? formatNumber(roundDecimal(formatUnits(parsedAmountIn || BigInt(0), 18), 4))
+        : tokenInInfo 
+          ? formatNumber(roundDecimal(formatUnits(parsedAmountIn || BigInt(0), tokenInInfo.decimals), 4))
+          : amountIn;
+
+      const formattedAmountOut = isNativeKUB(tokenOut)
+        ? formatNumber(roundDecimal(formatUnits(expectedOutput?.raw || BigInt(0), 18), 4))
+        : tokenOutInfo && expectedOutput?.raw
+          ? formatNumber(roundDecimal(formatUnits(expectedOutput.raw, tokenOutInfo.decimals), 4))
+          : expectedOutput?.formatted || '0';
+
+      // Show success toast
+      const id = toast.show({
+        color: 'neutral',
+        title: 'Swapped',
+        text: `${formattedAmountIn} ${tokenInInfo?.symbol || 'KUB'} for ${formattedAmountOut} ${tokenOutInfo?.symbol || 'KUB'}`,
+        actionsSlot: (
+          <Actionable 
+            onClick={() => window.open(`${CURRENT_CHAIN.blockExplorers.default.url}/tx/${txHash}`, '_blank')}
+          >
+            <View 
+              direction="row" 
+              gap={2} 
+              align="center" 
+              justify="space-between"
+            >
+              <TokenPair 
+                tokenAddressA={tokenIn}
+                tokenAddressB={tokenOut}
+                size="small"
+                tokenAInfo={tokenInInfo ? {
+                  symbol: tokenInInfo.symbol,
+                  name: tokenInInfo.name
+                } : isNativeKUB(tokenIn) ? {
+                  symbol: 'KUB',
+                  name: 'Native KUB'
+                } : undefined}
+                tokenBInfo={tokenOutInfo ? {
+                  symbol: tokenOutInfo.symbol,
+                  name: tokenOutInfo.name
+                } : isNativeKUB(tokenOut) ? {
+                  symbol: 'KUB',
+                  name: 'Native KUB'
+                } : undefined}
+              />
+              <Button onClick={(e) => { e.stopPropagation(); toast.hide(id); }} variant="ghost" size="small">
+                <Icon svg={X} />
+              </Button>
+            </View>
+          </Actionable>
+        ),
+      })
+
       // Refresh all balances after a successful swap
       refreshAllBalances()
 
@@ -771,7 +827,7 @@ export function SwapInterface({
       setTxHash(undefined)
       setError(null)
     }
-  }, [txStatus])
+  }, [txStatus, tokenIn, tokenOut, amountIn, expectedOutput?.formatted, tokenInInfo, tokenOutInfo, parsedAmountIn, txHash])
 
   useEffect(() => {
     if (error) {
