@@ -539,13 +539,17 @@ export function SwapInterface({
         <RelayEnvironmentProvider environment={environment}>
           <Suspense>
             <Actionable 
+              attributes={{
+                style: {
+                  width: '100%',
+                },
+              }}
               onClick={() => window.open(`${CURRENT_CHAIN.blockExplorers.default.url}/tx/${txHash}`, '_blank')}
             >
               <View 
                 direction="row"
                 align="start"
                 gap={3}
-                padding={4}
                 position="relative"
               >
                 <TokenPair
@@ -567,7 +571,7 @@ export function SwapInterface({
                   attributes={{
                     style: {
                       position: 'absolute',
-                      top: '8px',
+                      top: '-8px',
                       right: '8px'
                     }
                   }}
