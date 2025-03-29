@@ -61,8 +61,18 @@ type Query {
 
   # Launcher data
   activeLaunches(first: Int, after: String): LaunchConnection!
-  completedLaunches(first: Int, after: String): LaunchConnection!
+  completedLaunches(
+    first: Int
+    after: String
+    orderBy: LaunchOrderBy
+    orderDirection: OrderDirection
+  ): LaunchConnection!
   launch(launchId: Int!): Launch
+  myLaunches: [Launch!]!
+  myContributions: [Contribution!]!
+  launchProgress(launchId: Int!): Float!
+  launchTimeRemaining(launchId: Int!): Int
+  launchContributionLimits(launchId: Int!): LaunchLimits!
 
   # Get price chart data for a pair
   pairPriceChart(
@@ -91,6 +101,13 @@ type Query {
 enum OrderDirection {
   asc
   desc
+}
+
+enum LaunchOrderBy {
+  completedAt
+  createdAt
+  kubRaised
+  ponderRaised
 }
 
 enum PairOrderBy {
@@ -132,6 +149,9 @@ type Token {
   tvl: String
   marketCap: String
   fdv: String
+  lastPriceUpdate: DateTime
+  createdAt: DateTime!
+  updatedAt: DateTime!
   pairs0: [Pair!]!
   pairs1: [Pair!]!
 }
@@ -363,14 +383,27 @@ type Launch {
   launchId: Int!
   tokenAddress: String!
   creatorAddress: String!
+  imageURI: String!
   kubRaised: String!
   ponderRaised: String!
   status: String!
   kubPairAddress: String
   ponderPairAddress: String
   hasDualPools: Boolean
+  ponderPoolSkipped: Boolean
+  skippedPonderAmount: String
+  skippedPonderValue: String
+  kubLiquidity: String
+  ponderLiquidity: String
+  ponderBurned: String
+  lpWithdrawn: Boolean
+  lpWithdrawnAt: DateTime
   completedAt: DateTime
+  cancelledAt: DateTime
+  createdAt: DateTime!
+  updatedAt: DateTime!
   contributions(first: Int, after: String): ContributionConnection!
+  myContribution: Contribution
 }
 
 # Launch Connection
@@ -395,6 +428,16 @@ type Contribution {
   ponderValue: String!
   tokensReceived: String!
   refunded: Boolean
+  refundedKubAmount: String
+  refundedPonderAmount: String
+  refundedTokenAmount: String
+  vestingAmount: String
+  vestingReleased: String
+  vestingRemaining: String
+  vestingLastClaim: DateTime
+  vestingNextClaim: DateTime
+  createdAt: DateTime!
+  updatedAt: DateTime!
 }
 
 # Contribution Connection
@@ -424,4 +467,14 @@ type Swap {
   token0: Token
   token1: Token
   valueUSD: String
+}
+
+# New type for launch contribution limits
+type LaunchLimits {
+  minKub: String!
+  maxKub: String!
+  minPonder: String!
+  maxPonder: String!
+  remainingKub: String!
+  remainingPonder: String!
 }

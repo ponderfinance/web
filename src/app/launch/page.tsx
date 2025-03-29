@@ -1,14 +1,15 @@
 'use client'
+
 import { View } from 'reshaped'
-import LaunchCreationForm from '@/src/components/launch/LaunchToken'
-import LaunchContributionCard from "@/src/components/launch/LaunchContributionCard";
-export default function Launch() {
+import LaunchListView from '@/src/components/launch/LaunchListView'
+import RelayProvider from '@/src/lib/relay/RelayProvider'
+
+export default function LaunchPage() {
   return (
-    <View direction="column">
-      <View insetTop={36}>
-        <LaunchCreationForm />
-        <LaunchContributionCard launchId={BigInt(1)} />
+    <RelayProvider>
+      <View padding={4}>
+        <LaunchListView />
       </View>
-    </View>
+    </RelayProvider>
   )
 }
