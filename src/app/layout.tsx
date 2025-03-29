@@ -2,20 +2,12 @@ import type { Metadata } from 'next'
 import Providers from '../providers'
 import { Header } from '@/src/components/Header'
 import { Footer } from '@/src/components/Footer'
-// import 'reshaped/themes/reshaped/theme.css'
 import '@/src/themes/ponder/theme.css'
 import { Analytics } from '@vercel/analytics/react'
 
 import './globals.css'
-// import { Pirata_One } from 'next/font/google'
 import { View } from 'reshaped'
 
-// const pirataOne = Pirata_One({
-//   subsets: ['latin'],
-//   weight: ['400'],
-//   display: 'swap',
-//   variable: '--font-pirata-one',
-// })
 
 export const metadata: Metadata = {
   title: 'Ponder Finance',

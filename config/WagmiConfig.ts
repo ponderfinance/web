@@ -1,9 +1,11 @@
 import { createConfig, http } from 'wagmi'
-import {bitkubChain, bitkubTestnetChain} from "@/src/constants/chains";
+import { mainnet } from 'wagmi/chains'
+import { bitkubChain, bitkubTestnetChain } from "@/src/constants/chains";
 
 export const wagmiConfig = createConfig({
-  chains: [bitkubChain, bitkubTestnetChain],
+  chains: [mainnet, bitkubChain, bitkubTestnetChain],
   transports: {
+    [mainnet.id]: http(),
     [bitkubChain.id]: http(),
     [bitkubTestnetChain.id]: http(),
   },

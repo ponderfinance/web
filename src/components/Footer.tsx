@@ -1,3 +1,5 @@
+'use client'
+
 import { View, Text } from 'reshaped'
 import { DiscordLogo, GithubLogo, XLogo } from '@phosphor-icons/react'
 
