@@ -193,50 +193,16 @@ export const Header = () => {
                     </Link>
                   )}
                 </Popover.Trigger>
-                <Popover.Content>
-                  <View direction="column" gap={1}>
-                    <Button
-                      color="neutral"
-                      onClick={() => router.push('/explore/tokens')}
-                      attributes={{
-                        style: {
-                          justifyContent: 'start',
-                          paddingTop: 12,
-                          paddingBottom: 12,
-                        },
-                      }}
-                    >
-                      <Text variant="body-2">Tokens</Text>
-                    </Button>
-                    <Button
-                      color="neutral"
-                      onClick={() => router.push('/explore/pools')}
-                      attributes={{
-                        style: {
-                          justifyContent: 'start',
-                          paddingTop: 12,
-                          paddingBottom: 12,
-                        },
-                      }}
-                    >
-                      <Text variant="body-2">Pools</Text>
-                    </Button>
-                    <Button
-                      color="neutral"
-                      onClick={() => router.push('/explore/transactions')}
-                      attributes={{
-                        style: {
-                          justifyContent: 'start',
-                          paddingTop: 12,
-                          paddingBottom: 12,
-                        },
-                      }}
-                    >
-                      <Text variant="body-2">Transactions</Text>
-                    </Button>
-                  </View>
-                </Popover.Content>
+            
               </Popover>
+              {/* <Button variant="ghost">
+                <Text
+                  variant="body-1"
+                  color={pathname === '/launch' ? 'neutral' : 'neutral-faded'}
+                  >
+                  <Link href={'/launch'}>Launch</Link>
+                </Text>
+              </Button> */}
             </View>
           </Hidden>
         </View>

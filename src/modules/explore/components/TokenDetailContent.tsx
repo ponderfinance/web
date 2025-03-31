@@ -148,13 +148,13 @@ export default function TokenDetailContent({ tokenAddress }: { tokenAddress: str
         <View direction="row" justify="space-between" align="center">
           <View direction="row" gap={3} align="center">
             <Image
-              src={getIpfsGateway(token.imageURI ?? '')}
+              src={getIpfsGateway(token.imageURI ?? '/tokens/coin.svg')}
               height={8}
               width={8}
               alt={`${token.name || token.address.slice(0, 10)} Token Image`}
             />
             <Text variant="featured-2" weight="medium" color="neutral">
-              {token.name ? `${token.name}` : ''}
+              {token.name ? `${token.name}` : token.address.slice(0, 8)}
             </Text>
             <Text variant="featured-2" weight="medium" color="neutral-faded">
               {token.symbol}

@@ -43,17 +43,20 @@ const LaunchGridQuery = graphql`
 `
 
 interface LaunchGridData {
-  activeLaunches: {
-    edges: Array<{
-      node: {
-        id: string
-        launchId: number
-        imageURI: string
-        status: string
-        kubRaised: string
-        ponderRaised: string
-      }
-    }>
+  variables: Record<string, never>;
+  response: {
+    activeLaunches: {
+      edges: Array<{
+        node: {
+          id: string
+          launchId: number
+          imageURI: string
+          status: string
+          kubRaised: string
+          ponderRaised: string
+        }
+      }>
+    }
   }
 }
 

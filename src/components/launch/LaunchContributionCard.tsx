@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Text, Card, Button, View } from 'reshaped'
-import { useSwap, useContribute, usePonderSDK } from '@ponderfinance/sdk'
+import { useSwap, useContribute, usePonderSDK, useRemainingToRaise } from '@ponderfinance/sdk'
 import { formatEther, parseEther, type Address } from 'viem'
 import { useFragment, useLazyLoadQuery } from 'react-relay'
 import { graphql } from 'relay-runtime'
@@ -62,6 +62,7 @@ export default function LaunchContributionCard({
   const sdk = usePonderSDK()
   const contribute = useContribute()
   const swap = useSwap()
+  const { data: remainingData } = useRemainingToRaise(launchId)
 
   const [selectedToken, setSelectedToken] = useState<ContributionToken>('KOI')
   const [amount, setAmount] = useState<string>('')
@@ -169,27 +170,34 @@ export default function LaunchContributionCard({
     }
   }
 
-  const calculateMaxContribution = () => {
-    if (!data?.launch) return '0'
-
-    const launch = useFragment<LaunchContributionCard_launch$key>(
-      LaunchContributionCardFragment,
-      data.launch
+  if (!data?.launch) {
+    return (
+      <Card>
+        <View align="center" justify="center">
+          <Text>Loading...</Text>
+        </View>
+      </Card>
     )
+  }
+
+  const launch = useFragment<LaunchContributionCard_launch$key>(
+    LaunchContributionCardFragment,
+    data.launch
+  )
+
+  const calculateMaxContribution = async () => {
+    if (!remainingData) return '0'
 
     try {
-      const remainingToRaise = TARGET_RAISE - BigInt(launch.kubRaised)
-      if (remainingToRaise <= BigInt(0)) return '0'
-
       if (selectedToken === 'KUB') {
-        // For KUB, max is either remaining to raise or user's balance
-        const maxKub = remainingToRaise > balances.kub ? balances.kub : remainingToRaise
+        // For KUB, max is either remaining KUB or user's balance
+        const maxKub = remainingData.remainingKub > balances.kub ? balances.kub : remainingData.remainingKub
         return formatEther(maxKub)
       } else {
-        // For KOI, max is either:
-        // 1. Remaining to raise (converted to PONDER)
-        // 2. User's balance
-        const maxPonder = remainingToRaise > balances.koi ? balances.koi : remainingToRaise
+        // For KOI, remainingPonder is in KUB terms
+        // Use calculatePonderRequirements to get the actual PONDER amount needed
+        const metrics = await sdk.launcher.calculatePonderRequirements()
+        const maxPonder = metrics.requiredAmount > balances.koi ? balances.koi : metrics.requiredAmount
         return formatEther(maxPonder)
       }
     } catch (err) {
@@ -198,8 +206,8 @@ export default function LaunchContributionCard({
     }
   }
 
-  const handleMaxClick = () => {
-    const maxAmount = calculateMaxContribution()
+  const handleMaxClick = async () => {
+    const maxAmount = await calculateMaxContribution()
     setAmount(maxAmount)
   }
 
@@ -272,21 +280,6 @@ export default function LaunchContributionCard({
       </Card>
     )
   }
-
-  if (!data?.launch) {
-    return (
-      <Card>
-        <View align="center" justify="center">
-          <Text>Loading...</Text>
-        </View>
-      </Card>
-    )
-  }
-
-  const launch = useFragment<LaunchContributionCard_launch$key>(
-    LaunchContributionCardFragment,
-    data.launch
-  )
 
   if (launch.status === 'COMPLETED' || launch.status === 'CANCELLED') {
     return (
