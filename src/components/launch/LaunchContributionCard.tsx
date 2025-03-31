@@ -172,8 +172,13 @@ export default function LaunchContributionCard({
   const calculateMaxContribution = () => {
     if (!data?.launch) return '0'
 
+    const launch = useFragment<LaunchContributionCard_launch$key>(
+      LaunchContributionCardFragment,
+      data.launch
+    )
+
     try {
-      const remainingToRaise = TARGET_RAISE - BigInt(data.launch.kubRaised)
+      const remainingToRaise = TARGET_RAISE - BigInt(launch.kubRaised)
       if (remainingToRaise <= BigInt(0)) return '0'
 
       if (selectedToken === 'KUB') {
