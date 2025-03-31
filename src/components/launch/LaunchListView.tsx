@@ -1,10 +1,10 @@
-import { View, Text, Card } from 'reshaped'
+import { View, Text, Card, Image } from 'reshaped'
 import { useLazyLoadQuery, useFragment } from 'react-relay'
 import { graphql } from 'relay-runtime'
 import Link from 'next/link'
-import Image from 'next/image'
 import type { LaunchListViewQuery } from '../../__generated__/LaunchListViewQuery.graphql'
 import type { LaunchListView_launch$key } from '../../__generated__/LaunchListView_launch.graphql'
+import { getIpfsGateway } from '@/src/utils/ipfs'
 
 const LaunchListFragment = graphql`
   fragment LaunchListView_launch on Launch {
@@ -43,10 +43,10 @@ function LaunchCard({ launch }: LaunchCardProps) {
         <View direction="column" gap={4}>
           <View position="relative" height={200}>
             <Image
-              src={data.imageURI}
+              src={getIpfsGateway(data.imageURI ?? '')}
               alt={`Launch #${data.launchId}`}
-              fill
-              style={{ objectFit: 'cover' }}
+              width="100%"
+              height="100%"
             />
           </View>
           <View direction="column" gap={2}>

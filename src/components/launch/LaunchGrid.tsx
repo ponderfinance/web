@@ -1,8 +1,8 @@
-import { View, Text, Card, Grid } from 'reshaped'
+import { View, Text, Card, Grid, Image } from 'reshaped'
 import { useFragment, useLazyLoadQuery } from 'react-relay'
 import { graphql } from 'relay-runtime'
 import Link from 'next/link'
-import Image from 'next/image'
+import { getIpfsGateway } from '@/src/utils/ipfs'
 
 const LaunchGridFragment = graphql`
   fragment LaunchGridFragment on Launch {
@@ -66,10 +66,10 @@ function LaunchCard({ launch }: { launch: any }) {
         <View direction="column" gap={4}>
           <View position="relative" height={200}>
             <Image
-              src={data.imageURI}
+              src={getIpfsGateway(data.imageURI ?? '')}
               alt={`${data.launchId} Launch`}
-              fill
-              style={{ objectFit: 'cover' }}
+              width="100%"
+              height="100%"
             />
           </View>
           <View direction="column" gap={2}>

@@ -1,8 +1,8 @@
-import { View, Text, Card } from 'reshaped'
-import Image from 'next/image'
+import { View, Text, Card, Image } from 'reshaped'
 import { useFragment } from 'react-relay'
 import { graphql } from 'relay-runtime'
 import type { LaunchToken_launch$key } from '../../__generated__/LaunchToken_launch.graphql'
+import { getIpfsGateway } from '@/src/utils/ipfs'
 
 const LaunchTokenFragment = graphql`
   fragment LaunchToken_launch on Launch {
@@ -43,10 +43,10 @@ export default function LaunchToken({ launch }: LaunchTokenProps) {
         {/* Launch Image */}
         <View position="relative" height={400}>
           <Image
-            src={data.imageURI}
+            src={getIpfsGateway(data.imageURI ?? '')}
             alt={`Launch #${data.launchId}`}
-            fill
-            style={{ objectFit: 'cover' }}
+            width="100%"
+            height="100%"
           />
         </View>
 
