@@ -9,15 +9,21 @@ import Link from 'next/link'
 
 // Helper to format currency values
 const formatCurrency = (value: string | null | undefined): string => {
-  if (!value || value === '0') return '$0'
+  if (!value || value === '0' || value === 'null') return '$0'
 
   const numValue = parseFloat(value)
+  if (isNaN(numValue)) return '$0'
 
-  if (numValue < 0.01) return `$${roundDecimal(numValue)}`
-  if (numValue >= 1e9) return `$${(numValue / 1e9).toFixed(1)}B`
-  if (numValue >= 1e6) return `$${(numValue / 1e6).toFixed(1)}M`
-  if (numValue >= 1e3) return `$${(numValue / 1e3).toFixed(1)}K`
+  // Handle very small numbers with more precision
+  if (numValue < 0.01) return `$${numValue.toFixed(6)}`
+  if (numValue < 1) return `$${numValue.toFixed(4)}`
+  
+  // Handle larger numbers with appropriate suffixes
+  if (numValue >= 1e9) return `$${(numValue / 1e9).toFixed(2)}B`
+  if (numValue >= 1e6) return `$${(numValue / 1e6).toFixed(2)}M`
+  if (numValue >= 1e3) return `$${(numValue / 1e3).toFixed(2)}K`
 
+  // Regular numbers get 2 decimal places
   return `$${numValue.toFixed(2)}`
 }
 

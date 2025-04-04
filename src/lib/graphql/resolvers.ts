@@ -1149,9 +1149,6 @@ export const resolvers = {
         const queryParams: any = {
           take: first + 1, // Take one extra to check if there's a next page
           orderBy: { timestamp: 'desc' },
-          where: {
-            contractSender: { not: null },
-          },
           include: {
             pair: {
               include: {
@@ -1172,22 +1169,65 @@ export const resolvers = {
         // Fetch recent swaps with pagination
         const swaps = await prisma.swap.findMany(queryParams)
 
-        // Log the number of swaps found
-        console.log(`Found ${swaps.length} swaps in recentTransactions query`)
+        // Map the swaps and calculate USD values
+        const mappedSwapsPromises = swaps.map(async (swap: any) => {
+          // Calculate USD value
+          let valueUSD = '0'
+          try {
+            // Get token prices
+            const [token0Price, token1Price] = await Promise.all([
+              TokenPriceService.getTokenPriceUSD(swap.pair.token0.id),
+              TokenPriceService.getTokenPriceUSD(swap.pair.token1.id)
+            ])
+            
+            // Scale amounts based on token decimals
+            const token0Decimals = swap.pair.token0.decimals || 18
+            const token1Decimals = swap.pair.token1.decimals || 18
+            
+            // Convert amounts to proper decimal representation
+            const amount0In = parseFloat(swap.amountIn0) / Math.pow(10, token0Decimals)
+            const amount0Out = parseFloat(swap.amountOut0) / Math.pow(10, token0Decimals)
+            const amount1In = parseFloat(swap.amountIn1) / Math.pow(10, token1Decimals)
+            const amount1Out = parseFloat(swap.amountOut1) / Math.pow(10, token1Decimals)
+            
+            // Scale token prices (assuming they're in raw form like the amounts)
+            const scaledToken0Price = token0Price / Math.pow(10, token0Decimals)
+            const scaledToken1Price = token1Price / Math.pow(10, token1Decimals)
+            
+            // Calculate USD values for both sides of the swap
+            const amount0USD = (amount0In + amount0Out) * scaledToken0Price
+            const amount1USD = (amount1In + amount1Out) * scaledToken1Price
+            
+            // Use the larger value (since one side might be more accurate)
+            valueUSD = Math.max(amount0USD, amount1USD).toString()
+          } catch (error) {
+            console.error('Error calculating swap value:', error)
+          }
 
-        // If no swaps were found, log this fact
-        if (swaps.length === 0) {
-          // Log a count of all swaps in the database to verify data exists
-          const totalSwaps = await prisma.swap.count()
-          console.log(`Total swaps in database: ${totalSwaps}`)
-        }
+          return {
+            id: swap.id,
+            txHash: swap.txHash,
+            timestamp: swap.timestamp,
+            userAddress: swap.userAddress,
+            token0: swap.pair.token0,
+            token1: swap.pair.token1,
+            amountIn0: swap.amountIn0,
+            amountIn1: swap.amountIn1,
+            amountOut0: swap.amountOut0,
+            amountOut1: swap.amountOut1,
+            valueUSD
+          }
+        })
+
+        // Wait for all USD calculations to complete
+        const mappedSwaps = await Promise.all(mappedSwapsPromises)
 
         // Get total count
         const totalCount = await prisma.swap.count()
 
-        // Create pagination response
+        // Create pagination response with mapped swaps
         const paginationResult = createCursorPagination(
-          swaps,
+          mappedSwaps,
           first,
           after ? decodeCursor(after) : undefined
         )
@@ -1799,7 +1839,48 @@ export const resolvers = {
     symbol: async (parent: PrismaToken) => parent.symbol,
     decimals: async (parent: PrismaToken) => parent.decimals,
     imageURI: async (parent: PrismaToken) => parent.imageURI,
-    priceUSD: async (parent: PrismaToken) => parent.priceUSD || '0',
+    priceUSD: async (parent: PrismaToken, _: any, { prisma }: Context) => {
+      try {
+        // Get fresh price using TokenPriceService
+        const price = await TokenPriceService.getTokenPriceUSD(parent.id)
+        
+        // Helper function to scale price based on decimals
+        const scalePrice = (rawPrice: number, decimals: number | null = 18) => {
+          if (decimals === null) decimals = 18;
+          if (rawPrice > 1e6) { // If price is likely in blockchain format
+            return rawPrice / Math.pow(10, decimals)
+          }
+          return rawPrice
+        }
+        
+        // Format the price to a reasonable number of decimal places
+        // and ensure it's within a reasonable range
+        const scaledPrice = scalePrice(price, parent.decimals)
+        
+        if (scaledPrice > 0.000001) {
+          // For very small prices (less than 1), keep more decimals
+          if (scaledPrice < 1) {
+            return scaledPrice.toFixed(6)
+          }
+          // For larger prices, use fewer decimals
+          return scaledPrice.toFixed(2)
+        }
+        
+        // If the price is too small or zero, try to get it from the database
+        if (parent.priceUSD) {
+          const dbPrice = scalePrice(parseFloat(parent.priceUSD), parent.decimals)
+          if (dbPrice > 0.000001) {
+            return dbPrice < 1 ? dbPrice.toFixed(6) : dbPrice.toFixed(2)
+          }
+        }
+        
+        // If we still don't have a valid price, return null
+        return null
+      } catch (error) {
+        console.error(`Error getting price for token ${parent.id}:`, error)
+        return null
+      }
+    },
     priceChange24h: async (parent: PrismaToken) => parent.priceChange24h || 0,
     volumeUSD24h: async (parent: PrismaToken) => parent.volumeUSD24h || '0',
     lastPriceUpdate: async (parent: PrismaToken) => parent.lastPriceUpdate,
