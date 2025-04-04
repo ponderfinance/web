@@ -133,6 +133,7 @@ export const TokenPriceService = {
       
       // Process cached results and identify missing prices
       const missingPriceIds: string[] = []
+      const pricesToCache: Array<{ tokenId: string; price: string }> = []
       
       tokenIds.forEach((id, index) => {
         const cachedPrice = cachedPrices[index]
@@ -164,19 +165,28 @@ export const TokenPriceService = {
         if (token.priceUSD) {
           // Use the database price if available
           results[token.id] = token.priceUSD
+          pricesToCache.push({ tokenId: token.id, price: token.priceUSD })
           return false
         }
         return true
       })
       
       if (tokensNeedingPrices.length === 0) {
+        // Cache any prices we found in the database
+        if (pricesToCache.length > 0) {
+          await this.cacheTokenPricesBulk(
+            pricesToCache.map(({ tokenId, price }) => ({
+              tokenId,
+              price: parseFloat(price)
+            }))
+          )
+        }
         return results
       }
-      
-      // Step 3: Process all remaining tokens in parallel
+
+      // Step 3: Calculate missing prices in parallel
       const pricePromises = tokensNeedingPrices.map(async (token: Token) => {
         try {
-          // Use the comprehensive price lookup for each token
           const price = await this.getReliableTokenUsdPrice({
             id: token.id,
             address: token.address,
@@ -184,27 +194,30 @@ export const TokenPriceService = {
             symbol: token.symbol || undefined
           }, prismaClient)
           
-          // Cache the price for future use
           if (price > 0) {
-            await this.cacheTokenPrice(token.id, price)
-            return { id: token.id, price: price.toString() }
+            results[token.id] = price.toString()
+            pricesToCache.push({ tokenId: token.id, price: price.toString() })
+          } else {
+            results[token.id] = '0'
           }
-          
-          return { id: token.id, price: '0' }
         } catch (error) {
-          console.error(`Error getting price for token ${token.id}:`, error)
-          return { id: token.id, price: '0' }
+          console.error(`Error calculating price for token ${token.id}:`, error)
+          results[token.id] = '0'
         }
       })
-      
-      // Wait for all price calculations
-      const newPrices = await Promise.all(pricePromises)
-      
-      // Add new prices to results
-      newPrices.forEach(({ id, price }: { id: string, price: string }) => {
-        results[id] = price
-      })
-      
+
+      await Promise.all(pricePromises)
+
+      // Cache all newly calculated prices
+      if (pricesToCache.length > 0) {
+        await this.cacheTokenPricesBulk(
+          pricesToCache.map(({ tokenId, price }) => ({
+            tokenId,
+            price: parseFloat(price)
+          }))
+        )
+      }
+
       return results
     } catch (error) {
       console.error('Error in getTokenPricesUSDBulk:', error)

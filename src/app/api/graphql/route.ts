@@ -20,6 +20,7 @@ if (process.env.NODE_ENV === 'production') {
 let hasPreloaded = false
 
 export async function POST(request: NextRequest) {
+  const startTime = performance.now()
   try {
     if (process.env.NODE_ENV !== 'production') {
       initBackgroundTasks()
@@ -50,10 +51,17 @@ export async function POST(request: NextRequest) {
       contextValue: { prisma, req: request },
     })
 
+    // Log response time
+    const endTime = performance.now()
+    const responseTime = endTime - startTime
+    console.log(`GraphQL query executed in ${responseTime.toFixed(2)}ms`)
+
     // Return the result
     return NextResponse.json(result)
   } catch (error) {
-    console.error('API route error:', error)
+    const endTime = performance.now()
+    const responseTime = endTime - startTime
+    console.error(`GraphQL query failed after ${responseTime.toFixed(2)}ms:`, error)
 
     return NextResponse.json(
       {
