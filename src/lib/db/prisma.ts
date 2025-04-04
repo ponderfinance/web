@@ -1,15 +1,20 @@
-import { PrismaClient } from '@prisma/client'
+const { PrismaClient } = require('@prisma/client')
 
 // Create a singleton Prisma client that can be reused across requests
-const globalForPrisma = global as unknown as { prisma: PrismaClient }
+const globalForPrisma = global as unknown as { prisma: any }
+
+// Get the MongoDB URI based on environment
+const mongoUri = process.env.MONGO_URI
+if (!mongoUri) {
+  throw new Error('MONGO_URI environment variable is not defined')
+}
 
 export const prisma =
   globalForPrisma.prisma ||
   new PrismaClient({
-    // Connect to your existing database
     datasources: {
       db: {
-        url: process.env.MONGO_URI,
+        url: mongoUri,
       },
     },
   })

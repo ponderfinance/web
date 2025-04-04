@@ -1,5 +1,5 @@
 /**
- * @generated SignedSource<<3b92763986634220cb0ca2301da0373f>>
+ * @generated SignedSource<<ecb7c6c534ea3e6ecc27e941cbf84a5b>>
  * @lightSyntaxTransform
  * @nogrep
  */
@@ -17,15 +17,15 @@ export type TokenDetailContentQuery$data = {
   readonly tokenByAddress: {
     readonly address: string;
     readonly decimals: number | null;
-    readonly fdv: string | null;
+    readonly fdv: string;
     readonly id: string;
     readonly imageURI: string | null;
-    readonly marketCap: string | null;
+    readonly marketCap: string;
     readonly name: string | null;
     readonly priceChange24h: number | null;
-    readonly priceUSD: string;
+    readonly priceUSD: string | null;
     readonly symbol: string | null;
-    readonly tvl: string | null;
+    readonly tvl: string;
     readonly volumeUSD24h: string | null;
     readonly " $fragmentSpreads": FragmentRefs<"TokenPriceChartContainer_token">;
   } | null;

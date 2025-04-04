@@ -1,5 +1,5 @@
 import { getRedisClient } from './client'
-import { PrismaClient } from '@prisma/client'
+const { PrismaClient } = require('@prisma/client')
 import { USDT_ADDRESS } from '@/src/lib/graphql/oracleUtils'
 
 const TOKEN_CACHE_TTL = 5 * 60 // 5 minutes in seconds
@@ -86,7 +86,7 @@ export async function cacheTokenPricesBulk(
 /**
  * Preload token price cache from database snapshots
  */
-export async function preloadTokenPriceCache(prisma: PrismaClient): Promise<void> {
+export async function preloadTokenPriceCache(prisma: typeof PrismaClient): Promise<void> {
   try {
     console.log('Preloading token price cache from pair snapshots...')
 
@@ -130,8 +130,8 @@ export async function preloadTokenPriceCache(prisma: PrismaClient): Promise<void
           // Calculate price based on which token is USDT in the pair
           const priceUSD =
             pair.token0.address.toLowerCase() === USDT_ADDRESS.toLowerCase()
-              ? latestSnapshot.token1Price // USDT is token0, so we want token1 price in terms of USDT
-              : latestSnapshot.token0Price // USDT is token1, so we want token0 price in terms of USDT
+              ? latestSnapshot.price1 // USDT is token0, so we want token1 price in terms of USDT
+              : latestSnapshot.price0 // USDT is token1, so we want token0 price in terms of USDT
 
           tokenPrices.push({
             id: nonUsdtToken.id,

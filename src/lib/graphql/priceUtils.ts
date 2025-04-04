@@ -1,109 +1,166 @@
-import { PriceOracle, SupportedChainId } from '@ponderfinance/sdk'
-import { formatUnits, type PublicClient } from 'viem'
+import { prisma } from '@/src/lib/db/prisma'
+import type { PrismaToken } from './types'
 
-// Cache for price oracle instances
-const priceOracleCache = new Map<string, PriceOracle>()
+// Define a type for Token with stablePair
+type TokenWithStablePair = PrismaToken
 
-/**
- * Get a price oracle instance for a specific chain
- */
-function getPriceOracle(params: {
-  chainId: SupportedChainId
-  publicClient: PublicClient
-}): PriceOracle {
-  const { chainId, publicClient } = params
-  const cacheKey = `${chainId}`
-
-  if (!priceOracleCache.has(cacheKey)) {
-    priceOracleCache.set(cacheKey, new PriceOracle(chainId, publicClient))
-  }
-
-  return priceOracleCache.get(cacheKey)!
-}
-
-/**
- * Get the USD price of a token using a stablecoin pair as reference
- */
-export async function getTokenUSDPrice(params: {
-  chainId: SupportedChainId
-  publicClient: PublicClient
+export async function getTokenPriceFromOracle(params: {
+  pairAddress: string
   tokenAddress: string
-  stablecoinPairAddress: string
+  amount?: bigint
+  periodInSeconds?: number
 }): Promise<number> {
-  const { chainId, publicClient, tokenAddress, stablecoinPairAddress } = params
+  const { pairAddress, tokenAddress, amount = BigInt(1e18), periodInSeconds = 3600 } = params
 
   try {
-    const oracle = getPriceOracle({ chainId, publicClient })
+    // Get the pair data from the database
+    const pair = await prisma.pair.findUnique({
+      where: { address: pairAddress },
+      include: {
+        token0: true,
+        token1: true
+      }
+    })
 
-    // Get the price of 1 token in terms of the stablecoin
-    const { pricePerToken } = await oracle.getAveragePrice(
-      stablecoinPairAddress as `0x${string}`,
-      tokenAddress as `0x${string}`,
-      BigInt('1000000000000000000'), // 1 token with 18 decimals
-      3600 // 1 hour period
+    if (!pair) {
+      throw new Error(`Pair not found: ${pairAddress}`)
+    }
+
+    // Determine which token we're pricing
+    const isToken0 = tokenAddress.toLowerCase() === pair.token0.address.toLowerCase()
+    const token = isToken0 ? pair.token0 : pair.token1
+    const otherToken = isToken0 ? pair.token1 : pair.token0
+
+    // Get the reserves
+    const reserveIn = BigInt(isToken0 ? pair.reserve0 : pair.reserve1)
+    const reserveOut = BigInt(isToken0 ? pair.reserve1 : pair.reserve0)
+
+    if (reserveIn === BigInt(0)) {
+      return 0
+    }
+
+    // Calculate the price using the constant product formula
+    const price = (amount * reserveOut) / reserveIn
+
+    // If we have a stable pair for price discovery, use that to get USD value
+    if (token.stablePair) {
+      const stablePair = await prisma.pair.findUnique({
+        where: { address: token.stablePair },
+        include: {
+          token0: true,
+          token1: true
+        }
+      })
+
+      if (stablePair) {
+        // Get the price in terms of the stable token (e.g., USDT)
+        const stableToken = stablePair.token0.address.toLowerCase() === token.address.toLowerCase() 
+          ? stablePair.token0 
+          : stablePair.token1
+
+        const stableReserveIn = BigInt(
+          stablePair.token0.address.toLowerCase() === token.address.toLowerCase() 
+            ? stablePair.reserve0 
+            : stablePair.reserve1
+        )
+        const stableReserveOut = BigInt(
+          stablePair.token0.address.toLowerCase() === token.address.toLowerCase() 
+            ? stablePair.reserve1 
+            : stablePair.reserve0
+        )
+
+        if (stableReserveIn > BigInt(0)) {
+          const stablePrice = (price * stableReserveOut) / stableReserveIn
+          return Number(stablePrice) / 1e18
+        }
+      }
+    }
+
+    // If no stable pair or stable pair calculation failed, return the raw price
+    return Number(price) / 1e18
+  } catch (error) {
+    console.error('Error getting token price from oracle:', error)
+    return 0
+  }
+}
+
+export async function findUSDTPair(
+  tokenAddress: string,
+  db: typeof prisma
+): Promise<string | null> {
+  try {
+    // First check if the token has a stablePair set
+    const token = await db.token.findUnique({
+      where: { address: tokenAddress }
+    })
+
+    // Use optional chaining with type assertion
+    const stablePair = (token as any)?.stablePair
+    if (stablePair) {
+      return stablePair
+    }
+
+    // If no stablePair is set, look for a pair with USDT
+    const usdtPairs = await db.pair.findMany({
+      where: {
+        OR: [
+          { token0: { address: tokenAddress } },
+          { token1: { address: tokenAddress } }
+        ]
+      },
+      include: {
+        token0: true,
+        token1: true
+      }
+    })
+
+    // Find a pair with USDT
+    const usdtPair = usdtPairs.find((pair: { token0: { symbol?: string | null }, token1: { symbol?: string | null } }) => 
+      pair.token0.symbol?.toLowerCase() === 'usdt' || 
+      pair.token1.symbol?.toLowerCase() === 'usdt'
     )
 
-    return pricePerToken
+    if (usdtPair) {
+      return usdtPair.address
+    }
+
+    return null
   } catch (error) {
-    console.error(`Error getting USD price for ${tokenAddress}:`, error)
-    return 0
+    console.error('Error finding USDT pair:', error)
+    return null
   }
 }
 
-/**
- * Calculate the USD value of token reserves in a pair
- */
-export async function calculatePairTVL(params: {
-  chainId: SupportedChainId
-  publicClient: PublicClient
-  pairAddress: string
-  token0: {
-    address: string
-    decimals: number
-    stablePair?: string
-  }
-  token1: {
-    address: string
-    decimals: number
-    stablePair?: string
-  }
-  reserve0: string
-  reserve1: string
-}): Promise<number> {
-  const { chainId, publicClient, pairAddress, token0, token1, reserve0, reserve1 } =
-    params
-
+export async function calculatePairTVL(
+  pairAddress: string,
+  db: typeof prisma
+): Promise<string> {
   try {
-    // Get USD prices for both tokens
-    const [token0Price, token1Price] = await Promise.all([
-      token0.stablePair
-        ? getTokenUSDPrice({
-            chainId,
-            publicClient,
-            tokenAddress: token0.address,
-            stablecoinPairAddress: token0.stablePair,
-          })
-        : 0,
-      token1.stablePair
-        ? getTokenUSDPrice({
-            chainId,
-            publicClient,
-            tokenAddress: token1.address,
-            stablecoinPairAddress: token1.stablePair,
-          })
-        : 0,
-    ])
+    const pair = await db.pair.findUnique({
+      where: { address: pairAddress },
+      include: {
+        token0: true,
+        token1: true
+      }
+    })
 
-    // Convert reserves to decimal representation
-    const reserve0Value =
-      parseFloat(formatUnits(BigInt(reserve0), token0.decimals)) * token0Price
-    const reserve1Value =
-      parseFloat(formatUnits(BigInt(reserve1), token1.decimals)) * token1Price
+    if (!pair) {
+      return '0'
+    }
 
-    // Return the sum of both token values
-    return reserve0Value + reserve1Value
+    // Get token prices
+    const token0Price = pair.token0.priceUSD ? parseFloat(pair.token0.priceUSD) : 0
+    const token1Price = pair.token1.priceUSD ? parseFloat(pair.token1.priceUSD) : 0
+
+    // Calculate TVL
+    const reserve0 = parseFloat(pair.reserve0) / Math.pow(10, pair.token0.decimals || 18)
+    const reserve1 = parseFloat(pair.reserve1) / Math.pow(10, pair.token1.decimals || 18)
+
+    const tvl = (reserve0 * token0Price) + (reserve1 * token1Price)
+
+    return tvl.toString()
   } catch (error) {
-    console.error(`Error calculating TVL for pair ${pairAddress}:`, error)
-    return 0
+    console.error('Error calculating pair TVL:', error)
+    return '0'
   }
 }

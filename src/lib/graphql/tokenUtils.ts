@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client'
+const { PrismaClient } = require('@prisma/client')
 import {
   getTokenPriceFromOracle,
   findPair,
@@ -13,7 +13,7 @@ import { cacheTokenPrice } from '@/src/lib/redis/tokenCache'
 export async function calculateTokenPriceUSD(
   tokenId: string,
   tokenAddress: string,
-  prisma: PrismaClient
+  prisma: typeof PrismaClient
 ): Promise<string> {
   try {
     // Method 1: Check if token is USDT
@@ -72,37 +72,19 @@ export async function calculateTokenPriceUSD(
 
     if (pairs.length > 0) {
       // Look for the most recent price snapshot from any pair
-      const latestSnapshots = await Promise.all(
-        pairs.map((pair) =>
-          prisma.priceSnapshot.findFirst({
-            where: { pairId: pair.id },
-            orderBy: { timestamp: 'desc' },
-          })
-        )
-      )
+      const snapshots = await prisma.pairSnapshot.findMany({
+        where: { pairId: pairs[0].id },
+        orderBy: { timestamp: 'desc' },
+        take: 1,
+      })
 
-      // Filter out null results
-      const validSnapshots = latestSnapshots
-        .filter((snapshot, index): snapshot is NonNullable<typeof snapshot> => {
-          return snapshot !== null && pairs[index] !== undefined
-        })
-        .map((snapshot, index) => ({
-          snapshot,
-          pair: pairs[index],
-        }))
-
-      if (validSnapshots.length > 0) {
-        // Sort by timestamp to get the most recent first
-        validSnapshots.sort((a, b) => b.snapshot.timestamp - a.snapshot.timestamp)
-
-        // Get price from the most recent snapshot
-        const { snapshot, pair } = validSnapshots[0]
-
+      if (snapshots.length > 0) {
+        const snapshot = snapshots[0]
         // Check if our token is token0 or token1 in the pair
-        const isToken0 = pair.token0Id === tokenId
+        const isToken0 = pairs[0].token0Id === tokenId
 
         // Get the appropriate price based on token position
-        const priceStr = isToken0 ? snapshot.token0Price : snapshot.token1Price
+        const priceStr = isToken0 ? snapshot.price0 : snapshot.price1
 
         // Cache the result
         await cacheTokenPrice(tokenId, priceStr)
@@ -124,7 +106,7 @@ export async function calculateTokenPriceUSD(
  */
 export async function calculateTokenPricesUSDInBulk(
   tokens: Array<{ id: string; address: string }>,
-  prisma: PrismaClient
+  prisma: typeof PrismaClient
 ): Promise<Record<string, string>> {
   try {
     // Calculate prices in parallel

@@ -141,20 +141,31 @@ type Token {
   symbol: String
   decimals: Int
   imageURI: String
-  priceUSD: String!
+  stablePair: String
+  priceUSD: String
   priceChange24h: Float
   volumeUSD24h: String
-  totalSupply: String
-  circulatingSupply: String
-  tvl: String
-  marketCap: String
-  fdv: String
   lastPriceUpdate: DateTime
+  tvl: String!
+  marketCap: String!
+  fdv: String!
+  pairsAsToken0: [Pair!]!
+  pairsAsToken1: [Pair!]!
+  supplies: [TokenSupply!]!
   createdAt: DateTime!
   updatedAt: DateTime!
-  pairs0: [Pair!]!
-  pairs1: [Pair!]!
 }
+
+type TokenSupply {
+  id: ID!
+  tokenId: String!
+  amount: String!
+  isMaxSupply: Boolean!
+  timestamp: Int!
+  token: Token!
+  createdAt: DateTime!
+}
+
 # Token Connection
 type TokenConnection {
   edges: [TokenEdge!]!
@@ -176,9 +187,13 @@ type Pair {
   reserve0: String!
   reserve1: String!
   totalSupply: String!
-  token0Price: String!
-  token1Price: String!
+  feesPending0: String!
+  feesPending1: String!
+  feesCollected0: String!
+  feesCollected1: String!
   createdAt: DateTime!
+  updatedAt: DateTime!
+  lastBlockUpdate: Int!
   liquidityPositions(first: Int, after: String): LiquidityPositionConnection!
   swaps(first: Int, after: String): SwapConnection!
   priceHistory(days: Int!, interval: String): PriceSnapshotConnection!

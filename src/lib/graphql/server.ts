@@ -4,6 +4,7 @@ import { schema } from './schema'
 import prisma from '../db/prisma'
 import { createLoaders } from '../dataloader'
 import { Context } from './types'
+import { publicClient } from './resolvers'
 
 // Create the context for this request
 function createContext(req?: Request): Context {
@@ -11,6 +12,7 @@ function createContext(req?: Request): Context {
     prisma,
     req,
     loaders: createLoaders(prisma),
+    publicClient,
   }
 }
 

@@ -1,5 +1,5 @@
 /**
- * @generated SignedSource<<710144bdc358bcd9e168804f2225224e>>
+ * @generated SignedSource<<af74a85929f9a2ab1808cccc302b87fe>>
  * @lightSyntaxTransform
  * @nogrep
  */
@@ -16,7 +16,7 @@ export type TokenSelectorTokenFragment$data = {
   readonly id: string;
   readonly imageURI: string | null;
   readonly name: string | null;
-  readonly priceUSD: string;
+  readonly priceUSD: string | null;
   readonly symbol: string | null;
   readonly " $fragmentType": "TokenSelectorTokenFragment";
 };

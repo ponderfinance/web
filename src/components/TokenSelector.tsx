@@ -43,7 +43,7 @@ interface Token {
   address: `0x${string}`
   decimals: number
   imageURI?: string | null
-  priceUSD?: string
+  priceUSD?: string | null
   isNative?: boolean
   isCustom?: boolean
 }

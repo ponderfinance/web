@@ -11,107 +11,101 @@ datasource db {
 model Token {
   id              String   @id @default(auto()) @map("_id") @db.ObjectId
   address         String   @unique
-  name            String?
   symbol          String?
+  name            String?
   decimals        Int?
-  imageURI        String?  // URI for the token image
-  // Price related fields
-  priceUSD        String?  // Latest price in USD
-  priceChange24h  Float?   // 24h price change percentage
-  volumeUSD24h    String?  // 24h trading volume in USD
-  lastPriceUpdate DateTime? // When the price was last updated
-  // Relationships
-  pairsAsToken0   Pair[]   @relation("Token0")
-  pairsAsToken1   Pair[]   @relation("Token1")
-  // Timestamps
+  imageURI        String?
+  priceUSD        String?
+  priceChange24h  Float?
+  volumeUSD24h    String?
+  lastPriceUpdate DateTime?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
+  stablePair      String?  // Reference to a stable pair address for price discovery
+  pairsAsToken0   Pair[]   @relation("Token0")
+  pairsAsToken1   Pair[]   @relation("Token1")
+  supply          TokenSupply?
+}
+
+// Token supply tracking
+model TokenSupply {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  token       Token    @relation(fields: [tokenId], references: [id])
+  tokenId     String   @unique @db.ObjectId
+  total       String
+  circulating String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }
 
 // Trading pair model
 model Pair {
-  id                 String           @id @default(auto()) @map("_id") @db.ObjectId
-  address            String           @unique
-  token0Id           String           @db.ObjectId
-  token1Id           String           @db.ObjectId
-  reserve0           String           // String for precise BigInt representation
-  reserve1           String
-  totalSupply        String
-  // Fees and Protocol data
-  feesPending0       String           @default("0")
-  feesPending1       String           @default("0")
-  feesCollected0     String           @default("0")
-  feesCollected1     String           @default("0")
-  // Relationships
-  token0             Token            @relation("Token0", fields: [token0Id], references: [id])
-  token1             Token            @relation("Token1", fields: [token1Id], references: [id])
+  id                 String              @id @default(auto()) @map("_id") @db.ObjectId
+  address            String              @unique
+  token0Id          String              @db.ObjectId
+  token1Id          String              @db.ObjectId
+  token0            Token               @relation("Token0", fields: [token0Id], references: [id])
+  token1            Token               @relation("Token1", fields: [token1Id], references: [id])
+  reserve0          String
+  reserve1          String
+  totalSupply       String
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
   liquidityPositions LiquidityPosition[]
-  swaps              Swap[]
-  priceSnapshots     PriceSnapshot[]
-  reserveSnapshots   PairReserveSnapshot[]
-  // Timestamps
-  createdAt          DateTime         @default(now())
-  updatedAt          DateTime         @updatedAt
-  lastBlockUpdate    Int
+  feesPending0      String              @default("0")
+  feesPending1      String              @default("0")
+  feesCollected0    String              @default("0")
+  feesCollected1    String              @default("0")
+  swaps             Swap[]
+  priceSnapshots    PriceSnapshot[]
+  reserveSnapshots  PairReserveSnapshot[]
+  lastBlockUpdate   Int
 
   @@index([token0Id, token1Id])
 }
 
 // Liquidity positions for individual LPs
 model LiquidityPosition {
-  id               String   @id @default(auto()) @map("_id") @db.ObjectId
-  pairId           String   @db.ObjectId
-  userAddress      String
-  liquidityTokens  String   // LP tokens held
-  // Relationships
-  pair             Pair     @relation(fields: [pairId], references: [id])
-  // Timestamps
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
-  lastBlockNumber  Int?     // Last block number when the position was updated
+  id              String   @id @default(auto()) @map("_id") @db.ObjectId
+  pairId          String   @db.ObjectId
+  userAddress     String
+  liquidityTokens String   // LP tokens held
+  pair            Pair     @relation(fields: [pairId], references: [id])
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
-  @@unique([pairId, userAddress])
-  @@index([userAddress])
+  @@index([pairId, userAddress])
 }
 
 // Swap events
 model Swap {
-  id             String   @id @default(auto()) @map("_id") @db.ObjectId
-  pairId         String   @db.ObjectId
-  txHash         String
-  userAddress    String
-  contractSender String?   // Added field for the contract that sent the event
-  recipient      String   // Added field for the recipient address
-  amountIn0      String   // Amount of token0 in (can be 0)
-  amountIn1      String   // Amount of token1 in (can be 0)
-  amountOut0     String   // Amount of token0 out (can be 0)
-  amountOut1     String   // Amount of token1 out (can be 0)
-  blockNumber    Int
-  timestamp      Int
-  // Relationships
-  pair           Pair     @relation(fields: [pairId], references: [id])
-  // Timestamps
-  createdAt      DateTime @default(now())
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  pairId       String   @db.ObjectId
+  sender       String
+  amount0In    String
+  amount1In    String
+  amount0Out   String
+  amount1Out   String
+  to           String
+  blockNumber  Int
+  timestamp    Int
+  pair         Pair     @relation(fields: [pairId], references: [id])
+  createdAt    DateTime @default(now())
 
-  @@index([userAddress])
-  @@index([timestamp])
-  @@unique([txHash, pairId])
+  @@index([pairId, timestamp])
 }
 
 // Price snapshots for historical data
 model PriceSnapshot {
-  id           String    @id @default(auto()) @map("_id") @db.ObjectId
-  pairId       String    @db.ObjectId
-  token0Price  String    // Price of token0 in terms of token1
-  token1Price  String    // Price of token1 in terms of token0
-  timestamp    Int       // Unix timestamp
-  blockNumber  Int
-  // Relationships
-  pair         Pair      @relation(fields: [pairId], references: [id])
-  // Timestamps
-  createdAt    DateTime  @default(now())
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  pairId      String   @db.ObjectId
+  price0      String
+  price1      String
+  timestamp   Int       // Unix timestamp
+  blockNumber Int
+  pair        Pair     @relation(fields: [pairId], references: [id])
+  createdAt   DateTime @default(now())
 
-  @@index([timestamp])
   @@index([pairId, timestamp])
 }
 
@@ -123,7 +117,6 @@ model UserStat {
   totalLpCount     Int      @default(0)
   swapVolumeUSD    String   @default("0")
   liquidityProvidedUSD String @default("0")
-  // Timestamps
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 }
@@ -138,7 +131,6 @@ model Factory {
   feeTo            String?  // Address that collects fees
   feeToSetter      String?  // Address that can change feeTo
   launcher         String?  // Address of the launcher contract
-  // Timestamps
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 }
@@ -148,7 +140,6 @@ model IndexerState {
   id                   String   @id @default(auto()) @map("_id") @db.ObjectId
   key                  String   @unique
   lastProcessedBlock   Int
-  // Timestamps
   updatedAt            DateTime @updatedAt
 }
 
@@ -597,14 +588,13 @@ model OracleMetric {
 
 // Reserve snapshots for tracking historical reserves
 model PairReserveSnapshot {
-  id          String   @id @default(uuid()) @map("_id")
-  pairId      String
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  pairId      String   @db.ObjectId
   reserve0    String
   reserve1    String
   reserveUSD  String
   timestamp   Int
   pair        Pair     @relation(fields: [pairId], references: [id])
 
-  @@index([pairId, timestamp(sort: Desc)])
-  @@index([reserveUSD])
+  @@index([pairId, timestamp])
 }

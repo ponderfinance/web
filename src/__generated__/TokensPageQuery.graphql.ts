@@ -1,5 +1,5 @@
 /**
- * @generated SignedSource<<90b81507e953651efee4571a0ca29377>>
+ * @generated SignedSource<<96d1c68447e8c5dcf93c777b9f8dd55c>>
  * @lightSyntaxTransform
  * @nogrep
  */
@@ -26,7 +26,7 @@ export type TokensPageQuery$data = {
         readonly imageURI: string | null;
         readonly name: string | null;
         readonly priceChange24h: number | null;
-        readonly priceUSD: string;
+        readonly priceUSD: string | null;
         readonly symbol: string | null;
         readonly volumeUSD24h: string | null;
         readonly " $fragmentSpreads": FragmentRefs<"TokenPairFragment">;
