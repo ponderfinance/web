@@ -541,7 +541,7 @@ export function SwapInterface({
             <Actionable 
               attributes={{
                 style: {
-                  width: '100%',
+                  width: '100% !important',
                 },
               }}
               onClick={() => window.open(`${CURRENT_CHAIN.blockExplorers.default.url}/tx/${txHash}`, '_blank')}
