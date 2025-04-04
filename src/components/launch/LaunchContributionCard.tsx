@@ -1,26 +1,60 @@
 import { useState, useEffect } from 'react'
 import { Text, Card, Button, View } from 'reshaped'
-import { useSwap, useContribute, usePonderSDK } from '@ponderfinance/sdk'
+import { useSwap, useContribute, usePonderSDK, useRemainingToRaise } from '@ponderfinance/sdk'
 import { formatEther, parseEther, type Address } from 'viem'
+import { useFragment, useLazyLoadQuery } from 'react-relay'
+import { graphql } from 'relay-runtime'
+import type { LaunchContributionCard_launch$key } from '../../__generated__/LaunchContributionCard_launch.graphql'
+import type { LaunchContributionCardQuery } from '../../__generated__/LaunchContributionCardQuery.graphql'
+import { getIpfsGateway } from '@/src/utils/ipfs'
 
 interface LaunchContributionCardProps {
   launchId: bigint
 }
 
-type ContributionToken = 'PONDER' | 'KUB'
+type ContributionToken = 'KOI' | 'KUB'
 
-interface LaunchInfo {
-  totalRaised: bigint
-  launched: boolean
-  tokenAddress: Address
-  name: string
-  ponderMetrics?: {
-    requiredAmount: bigint
-    lpAllocation: bigint
-    protocolLPAllocation: bigint
-    burnAmount: bigint
+const LaunchContributionCardFragment = graphql`
+  fragment LaunchContributionCard_launch on Launch {
+    id
+    launchId
+    tokenAddress
+    creatorAddress
+    imageURI
+    kubRaised
+    ponderRaised
+    status
+    kubPairAddress
+    ponderPairAddress
+    hasDualPools
+    ponderPoolSkipped
+    kubLiquidity
+    ponderLiquidity
+    ponderBurned
+    lpWithdrawn
+    lpWithdrawnAt
+    completedAt
+    cancelledAt
+    createdAt
+    updatedAt
   }
-}
+`
+
+const LaunchContributionCardQuery = graphql`
+  query LaunchContributionCardQuery($launchId: Int!) {
+    launch(launchId: $launchId) {
+      ...LaunchContributionCard_launch
+    }
+  }
+`
+
+// Constants from the contract
+const TARGET_RAISE = BigInt('5555000000000000000000') // 5555 KUB
+const MAX_PONDER_PERCENT = BigInt('2000') // 20% in basis points
+const BASIS_POINTS = BigInt('10000')
+const MIN_KUB_CONTRIBUTION = BigInt('10000000000000000') // 0.01 KUB
+const MIN_PONDER_CONTRIBUTION = BigInt('100000000000000000') // 0.1 PONDER
+const PONDER_TO_KUB_RATIO = BigInt('10') // 1 PONDER = 0.1 KUB
 
 export default function LaunchContributionCard({
   launchId,
@@ -28,61 +62,44 @@ export default function LaunchContributionCard({
   const sdk = usePonderSDK()
   const contribute = useContribute()
   const swap = useSwap()
+  const { data: remainingData } = useRemainingToRaise(launchId)
 
-  const [selectedToken, setSelectedToken] = useState<ContributionToken>('PONDER')
+  const [selectedToken, setSelectedToken] = useState<ContributionToken>('KOI')
   const [amount, setAmount] = useState<string>('')
-  const [launchInfo, setLaunchInfo] = useState<LaunchInfo | null>(null)
   const [isLoadingMetrics, setIsLoadingMetrics] = useState(true)
   const [isApproving, setIsApproving] = useState(false)
   const [hasApproved, setHasApproved] = useState(false)
   const [balances, setBalances] = useState<{
-    ponder: bigint
+    koi: bigint
     kub: bigint
   }>({
-    ponder: BigInt(0),
+    koi: BigInt(0),
     kub: BigInt(0),
   })
 
-  // Fetch launch info and required PONDER
+  // Fetch launch info using Relay
+  const data = useLazyLoadQuery<LaunchContributionCardQuery>(LaunchContributionCardQuery, {
+    launchId: Number(launchId),
+  })
+
+  // Fetch PONDER metrics
   useEffect(() => {
-    const fetchLaunchInfo = async () => {
+    const fetchMetrics = async () => {
       if (!sdk?.walletClient?.account) return
 
       try {
         setIsLoadingMetrics(true)
-
-        // First get basic launch info
-        const info = await sdk.launcher.getLaunchInfo(launchId)
-
-        // Set initial info without metrics
-        setLaunchInfo({
-          totalRaised: info.totalRaised,
-          launched: info.launched,
-          tokenAddress: info.tokenAddress as Address,
-          name: info.name,
-        })
-
-        // Then fetch PONDER metrics
         const metrics = await sdk.launcher.calculatePonderRequirements()
-
-        // Update with metrics
-        setLaunchInfo((prev) =>
-          prev
-            ? {
-                ...prev,
-                ponderMetrics: metrics,
-              }
-            : null
-        )
+        // Store metrics in state if needed
       } catch (err) {
-        console.error('Failed to fetch launch info:', err)
+        console.error('Failed to fetch PONDER metrics:', err)
       } finally {
         setIsLoadingMetrics(false)
       }
     }
 
-    fetchLaunchInfo()
-  }, [sdk?.walletClient?.account, launchId])
+    fetchMetrics()
+  }, [sdk?.walletClient?.account])
 
   // Fetch balances
   useEffect(() => {
@@ -96,7 +113,7 @@ export default function LaunchContributionCard({
         ])
 
         setBalances({
-          ponder: ponderBalance,
+          koi: ponderBalance,
           kub: kubBalance,
         })
       } catch (err) {
@@ -110,7 +127,7 @@ export default function LaunchContributionCard({
   // Check approval status
   useEffect(() => {
     const checkApproval = async () => {
-      if (!sdk?.walletClient?.account || !amount || selectedToken !== 'PONDER') {
+      if (!sdk?.walletClient?.account || !amount || selectedToken !== 'KOI') {
         setHasApproved(false)
         return
       }
@@ -153,21 +170,70 @@ export default function LaunchContributionCard({
     }
   }
 
+  if (!data?.launch) {
+    return (
+      <Card>
+        <View align="center" justify="center">
+          <Text>Loading...</Text>
+        </View>
+      </Card>
+    )
+  }
+
+  const launch = useFragment<LaunchContributionCard_launch$key>(
+    LaunchContributionCardFragment,
+    data.launch
+  )
+
+  const calculateMaxContribution = async () => {
+    if (!remainingData) return '0'
+
+    try {
+      if (selectedToken === 'KUB') {
+        // For KUB, max is either remaining KUB or user's balance
+        const maxKub = remainingData.remainingKub > balances.kub ? balances.kub : remainingData.remainingKub
+        return formatEther(maxKub)
+      } else {
+        // For KOI, remainingPonder is in KUB terms
+        // Use calculatePonderRequirements to get the actual PONDER amount needed
+        const metrics = await sdk.launcher.calculatePonderRequirements()
+        const maxPonder = metrics.requiredAmount > balances.koi ? balances.koi : metrics.requiredAmount
+        return formatEther(maxPonder)
+      }
+    } catch (err) {
+      console.error('Failed to calculate max contribution:', err)
+      return '0'
+    }
+  }
+
+  const handleMaxClick = async () => {
+    const maxAmount = await calculateMaxContribution()
+    setAmount(maxAmount)
+  }
+
   const handleContribute = async () => {
-    if (!sdk?.walletClient?.account || !amount || !launchInfo?.ponderMetrics) return
+    if (!sdk?.walletClient?.account || !amount) return
 
     try {
       const contributionAmount = parseEther(amount)
 
-      if (selectedToken === 'PONDER') {
-        // Check PONDER balance and allowance
-        const [ponderBalance, allowance] = await Promise.all([
+      // Validate minimum contribution
+      if (selectedToken === 'KUB' && contributionAmount < MIN_KUB_CONTRIBUTION) {
+        throw new Error(`Minimum KUB contribution is ${formatEther(MIN_KUB_CONTRIBUTION)} KUB`)
+      }
+      if (selectedToken === 'KOI' && contributionAmount < MIN_PONDER_CONTRIBUTION) {
+        throw new Error(`Minimum KOI contribution is ${formatEther(MIN_PONDER_CONTRIBUTION)} KOI`)
+      }
+
+      if (selectedToken === 'KOI') {
+        // Check KOI balance and allowance
+        const [koiBalance, allowance] = await Promise.all([
           sdk.ponder.balanceOf(sdk.walletClient.account.address),
           sdk.ponder.allowance(sdk.walletClient.account.address, sdk.launcher.address),
         ])
 
-        if (ponderBalance < contributionAmount) {
-          throw new Error('Insufficient PONDER balance')
+        if (koiBalance < contributionAmount) {
+          throw new Error('Insufficient KOI balance')
         }
 
         // Check if we need approval for the contribution amount
@@ -179,19 +245,26 @@ export default function LaunchContributionCard({
           await sdk.publicClient.waitForTransactionReceipt({ hash: approvalTx })
         }
       } else {
-        // KUB flow remains the same...
+        // Check KUB balance
+        const kubBalance = await sdk.publicClient.getBalance({ 
+          address: sdk.walletClient.account.address 
+        })
+        
+        if (kubBalance < contributionAmount) {
+          throw new Error('Insufficient KUB balance')
+        }
       }
 
       // Now contribute
       const result = await contribute.mutateAsync({
         launchId,
         amount: contributionAmount,
-        type: selectedToken,
+        type: selectedToken === 'KOI' ? 'PONDER' : 'KUB', // Map KOI to PONDER for the contract
       })
 
-      // console.log('re', result)
-
-      // Rest of the success handling...
+      // Reset form
+      setAmount('')
+      setHasApproved(false)
     } catch (err) {
       console.error('Operation failed:', err)
       throw err
@@ -208,21 +281,11 @@ export default function LaunchContributionCard({
     )
   }
 
-  if (!launchInfo) {
+  if (launch.status === 'COMPLETED' || launch.status === 'CANCELLED') {
     return (
       <Card>
         <View align="center" justify="center">
-          <Text>Loading...</Text>
-        </View>
-      </Card>
-    )
-  }
-
-  if (launchInfo.launched) {
-    return (
-      <Card>
-        <View align="center" justify="center">
-          <Text>Launch completed</Text>
+          <Text>Launch {launch.status.toLowerCase()}</Text>
         </View>
       </Card>
     )
@@ -230,28 +293,26 @@ export default function LaunchContributionCard({
 
   const isLoading = contribute.isPending || swap.isPending
   const error = contribute.error || swap.error
-  const needsApproval = selectedToken === 'PONDER' && !hasApproved
+  const needsApproval = selectedToken === 'KOI' && !hasApproved
 
   return (
     <Card>
       <View gap={16}>
         <View gap={8}>
-          <Text variant="title-3">Contribute to {launchInfo.name}</Text>
-          <Text>Total Raised: {formatEther(launchInfo.totalRaised)} KUB</Text>
+          <Text variant="title-3">Contribute to Launch #{launch.launchId}</Text>
+          <Text>Total Raised: {formatEther(BigInt(launch.kubRaised))} KUB</Text>
+          <Text>KOI Raised: {formatEther(BigInt(launch.ponderRaised))} KOI</Text>
 
           {isLoadingMetrics ? (
-            <Text>Calculating required PONDER amount...</Text>
-          ) : launchInfo.ponderMetrics ? (
-            <Text>
-              Required PONDER: {formatEther(launchInfo.ponderMetrics.requiredAmount)}{' '}
-              PONDER
-            </Text>
+            <Text>Calculating required KOI amount...</Text>
           ) : (
-            <Text>Failed to calculate PONDER requirement</Text>
+            <Text>Required KOI: {formatEther(BigInt(launch.ponderRaised))} KOI</Text>
           )}
 
           {error && (
-            <Text>{error instanceof Error ? error.message : 'Failed to contribute'}</Text>
+            <Text color="critical">
+              {error instanceof Error ? error.message : 'Failed to contribute'}
+            </Text>
           )}
 
           <View gap={4}>
@@ -261,7 +322,7 @@ export default function LaunchContributionCard({
               onChange={(e) => setSelectedToken(e.target.value as ContributionToken)}
               className="w-full p-2 border rounded"
             >
-              <option value="PONDER">PONDER ({formatEther(balances.ponder)})</option>
+              <option value="KOI">KOI ({formatEther(balances.koi)})</option>
               <option value="KUB">KUB ({formatEther(balances.kub)})</option>
             </select>
           </View>
@@ -281,6 +342,9 @@ export default function LaunchContributionCard({
                 {selectedToken}
               </span>
             </div>
+            <Button onClick={handleMaxClick} variant="outline" fullWidth>
+              MAX
+            </Button>
           </View>
         </View>
 
@@ -291,14 +355,12 @@ export default function LaunchContributionCard({
             loading={isApproving}
             fullWidth
           >
-            {isApproving ? 'Approving...' : 'Approve PONDER'}
+            {isApproving ? 'Approving...' : 'Approve KOI'}
           </Button>
         ) : (
           <Button
             onClick={handleContribute}
-            disabled={
-              isLoading || !amount || isLoadingMetrics || !launchInfo.ponderMetrics
-            }
+            disabled={isLoading || !amount || isLoadingMetrics}
             loading={isLoading}
             fullWidth
           >

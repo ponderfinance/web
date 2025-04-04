@@ -1,8 +1,13 @@
 // src/lib/services/tokenPriceService.ts
 // Server-only service for token pricing - this should never be imported in client components
 
-import { formatUnits } from 'viem'
+import { formatUnits, parseUnits } from 'viem'
 import { getRedisClient } from '@/src/lib/redis/client'
+import { PrismaClient, Token, Pair } from '@prisma/client'
+import { createPublicClient, http } from 'viem'
+import { CURRENT_CHAIN } from '@/src/constants/chains'
+import { ORACLE_ABI } from '@/src/constants/abis'
+import { ORACLE_ADDRESS } from '@/src/constants/addresses'
 import {
   detectNeedsDecimalNormalization,
   getStablecoinAddresses,
@@ -13,10 +18,20 @@ import {
 const CACHE_TTL_SECONDS = 300 // 5 minutes
 const STABLECOIN_ADDRESSES = getStablecoinAddresses()
 
+// Create a viem public client for blockchain interactions
+const publicClient = createPublicClient({
+  chain: CURRENT_CHAIN,
+  transport: http(CURRENT_CHAIN.rpcUrls.default.http[0]),
+})
+
+type PairWithTokens = Pair & {
+  token0: Token
+  token1: Token
+}
+
 // Interface for token info
 interface TokenInfo {
   decimals: number
-  symbol: string
   address: string
 }
 
@@ -31,46 +46,51 @@ export const TokenPriceService = {
    */
   async getTokenPriceUSD(tokenId: string, tokenDecimals?: number): Promise<number> {
     try {
+      console.log(`Starting getTokenPriceUSD for token ${tokenId}`)
+      
       // Try to get price from cache first
       const cachedPrice = await this.getCachedTokenPrice(tokenId)
-      if (cachedPrice !== null) {
+      if (cachedPrice !== null && cachedPrice > 0) {
+        console.log(`Using cached price ${cachedPrice} for token ${tokenId}`)
         return cachedPrice
       }
 
-      // If we get here, we need to check with the database and blockchain
-
-      // Import the server-only modules dynamically to avoid bundling issues
-      const { PrismaClient } = await import('@prisma/client')
       const prisma = new PrismaClient()
 
-      // Get the token info to verify decimals
+      // Get the token info
       const token = await prisma.token.findUnique({
         where: { id: tokenId },
+        select: {
+          id: true,
+          address: true,
+          decimals: true,
+          symbol: true
+        }
       })
 
-      if (!token) return 0
-
-      // Get token decimals if not provided
-      if (tokenDecimals === undefined) {
-        tokenDecimals = token.decimals || 18
+      if (!token) {
+        console.warn(`Token ${tokenId} not found in database`)
+        return 0
       }
 
-      // 1. Try to get from stablecoin pairs in our database
-      let priceFromPairs = await this.getPriceFromStablecoinPairs(
-        tokenId,
-        tokenDecimals,
-        prisma
-      )
-      if (priceFromPairs > 0) {
-        // Cache this price for future use
-        await this.cacheTokenPrice(tokenId, priceFromPairs)
-        return priceFromPairs
+      console.log(`Found token ${token.symbol} (${token.address}) with decimals ${token.decimals}`)
+
+      // Use our comprehensive price lookup with all fallbacks
+      const price = await this.getReliableTokenUsdPrice({
+        id: token.id,
+        address: token.address,
+        decimals: token.decimals || 18,
+        symbol: token.symbol || undefined
+      }, prisma)
+      
+      if (price > 0) {
+        console.log(`Got valid price ${price} for token ${token.symbol}`)
+        // Cache this price for future use (5 minutes TTL)
+        await this.cacheTokenPrice(tokenId, price, 300)
+        return price
       }
 
-      // 2. Try to get from price oracle if needed
-      // This part would depend on your blockchain specific code
-
-      // 3. If all else fails, return zero
+      console.warn(`Could not find valid price for token ${token.symbol} from any source`)
       return 0
     } catch (error) {
       console.error(`Error getting USD price for token ${tokenId}:`, error)
@@ -84,88 +104,90 @@ export const TokenPriceService = {
   async getPriceFromStablecoinPairs(
     tokenId: string,
     tokenDecimals?: number,
-    prismaClient?: any
+    prismaClient?: PrismaClient
   ): Promise<number> {
     try {
-      // Import Prisma if not provided
-      if (!prismaClient) {
-        const { PrismaClient } = await import('@prisma/client')
-        prismaClient = new PrismaClient()
-      }
+      const prisma = prismaClient || new PrismaClient()
 
-      // Find the token
-      const token = await prismaClient.token.findUnique({
+      const token = await prisma.token.findUnique({
         where: { id: tokenId },
-      })
-
-      if (!token) return 0
-
-      // Get token decimals if not provided
-      if (tokenDecimals === undefined) {
-        tokenDecimals = token.decimals || 18
-      }
-
-      // Find pairs where this token is paired with a stablecoin
-      const pairs = await prismaClient.pair.findMany({
-        where: {
-          OR: [
-            {
-              token0Id: tokenId,
-              token1: {
-                address: {
-                  in: STABLECOIN_ADDRESSES,
-                },
-              },
-            },
-            {
-              token1Id: tokenId,
-              token0: {
-                address: {
-                  in: STABLECOIN_ADDRESSES,
-                },
-              },
-            },
-          ],
-        },
         include: {
-          token0: true,
-          token1: true,
-        },
+          pairsAsToken0: {
+            include: {
+              token0: true,
+              token1: true
+            },
+            where: {
+              token1: {
+                symbol: {
+                  in: ['USDT', 'USDC']
+                }
+              }
+            }
+          },
+          pairsAsToken1: {
+            include: {
+              token0: true,
+              token1: true
+            },
+            where: {
+              token0: {
+                symbol: {
+                  in: ['USDT', 'USDC']
+                }
+              }
+            }
+          }
+        }
       })
 
-      // If no stablecoin pairs found
-      if (pairs.length === 0) return 0
-
-      // Get the most liquid pair (highest reserves)
-      let bestPair = pairs[0]
-      let highestReserves = 0
-
-      for (const pair of pairs) {
-        const isToken0 = pair.token0Id === tokenId
-        const stablecoinReserve = parseFloat(isToken0 ? pair.reserve1 : pair.reserve0)
-        if (stablecoinReserve > highestReserves) {
-          highestReserves = stablecoinReserve
-          bestPair = pair
-        }
+      if (!token) {
+        console.warn(`Token ${tokenId} not found in database`)
+        return 0
       }
 
-      // Calculate price based on reserves
+      // Combine all relevant pairs
+      const allPairs = [
+        ...(token.pairsAsToken0 as PairWithTokens[]),
+        ...(token.pairsAsToken1 as PairWithTokens[])
+      ]
+      if (allPairs.length === 0) {
+        console.warn(`No stablecoin pairs found for token ${tokenId}`)
+        return 0
+      }
+
+      console.log(`Found ${allPairs.length} stablecoin pairs for token ${tokenId}`)
+
+      // Find the pair with the highest liquidity
+      const bestPair = allPairs.reduce((best, current) => {
+        const currentReserves = BigInt(current.reserve0) + BigInt(current.reserve1)
+        const bestReserves = BigInt(best.reserve0) + BigInt(best.reserve1)
+        return currentReserves > bestReserves ? current : best
+      })
+
+      console.log(`Selected best pair ${bestPair.address} with reserves: ${bestPair.reserve0}, ${bestPair.reserve1}`)
+
+      // Determine if our token is token0 or token1 in the pair
       const isToken0 = bestPair.token0Id === tokenId
-      const pairToken = isToken0 ? bestPair.token0 : bestPair.token1
+
+      // Get the stablecoin from the pair
       const stablecoin = isToken0 ? bestPair.token1 : bestPair.token0
+      console.log(`Using stablecoin ${stablecoin.symbol} (${stablecoin.address})`)
 
       // Get reserves
       const tokenReserveRaw = isToken0 ? bestPair.reserve0 : bestPair.reserve1
       const stablecoinReserveRaw = isToken0 ? bestPair.reserve1 : bestPair.reserve0
 
       // Get decimals
-      const tokenDecimalsFinal = pairToken.decimals || 18
+      const tokenDecimalsFinal = tokenDecimals || token.decimals || 18
       const stablecoinDecimals = stablecoin.decimals || 18
 
-      try {
-        // Use viem to format the values
-        const { formatUnits } = await import('viem')
+      console.log(`Using decimals - token: ${tokenDecimalsFinal}, stablecoin: ${stablecoinDecimals}`)
 
+      try {
+        const { formatUnits, parseUnits } = await import('viem')
+
+        // Format reserves using viem's formatUnits
         const tokenReserve = parseFloat(
           formatUnits(BigInt(tokenReserveRaw), tokenDecimalsFinal)
         )
@@ -173,9 +195,30 @@ export const TokenPriceService = {
           formatUnits(BigInt(stablecoinReserveRaw), stablecoinDecimals)
         )
 
-        // Calculate price
+        console.log(`Formatted reserves - token: ${tokenReserve}, stablecoin: ${stablecoinReserve}`)
+
         if (tokenReserve > 0) {
-          return stablecoinReserve / tokenReserve
+          // Calculate price using viem's utilities
+          // First, get the amount of stablecoin for 1 unit of the token
+          const oneToken = parseUnits('1', tokenDecimalsFinal)
+          const priceInStablecoin = (BigInt(stablecoinReserveRaw) * oneToken) / BigInt(tokenReserveRaw)
+          
+          // Format the result to get the USD price
+          const price = parseFloat(formatUnits(priceInStablecoin, stablecoinDecimals))
+          
+          console.log(`Raw reserves - token: ${tokenReserveRaw}, stablecoin: ${stablecoinReserveRaw}`)
+          console.log(`Decimals - token: ${tokenDecimalsFinal}, stablecoin: ${stablecoinDecimals}`)
+          console.log(`Calculated price: ${price} USD per ${token.symbol || token.address}`)
+          
+          // Basic sanity check - price should be positive and reasonable
+          if (price > 0.000001 && price < 1000000000) {
+            return price
+          } else {
+            console.warn(`Calculated price ${price} appears outside reasonable bounds for token ${token.symbol || token.address}`)
+            return 0
+          }
+        } else {
+          console.warn(`Token reserve is 0 for pair ${bestPair.address}`)
         }
       } catch (error) {
         console.error(`Error formatting reserves for token ${tokenId}:`, error)
@@ -183,10 +226,7 @@ export const TokenPriceService = {
 
       return 0
     } catch (error) {
-      console.error(
-        `Error getting price from stablecoin pairs for token ${tokenId}:`,
-        error
-      )
+      console.error(`Error getting price from stablecoin pairs for token ${tokenId}:`, error)
       return 0
     }
   },
@@ -201,33 +241,36 @@ export const TokenPriceService = {
 
       const cachedValue = await redis.get(cacheKey)
       if (cachedValue) {
-        return parseFloat(cachedValue)
+        const price = parseFloat(cachedValue)
+        // Validate the cached price
+        if (!isNaN(price) && price >= 0) {
+          return price
+        }
       }
 
       return null
     } catch (error) {
-      console.error(`Cache error for token ${tokenId}:`, error)
+      console.error(`Error getting cached price for token ${tokenId}:`, error)
       return null
     }
   },
 
   /**
-   * Cache a token price in Redis with expiration
+   * Cache token price in Redis
    */
-  async cacheTokenPrice(
-    tokenId: string,
-    price: number,
-    ttlSeconds: number = CACHE_TTL_SECONDS
-  ): Promise<void> {
+  async cacheTokenPrice(tokenId: string, price: number, ttlSeconds: number = 300): Promise<void> {
     try {
       const redis = getRedisClient()
       const cacheKey = `token:${tokenId}:priceUSD`
 
-      // Store the price with an expiration time
-      await redis.set(cacheKey, price.toString(), 'EX', ttlSeconds)
+      // Only cache valid prices
+      if (!isNaN(price) && price > 0 && price < 1e10) {
+        await redis.set(cacheKey, price.toString(), 'EX', ttlSeconds)
+      } else {
+        console.warn(`Invalid price ${price} for token ${tokenId} - not caching`)
+      }
     } catch (error) {
       console.error(`Error caching price for token ${tokenId}:`, error)
-      // Non-blocking - we don't throw here as caching failures shouldn't break the app
     }
   },
 
@@ -269,6 +312,8 @@ export const TokenPriceService = {
     const tokenDecimals = token.decimals || 18
     const tokenSymbol = token.symbol || 'Unknown'
 
+    console.log(`Starting price resolution for ${tokenSymbol} (${tokenId})`)
+
     // Track attempt methods for debugging
     const attemptMethods: string[] = []
 
@@ -277,6 +322,7 @@ export const TokenPriceService = {
     try {
       const cachedPrice = await this.getCachedTokenPrice(tokenId)
       if (cachedPrice !== null && cachedPrice > 0) {
+        console.log(`Found cached price ${cachedPrice} for ${tokenSymbol}`)
         return cachedPrice
       }
     } catch (error) {
@@ -297,10 +343,21 @@ export const TokenPriceService = {
         select: { priceUSD: true },
       })
 
-      if (tokenData?.priceUSD && parseFloat(tokenData.priceUSD) > 0) {
-        // Cache this value for future use
-        await this.cacheTokenPrice(tokenId, parseFloat(tokenData.priceUSD))
-        return parseFloat(tokenData.priceUSD)
+      if (tokenData?.priceUSD) {
+        const dbPrice = parseFloat(tokenData.priceUSD)
+        // Only accept database price if it's reasonable (not extremely small)
+        if (dbPrice > 0.000001) {
+          console.log(`Found valid database price ${dbPrice} for ${tokenSymbol}`)
+          await this.cacheTokenPrice(tokenId, dbPrice)
+          return dbPrice
+        } else {
+          console.log(`Found invalid database price ${dbPrice} for ${tokenSymbol}, will recalculate`)
+          // Clear invalid price from database
+          await prismaClient.token.update({
+            where: { id: tokenId },
+            data: { priceUSD: null }
+          })
+        }
       }
     } catch (error) {
       console.warn(`DB lookup failed for ${tokenSymbol} (${tokenId})`, error)
@@ -315,9 +372,22 @@ export const TokenPriceService = {
         prismaClient
       )
 
-      if (priceFromPairs > 0) {
+      if (priceFromPairs > 0.000001) {  // Only accept reasonable prices
+        console.log(`Found valid price ${priceFromPairs} from stablecoin pairs for ${tokenSymbol}`)
+        // Store in database and cache
+        try {
+          await prismaClient.token.update({
+            where: { id: tokenId },
+            data: { priceUSD: priceFromPairs.toString() }
+          })
+          console.log(`Updated database with price ${priceFromPairs} for ${tokenSymbol}`)
+        } catch (error) {
+          console.error(`Failed to update database with price for ${tokenSymbol}:`, error)
+        }
         await this.cacheTokenPrice(tokenId, priceFromPairs)
         return priceFromPairs
+      } else {
+        console.log(`Found invalid price ${priceFromPairs} from stablecoin pairs for ${tokenSymbol}, trying next method`)
       }
     } catch (error) {
       console.warn(`Stablecoin pair lookup failed for ${tokenSymbol} (${tokenId})`, error)
@@ -345,6 +415,8 @@ export const TokenPriceService = {
         take: 10,
       })
 
+      console.log(`Found ${tokensWithPrices.length} reference tokens for ${tokenSymbol}`)
+
       // Filter to tokens with valid prices
       const referenceTokens = tokensWithPrices.filter(
         (t: { priceUSD: string }) => t.priceUSD && parseFloat(t.priceUSD) > 0
@@ -352,6 +424,7 @@ export const TokenPriceService = {
 
       for (const refToken of referenceTokens) {
         const refTokenPrice = parseFloat(refToken.priceUSD as string)
+        console.log(`Trying reference token ${refToken.symbol} with price ${refTokenPrice}`)
 
         // Find pair between our token and this reference token
         const pair = await prismaClient.pair.findFirst({
@@ -374,6 +447,7 @@ export const TokenPriceService = {
         })
 
         if (pair) {
+          console.log(`Found pair ${pair.address} with reference token ${refToken.symbol}`)
           // Get the most recent price snapshot
           const snapshot = await prismaClient.priceSnapshot.findFirst({
             where: { pairId: pair.id },
@@ -386,28 +460,38 @@ export const TokenPriceService = {
 
             if (isToken0 && !refIsToken0) {
               // Our token is token0, reference token is token1
-              // token0Price is "how much token1 per token0"
-              // Multiply: (token1 per token0) * (USD per token1) = USD per token0
               const price = parseFloat(snapshot.token0Price) * refTokenPrice
+              console.log(`Calculated price ${price} from token0Price for ${tokenSymbol}`)
 
               if (price > 0) {
+                try {
+                  await prismaClient.token.update({
+                    where: { id: tokenId },
+                    data: { priceUSD: price.toString() }
+                  })
+                  console.log(`Updated database with price ${price} for ${tokenSymbol}`)
+                } catch (error) {
+                  console.error(`Failed to update database with price for ${tokenSymbol}:`, error)
+                }
                 await this.cacheTokenPrice(tokenId, price)
-                console.log(
-                  `Found ${tokenSymbol} price via reference token ${refToken.symbol}: $${price}`
-                )
                 return price
               }
             } else if (!isToken0 && refIsToken0) {
               // Our token is token1, reference token is token0
-              // token1Price is "how much token0 per token1"
-              // Multiply: (token0 per token1) * (USD per token0) = USD per token1
               const price = parseFloat(snapshot.token1Price) * refTokenPrice
+              console.log(`Calculated price ${price} from token1Price for ${tokenSymbol}`)
 
               if (price > 0) {
+                try {
+                  await prismaClient.token.update({
+                    where: { id: tokenId },
+                    data: { priceUSD: price.toString() }
+                  })
+                  console.log(`Updated database with price ${price} for ${tokenSymbol}`)
+                } catch (error) {
+                  console.error(`Failed to update database with price for ${tokenSymbol}:`, error)
+                }
                 await this.cacheTokenPrice(tokenId, price)
-                console.log(
-                  `Found ${tokenSymbol} price via reference token ${refToken.symbol}: $${price}`
-                )
                 return price
               }
             }
@@ -436,6 +520,7 @@ export const TokenPriceService = {
       })
 
       if (mostLiquidPair) {
+        console.log(`Found most liquid pair ${mostLiquidPair.address} for ${tokenSymbol}`)
         const snapshot = await prismaClient.priceSnapshot.findFirst({
           where: { pairId: mostLiquidPair.id },
           orderBy: { timestamp: 'desc' },
@@ -447,6 +532,7 @@ export const TokenPriceService = {
             ? mostLiquidPair.token1
             : mostLiquidPair.token0
 
+          console.log(`Getting counterpart token ${counterpartToken.symbol} price`)
           // Try to get counterpart token's price
           const counterpartPrice = await this.getTokenPriceUSD(
             counterpartToken.id,
@@ -459,13 +545,24 @@ export const TokenPriceService = {
             if (isToken0) {
               // Our token is token0, formula: token0Price * counterpartPrice
               price = parseFloat(snapshot.token0Price) * counterpartPrice
+              console.log(`Calculated price ${price} from token0Price for ${tokenSymbol}`)
             } else {
               // Our token is token1, formula: counterpartPrice / token1Price
               const token1Price = parseFloat(snapshot.token1Price)
               price = token1Price > 0 ? counterpartPrice / token1Price : 0
+              console.log(`Calculated price ${price} from token1Price for ${tokenSymbol}`)
             }
 
             if (price > 0) {
+              try {
+                await prismaClient.token.update({
+                  where: { id: tokenId },
+                  data: { priceUSD: price.toString() }
+                })
+                console.log(`Updated database with price ${price} for ${tokenSymbol}`)
+              } catch (error) {
+                console.error(`Failed to update database with price for ${tokenSymbol}:`, error)
+              }
               await this.cacheTokenPrice(tokenId, price)
               return price
             }
@@ -515,4 +612,262 @@ export const TokenPriceService = {
   getStablecoinAddresses,
   normalizePrice,
   detectNeedsDecimalNormalization,
+
+  /**
+   * Get price from the on-chain oracle
+   */
+  async getPriceFromOracle(tokenAddress: string): Promise<number> {
+    try {
+      // Find a stablecoin pair for this token
+      const prisma = new PrismaClient()
+      const token = await prisma.token.findUnique({
+        where: { address: tokenAddress },
+        include: {
+          pairsAsToken0: {
+            include: {
+              token0: true,
+              token1: true
+            },
+            where: {
+              token1: {
+                symbol: {
+                  in: ['USDT', 'USDC']
+                }
+              }
+            }
+          },
+          pairsAsToken1: {
+            include: {
+              token0: true,
+              token1: true
+            },
+            where: {
+              token0: {
+                symbol: {
+                  in: ['USDT', 'USDC']
+                }
+              }
+            }
+          }
+        }
+      })
+
+      if (!token) {
+        console.warn(`Token ${tokenAddress} not found in database`)
+        return 0
+      }
+
+      // Get the first stablecoin pair
+      const allPairs = [
+        ...(token.pairsAsToken0 as PairWithTokens[]),
+        ...(token.pairsAsToken1 as PairWithTokens[])
+      ]
+      const pair = allPairs[0]
+      if (!pair) {
+        console.warn(`No stablecoin pair found for token ${tokenAddress}`)
+        return 0
+      }
+
+      console.log(`Found stablecoin pair ${pair.address} for token ${tokenAddress}`)
+
+      // 1. First try to get price from reserves (always available)
+      try {
+        const { formatUnits, parseUnits } = await import('viem')
+        const tokenReserveRaw = pair.token0Id === token.id ? pair.reserve0 : pair.reserve1
+        const stablecoinReserveRaw = pair.token0Id === token.id ? pair.reserve1 : pair.reserve0
+        
+        const tokenReserve = parseFloat(
+          formatUnits(BigInt(tokenReserveRaw), token.decimals || 18)
+        )
+        const stablecoinReserve = parseFloat(
+          formatUnits(BigInt(stablecoinReserveRaw), pair.token0Id === token.id ? pair.token1.decimals || 18 : pair.token0.decimals || 18)
+        )
+
+        if (tokenReserve > 0) {
+          const price = stablecoinReserve / tokenReserve
+          console.log(`Got price ${price} from reserves for token ${tokenAddress}`)
+          // Store in database and cache
+          try {
+            await prisma.token.update({
+              where: { id: token.id },
+              data: { priceUSD: price.toString() }
+            })
+            console.log(`Updated database with reserve price ${price} for token ${tokenAddress}`)
+          } catch (error) {
+            console.error(`Failed to update database with price for ${tokenAddress}:`, error)
+          }
+          await this.cacheTokenPrice(token.id, price)
+          return price
+        }
+      } catch (error) {
+        console.error(`Error getting price from reserves for ${tokenAddress}:`, error)
+      }
+
+      // 2. If reserves didn't work, try Oracle (only if pair is initialized)
+      try {
+        // Check if pair is initialized in Oracle
+        const isInitialized = await publicClient.readContract({
+          address: ORACLE_ADDRESS[CURRENT_CHAIN.id],
+          abi: ORACLE_ABI,
+          functionName: 'isPairInitialized',
+          args: [pair.address as `0x${string}`]
+        })
+
+        if (!isInitialized) {
+          console.warn(`Oracle pair ${pair.address} not initialized`)
+          return 0
+        }
+
+        console.log(`Oracle pair ${pair.address} is initialized, trying to get TWAP price`)
+
+        // Calculate amountIn (1 token with proper decimals)
+        const tokenDecimals = token.decimals || 18
+        const amountIn = BigInt(1) * BigInt(10) ** BigInt(tokenDecimals)
+
+        // Call the oracle's consult function
+        const result = await publicClient.readContract({
+          address: ORACLE_ADDRESS[CURRENT_CHAIN.id],
+          abi: ORACLE_ABI,
+          functionName: 'consult',
+          args: [
+            pair.address as `0x${string}`,
+            tokenAddress as `0x${string}`,
+            amountIn,
+            3600 // 1 hour period
+          ]
+        })
+
+        if (result) {
+          // Get the stablecoin decimals
+          const stablecoin = pair.token0Id === token.id ? pair.token1 : pair.token0
+          const stablecoinDecimals = stablecoin.decimals || 18
+          
+          // Convert the result to USD price
+          const price = Number(result) / Math.pow(10, stablecoinDecimals)
+          console.log(`Got price ${price} from oracle for token ${tokenAddress}`)
+          // Store in database and cache
+          try {
+            await prisma.token.update({
+              where: { id: token.id },
+              data: { priceUSD: price.toString() }
+            })
+            console.log(`Updated database with oracle price ${price} for token ${tokenAddress}`)
+          } catch (error) {
+            console.error(`Failed to update database with price for ${tokenAddress}:`, error)
+          }
+          await this.cacheTokenPrice(token.id, price)
+          return price
+        }
+      } catch (error: any) {
+        // Handle specific Oracle errors
+        if (error.message?.includes('NotInitialized')) {
+          console.warn(`Oracle pair ${pair.address} not initialized`)
+        } else if (error.message?.includes('StalePrice')) {
+          console.warn(`Oracle price for pair ${pair.address} is stale, falling back to reserves`)
+          // Try to get price from reserves again
+          try {
+            const { formatUnits, parseUnits } = await import('viem')
+            const tokenReserveRaw = pair.token0Id === token.id ? pair.reserve0 : pair.reserve1
+            const stablecoinReserveRaw = pair.token0Id === token.id ? pair.reserve1 : pair.reserve0
+            
+            const tokenReserve = parseFloat(
+              formatUnits(BigInt(tokenReserveRaw), token.decimals || 18)
+            )
+            const stablecoinReserve = parseFloat(
+              formatUnits(BigInt(stablecoinReserveRaw), pair.token0Id === token.id ? pair.token1.decimals || 18 : pair.token0.decimals || 18)
+            )
+
+            if (tokenReserve > 0) {
+              const price = stablecoinReserve / tokenReserve
+              console.log(`Got fallback price ${price} from reserves for token ${tokenAddress}`)
+              // Store in database and cache
+              try {
+                await prisma.token.update({
+                  where: { id: token.id },
+                  data: { priceUSD: price.toString() }
+                })
+                console.log(`Updated database with fallback price ${price} for token ${tokenAddress}`)
+              } catch (error) {
+                console.error(`Failed to update database with price for ${tokenAddress}:`, error)
+              }
+              await this.cacheTokenPrice(token.id, price)
+              return price
+            }
+          } catch (error) {
+            console.error(`Error getting fallback price from reserves for ${tokenAddress}:`, error)
+          }
+        } else if (error.message?.includes('InvalidPeriod')) {
+          console.warn(`Invalid period for oracle query on pair ${pair.address}`)
+        } else if (error.message?.includes('InsufficientData')) {
+          console.warn(`Insufficient data for oracle query on pair ${pair.address}`)
+        } else if (error.message?.includes('InvalidTimeElapsed')) {
+          console.warn(`Invalid time elapsed for oracle query on pair ${pair.address}`)
+        } else if (error.message?.includes('ElapsedTimeZero')) {
+          console.warn(`Zero time elapsed for oracle query on pair ${pair.address}`)
+        } else if (error.message?.includes('InvalidPair')) {
+          console.warn(`Invalid pair ${pair.address} for oracle query`)
+        } else if (error.message?.includes('InvalidToken')) {
+          console.warn(`Invalid token ${tokenAddress} for oracle query on pair ${pair.address}`)
+        } else if (error.message?.includes('UpdateTooFrequent')) {
+          console.warn(`Update too frequent for oracle query on pair ${pair.address}`)
+        } else {
+          console.error(`Oracle error for ${tokenAddress}:`, error)
+        }
+        // Clear cache when Oracle errors occur
+        await this.clearTokenPriceCache()
+      }
+
+      return 0
+    } catch (error) {
+      console.error(`Error getting price from oracle for ${tokenAddress}:`, error)
+      return 0
+    }
+  },
+
+  /**
+   * Clear Redis cache for token prices
+   */
+  async clearTokenPriceCache(): Promise<void> {
+    try {
+      const redis = getRedisClient()
+      const keys = await redis.keys('token:*:priceUSD')
+      if (keys.length > 0) {
+        await redis.del(...keys)
+        console.log(`Cleared ${keys.length} token price cache entries`)
+      }
+    } catch (error) {
+      console.error('Error clearing token price cache:', error)
+    }
+  },
+
+  /**
+   * Validate a token price is reasonable based on token characteristics
+   */
+  validateTokenPrice(
+    price: number,
+    token: { symbol?: string; address: string },
+    stablecoin: { symbol: string; address: string }
+  ): boolean {
+    // Basic validation
+    if (!price || isNaN(price) || price <= 0) {
+      return false
+    }
+
+    // For stablecoins themselves, we want to validate they're close to $1
+    if (token.symbol === 'USDT' || token.symbol === 'USDC') {
+      // Allow more deviation for stablecoins in price discovery
+      return Math.abs(price - 1) < 0.1 // Allow 10% deviation
+    }
+
+    // For prices derived from stablecoin pairs, we trust the calculation
+    // since it's based on actual reserves and proper decimal handling
+    if (stablecoin.symbol === 'USDT' || stablecoin.symbol === 'USDC') {
+      // Just ensure the price is within a very wide but reasonable range
+      // This catches obvious errors while allowing legitimate prices
+      return price > 0.000000001 && price < 1000000000
+    }
+
+    // For non-stablecoin pairs, apply similar reasonable bounds
+    return price > 0.000000001 && price < 1000000000
+  },
 }

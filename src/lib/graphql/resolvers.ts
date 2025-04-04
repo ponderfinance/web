@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client'
+import { PrismaClient, Launch as PrismaLaunch, Pair, Token as PrismaToken } from '@prisma/client'
 import { createPublicClient, formatUnits, parseUnits, PublicClient } from 'viem'
 import { calculateReservesUSD } from '@/src/lib/graphql/oracleUtils'
 import { CURRENT_CHAIN } from '@/src/constants/chains'
@@ -13,6 +13,7 @@ import {
 } from '@/src/lib/redis/pairCache'
 import { getRedisClient } from '@/src/lib/redis/client'
 import { TokenPriceService } from '@/src/lib/services/tokenPriceService'
+import { createCursorPagination, decodeCursor } from './utils'
 
 // USDT address
 const USDT_ADDRESS = '0x7d984C24d2499D840eB3b7016077164e15E5faA6'
@@ -58,46 +59,38 @@ interface VolumeChartData extends ChartDataPoint {
   count?: number
 }
 
-// Helper function to create cursor-based pagination
-const createCursorPagination = <T extends { id: string }>(
-  items: T[],
-  first: number,
-  cursorId?: string
-) => {
-  // Create the edges with cursors
-  const edges = items.map((item) => ({
-    node: item,
-    // Create a cursor from the item ID
-    cursor: Buffer.from(item.id).toString('base64'),
-  }))
-
-  // Check if there are more results by comparing the requested count with the result count
-  const hasNextPage = items.length > first
-  // Remove the extra item we fetched to check for more results
-  const limitedEdges = hasNextPage ? edges.slice(0, first) : edges
-
-  // Determine if there's a previous page - true if a cursor was provided
-  const hasPreviousPage = Boolean(cursorId)
-
-  return {
-    edges: limitedEdges,
-    pageInfo: {
-      hasNextPage,
-      hasPreviousPage,
-      startCursor: limitedEdges.length > 0 ? limitedEdges[0].cursor : null,
-      endCursor:
-        limitedEdges.length > 0 ? limitedEdges[limitedEdges.length - 1].cursor : null,
-    },
-  }
+interface TokenWhereInput {
+  address?: string;
+  symbol?: string;
+  name?: string;
 }
 
-// Helper to decode a cursor
-const decodeCursor = (cursor: string): string => {
-  try {
-    return Buffer.from(cursor, 'base64').toString('utf-8')
-  } catch (e) {
-    throw new Error(`Invalid cursor: ${cursor}`)
-  }
+interface LaunchResolvers {
+  id: (parent: PrismaLaunch) => string;
+  launchId: (parent: PrismaLaunch) => number;
+  tokenAddress: (parent: PrismaLaunch) => string;
+  creatorAddress: (parent: PrismaLaunch) => string;
+  imageURI: (parent: PrismaLaunch) => string;
+  kubRaised: (parent: PrismaLaunch) => string;
+  ponderRaised: (parent: PrismaLaunch) => string;
+  status: (parent: PrismaLaunch) => string;
+  kubPairAddress: (parent: PrismaLaunch) => string | null;
+  ponderPairAddress: (parent: PrismaLaunch) => string | null;
+  hasDualPools: (parent: PrismaLaunch) => boolean | null;
+  ponderPoolSkipped: (parent: PrismaLaunch) => boolean | null;
+  skippedPonderAmount: (parent: PrismaLaunch) => string | null;
+  skippedPonderValue: (parent: PrismaLaunch) => string | null;
+  kubLiquidity: (parent: PrismaLaunch) => string | null;
+  ponderLiquidity: (parent: PrismaLaunch) => string | null;
+  ponderBurned: (parent: PrismaLaunch) => string | null;
+  lpWithdrawn: (parent: PrismaLaunch) => boolean | null;
+  lpWithdrawnAt: (parent: PrismaLaunch) => Date | null;
+  completedAt: (parent: PrismaLaunch) => Date | null;
+  cancelledAt: (parent: PrismaLaunch) => Date | null;
+  createdAt: (parent: PrismaLaunch) => Date;
+  updatedAt: (parent: PrismaLaunch) => Date;
+  contributions: (parent: PrismaLaunch, args: { first?: number; after?: string }, context: Context) => Promise<any>;
+  myContribution: (parent: PrismaLaunch, args: any, context: Context) => Promise<any>;
 }
 
 export const resolvers = {
@@ -110,157 +103,48 @@ export const resolvers = {
     },
     tokens: async (
       _: any,
-      {
-        first = 10,
-        after,
-        where,
-        orderBy = 'volumeUSD24h',
-        orderDirection = 'desc',
-      }: {
-        first?: number
-        after?: string
-        where?: { address?: string; symbol?: string; name?: string }
-        orderBy?: string
-        orderDirection?: 'asc' | 'desc'
+      args: {
+        first?: number;
+        after?: string;
+        where?: TokenWhereInput;
+        orderBy?: string;
+        orderDirection?: string;
       },
       { prisma, loaders }: Context
     ) => {
-      try {
-        // Set up query params
-        const queryParams: any = {
-          take: first * 2, // Take more than needed for efficient sorting
-        }
+      const { first = 10, after, where, orderBy = 'createdAt', orderDirection = 'desc' } = args;
 
-        // Add filtering by where parameter
-        if (where) {
-          queryParams.where = {}
+      let tokens = await prisma.token.findMany({
+        take: first + 1,
+        where: {
+          ...(where?.address && { address: where.address }),
+          ...(where?.symbol && { symbol: where.symbol }),
+          ...(where?.name && { name: where.name }),
+        },
+        orderBy: { [orderBy]: orderDirection.toLowerCase() },
+      });
 
-          // Filter by address if provided
-          if (where.address) {
-            queryParams.where.address = where.address.toLowerCase()
-          }
-
-          // Filter by symbol if provided
-          if (where.symbol) {
-            queryParams.where.symbol = where.symbol
-          }
-
-          // Filter by name if provided
-          if (where.name) {
-            queryParams.where.name = where.name
-          }
-        }
-
-        // Add cursor if provided
-        if (after) {
-          const cursorId = decodeCursor(after)
-          queryParams.cursor = { id: cursorId }
-          queryParams.skip = 1 // Skip the cursor itself
-        }
-
-        // For standard fields, we can use Prisma's orderBy
-        if (['createdAt', 'name', 'symbol'].includes(orderBy)) {
-          queryParams.orderBy = { [orderBy]: orderDirection }
-        }
-
-        // Fetch tokens with pagination
-        const tokens = await prisma.token.findMany(queryParams)
-
-        // If we're ordering by price or volume, we need to handle that separately
-        if (['priceUSD', 'volumeUSD24h', 'priceChange24h'].includes(orderBy)) {
-          // For production sorting by price, preload all prices in a batch
-          if (orderBy === 'priceUSD') {
-            // Get token IDs for batch loading
-            const tokenIds = tokens.map((token) => token.id)
-
-            // Batch load all token prices
-            const tokenPrices = await Promise.all(
-              tokenIds.map((id) => loaders.tokenPriceLoader.load(id))
-            )
-
-            // Attach prices to tokens
-            tokens.forEach((token, i) => {
-              token.priceUSD = tokenPrices[i]
-            })
-
-            // Sort by price
-            tokens.sort((a, b) => {
-              const priceA = parseFloat(a.priceUSD ?? '0')
-              const priceB = parseFloat(b.priceUSD ?? '0')
-              return orderDirection === 'asc' ? priceA - priceB : priceB - priceA
-            })
-          }
-          // For volume or price change, calculate these values and sort
-          else if (orderBy === 'volumeUSD24h' || orderBy === 'priceChange24h') {
-            // This approach will work but is less efficient for large token sets
-            // In production, you would precompute and store these values
-
-            // Calculate the sorting field for each token
-            const tokenValues = await Promise.all(
-              tokens.map(async (token) => {
-                let value: number
-
-                if (orderBy === 'volumeUSD24h') {
-                  const volumeUSD = await resolvers.Token.volumeUSD24h(token, null, {
-                    prisma,
-                    loaders,
-                  })
-                  value = parseFloat(volumeUSD)
-                } else {
-                  // priceChange24h
-                  value = await resolvers.Token.priceChange24h(token, null, {
-                    prisma,
-                    loaders,
-                  })
-                }
-
-                return { token, value }
-              })
-            )
-
-            // Sort by the calculated value
-            tokenValues.sort((a, b) => {
-              return orderDirection === 'asc' ? a.value - b.value : b.value - a.value
-            })
-
-            // Replace tokens array with sorted tokens
-            tokens.length = 0
-            tokens.push(...tokenValues.map((tv) => tv.token))
-          }
-        }
-
-        // Apply pagination to the sorted results
-        const pagedTokens = tokens.slice(0, first + 1)
-
-        // Get total count
-        const totalCount = await prisma.token.count(
-          where ? { where: queryParams.where } : undefined
-        )
-
-        // Create pagination response
-        const paginationResult = createCursorPagination(
-          pagedTokens,
-          first,
-          after ? decodeCursor(after) : undefined
-        )
-
-        return {
-          ...paginationResult,
-          totalCount,
-        }
-      } catch (error) {
-        console.error('Error fetching tokens:', error)
-        return {
-          edges: [],
-          pageInfo: {
-            hasNextPage: false,
-            hasPreviousPage: false,
-            startCursor: null,
-            endCursor: null,
-          },
-          totalCount: 0,
-        }
+      // Handle cursor-based pagination
+      const hasNextPage = tokens.length > first;
+      if (hasNextPage) {
+        tokens = tokens.slice(0, -1);
       }
+
+      const edges = tokens.map((token) => ({
+        node: token,
+        cursor: token.id,
+      }));
+
+      return {
+        edges,
+        pageInfo: {
+          hasNextPage,
+          hasPreviousPage: false,
+          startCursor: edges[0]?.cursor,
+          endCursor: edges[edges.length - 1]?.cursor,
+        },
+        totalCount: await prisma.token.count(),
+      };
     },
     tokenByAddress: async (
       _: any,
@@ -340,7 +224,10 @@ export const resolvers = {
           const pairIds = pairs.map((pair) => pair.id)
 
           // Get reserveUSD values from Redis cache first in a single batch operation
-          const cachedValues = await getCachedPairReserveUSDBulk(pairIds)
+          const cachedValues: Record<string, string> = await getCachedPairReserveUSDBulk(pairIds).catch((err) => {
+            console.error('Error getting cached values from Redis:', err)
+            return {}
+          })
 
           // Identify which pairs need snapshot data
           const missingPairIds = pairIds.filter((id) => !cachedValues[id])
@@ -1262,9 +1149,6 @@ export const resolvers = {
         const queryParams: any = {
           take: first + 1, // Take one extra to check if there's a next page
           orderBy: { timestamp: 'desc' },
-          where: {
-            contractSender: { not: null },
-          },
           include: {
             pair: {
               include: {
@@ -1285,22 +1169,65 @@ export const resolvers = {
         // Fetch recent swaps with pagination
         const swaps = await prisma.swap.findMany(queryParams)
 
-        // Log the number of swaps found
-        console.log(`Found ${swaps.length} swaps in recentTransactions query`)
+        // Map the swaps and calculate USD values
+        const mappedSwapsPromises = swaps.map(async (swap: any) => {
+          // Calculate USD value
+          let valueUSD = '0'
+          try {
+            // Get token prices
+            const [token0Price, token1Price] = await Promise.all([
+              TokenPriceService.getTokenPriceUSD(swap.pair.token0.id),
+              TokenPriceService.getTokenPriceUSD(swap.pair.token1.id)
+            ])
+            
+            // Scale amounts based on token decimals
+            const token0Decimals = swap.pair.token0.decimals || 18
+            const token1Decimals = swap.pair.token1.decimals || 18
+            
+            // Convert amounts to proper decimal representation
+            const amount0In = parseFloat(swap.amountIn0) / Math.pow(10, token0Decimals)
+            const amount0Out = parseFloat(swap.amountOut0) / Math.pow(10, token0Decimals)
+            const amount1In = parseFloat(swap.amountIn1) / Math.pow(10, token1Decimals)
+            const amount1Out = parseFloat(swap.amountOut1) / Math.pow(10, token1Decimals)
+            
+            // Scale token prices (assuming they're in raw form like the amounts)
+            const scaledToken0Price = token0Price / Math.pow(10, token0Decimals)
+            const scaledToken1Price = token1Price / Math.pow(10, token1Decimals)
+            
+            // Calculate USD values for both sides of the swap
+            const amount0USD = (amount0In + amount0Out) * scaledToken0Price
+            const amount1USD = (amount1In + amount1Out) * scaledToken1Price
+            
+            // Use the larger value (since one side might be more accurate)
+            valueUSD = Math.max(amount0USD, amount1USD).toString()
+          } catch (error) {
+            console.error('Error calculating swap value:', error)
+          }
 
-        // If no swaps were found, log this fact
-        if (swaps.length === 0) {
-          // Log a count of all swaps in the database to verify data exists
-          const totalSwaps = await prisma.swap.count()
-          console.log(`Total swaps in database: ${totalSwaps}`)
-        }
+          return {
+            id: swap.id,
+            txHash: swap.txHash,
+            timestamp: swap.timestamp,
+            userAddress: swap.userAddress,
+            token0: swap.pair.token0,
+            token1: swap.pair.token1,
+            amountIn0: swap.amountIn0,
+            amountIn1: swap.amountIn1,
+            amountOut0: swap.amountOut0,
+            amountOut1: swap.amountOut1,
+            valueUSD
+          }
+        })
+
+        // Wait for all USD calculations to complete
+        const mappedSwaps = await Promise.all(mappedSwapsPromises)
 
         // Get total count
         const totalCount = await prisma.swap.count()
 
-        // Create pagination response
+        // Create pagination response with mapped swaps
         const paginationResult = createCursorPagination(
-          swaps,
+          mappedSwaps,
           first,
           after ? decodeCursor(after) : undefined
         )
@@ -1506,9 +1433,23 @@ export const resolvers = {
 
         // Add cursor if provided
         if (after) {
-          const cursorId = decodeCursor(after)
-          queryParams.cursor = { id: cursorId }
-          queryParams.skip = 1 // Skip the cursor itself
+          try {
+            const cursorId = decodeCursor(after)
+            queryParams.cursor = { id: cursorId }
+            queryParams.skip = 1 // Skip the cursor itself
+          } catch (error) {
+            console.error('Invalid cursor:', error)
+            return {
+              edges: [],
+              pageInfo: {
+                hasNextPage: false,
+                hasPreviousPage: false,
+                startCursor: null,
+                endCursor: null,
+              },
+              totalCount: 0,
+            }
+          }
         }
 
         // Fetch active launches with pagination
@@ -1602,800 +1543,111 @@ export const resolvers = {
         where: { launchId },
       })
     },
-  },
-  // Swap type resolver
-  Swap: {
-    pair: async (parent: any, _: any, { loaders }: Context) => {
-      if (!parent.pairId) return null
-      return loaders.pairLoader.load(parent.pairId)
+
+    myLaunches: async (_: any, args: any, context: Context) => {
+      const userAddress = context.req?.headers.get('x-user-address');
+      if (!userAddress || !context.prisma) return [];
+      return await context.prisma.launch.findMany({
+        where: {
+          creatorAddress: userAddress.toLowerCase(),
+        },
+        orderBy: {
+          createdAt: 'desc',
+        },
+      });
     },
 
-    token0: async (parent: any, _: any, { prisma, loaders }: Context) => {
-      if (parent.token0) return parent.token0
-
-      try {
-        // If pair is already loaded with the swap, use it directly
-        if (parent.pair?.token0Id) {
-          return loaders.tokenLoader.load(parent.pair.token0Id)
-        }
-
-        // Otherwise, load the pair first
-        const pair = await loaders.pairLoader.load(parent.pairId)
-        if (!pair) return null
-
-        return loaders.tokenLoader.load(pair.token0Id)
-      } catch (error) {
-        console.error(`Error loading token0 for swap ${parent.id}:`, error)
-        return null
-      }
-    },
-
-    token1: async (parent: any, _: any, { prisma, loaders }: Context) => {
-      if (parent.token1) return parent.token1
-
-      try {
-        // If pair is already loaded with the swap, use it directly
-        if (parent.pair?.token1Id) {
-          return loaders.tokenLoader.load(parent.pair.token1Id)
-        }
-
-        // Otherwise, load the pair first
-        const pair = await loaders.pairLoader.load(parent.pairId)
-        if (!pair) return null
-
-        return loaders.tokenLoader.load(pair.token1Id)
-      } catch (error) {
-        console.error(`Error loading token1 for swap ${parent.id}:`, error)
-        return null
-      }
-    },
-
-    valueUSD: async (parent: any, _: any, { prisma, loaders }: Context) => {
-      if (parent.valueUSD) return parent.valueUSD
-
-      try {
-        // Load tokens to get prices
-        const token0 = await resolvers.Swap.token0(parent, _, { prisma, loaders })
-        const token1 = await resolvers.Swap.token1(parent, _, { prisma, loaders })
-
-        if (!token0 || !token1) return '0'
-
-        // Get token prices in USD
-        const token0Price = await loaders.tokenPriceLoader.load(token0.id)
-        const token1Price = await loaders.tokenPriceLoader.load(token1.id)
-
-        // Get token decimals
-        const decimals0 = token0.decimals || 18
-        const decimals1 = token1.decimals || 18
-
-        let token0Amount: number
-        let token1Amount: number
-
-        try {
-          // Use viem for proper decimal handling
-          const amountIn0 = formatUnits(BigInt(parent.amountIn0), decimals0)
-          const amountOut0 = formatUnits(BigInt(parent.amountOut0), decimals0)
-          token0Amount = Math.max(parseFloat(amountIn0), parseFloat(amountOut0))
-
-          const amountIn1 = formatUnits(BigInt(parent.amountIn1), decimals1)
-          const amountOut1 = formatUnits(BigInt(parent.amountOut1), decimals1)
-          token1Amount = Math.max(parseFloat(amountIn1), parseFloat(amountOut1))
-        } catch (error) {
-          // Fallback to standard decimal division if BigInt conversion fails
-          token0Amount = Math.max(
-            parseFloat(parent.amountIn0) / 10 ** decimals0,
-            parseFloat(parent.amountOut0) / 10 ** decimals0
-          )
-          token1Amount = Math.max(
-            parseFloat(parent.amountIn1) / 10 ** decimals1,
-            parseFloat(parent.amountOut1) / 10 ** decimals1
-          )
-        }
-
-        // Calculate total value
-        const token0Value = token0Amount * parseFloat(token0Price || '0')
-        const token1Value = token1Amount * parseFloat(token1Price || '0')
-
-        // Use the larger value (sometimes one token amount might be 0)
-        const swapValue = Math.max(token0Value, token1Value)
-
-        return swapValue.toString()
-      } catch (error) {
-        console.error(`Error calculating USD value for swap ${parent.id}:`, error)
-        return '0'
-      }
-    },
-  },
-
-  // Type resolvers
-  Token: {
-    pairs0: async (parent: any, _: any, { prisma }: Context) => {
-      return prisma.pair.findMany({
-        where: { token0Id: parent.id },
+    launchProgress: async (_: any, { launchId }: { launchId: number }, { prisma }: Context) => {
+      const launch = await prisma.launch.findUnique({
+        where: { launchId },
       })
-    },
-    pairs1: async (parent: any, _: any, { prisma }: Context) => {
-      return prisma.pair.findMany({
-        where: { token1Id: parent.id },
-      })
-    },
-    imageURI: async (parent: any, _: any, { prisma }: Context) => {
-      if (parent.imageURI !== undefined) {
-        return parent.imageURI
-      }
+      if (!launch) return 0
 
-      try {
-        const token = await prisma.token.findUnique({
-          where: { id: parent.id },
-          select: { imageURI: true },
-        })
-        return token?.imageURI || null
-      } catch (error) {
-        console.error('Error fetching token imageURI:', error)
-        return null
-      }
-    },
-    priceUSD: async (parent: any, _: any, { loaders, prisma }: Context) => {
-      // If we already have the calculated value, return it immediately
-      if (parent.priceUSD) return parent.priceUSD
-
-      try {
-        // Use dataloader to batch price queries
-        return loaders.tokenPriceLoader.load(parent.id)
-      } catch (error) {
-        console.error(`Error getting price for token ${parent.id}:`, error)
-        return '0'
-      }
-    },
-    priceChange24h: async (parent: any, _: any, { prisma }: Context) => {
-      try {
-        // Calculate 24h ago timestamp
-        const now = Math.floor(Date.now() / 1000)
-        const oneDayAgo = now - 24 * 60 * 60
-
-        // Get token decimals
-        const token = await prisma.token.findUnique({
-          where: { id: parent.id },
-          select: { decimals: true },
-        })
-        const tokenDecimals = token?.decimals || 18
-
-        // Find pairs where this token is token0 or token1
-        const pairs = await prisma.pair.findMany({
-          where: {
-            OR: [{ token0Id: parent.id }, { token1Id: parent.id }],
-          },
-          include: {
-            token0: true,
-            token1: true,
-          },
-        })
-
-        if (pairs.length === 0) {
-          return 0 // No pairs found, so no price change
-        }
-
-        // Get current price
-        const currentPrice = parseFloat(
-          await resolvers.Token.priceUSD(parent, _, { loaders: {} as any, prisma })
-        )
-
-        // Prioritize stablecoin pairs for more accurate price change calculation
-        const stablecoinAddresses = TokenPriceService.getStablecoinAddresses()
-        const stablecoinPairs = pairs.filter(
-          (pair) =>
-            stablecoinAddresses.includes(pair.token0.address.toLowerCase()) ||
-            stablecoinAddresses.includes(pair.token1.address.toLowerCase())
-        )
-
-        // Use stablecoin pairs if available, otherwise use all pairs
-        const pairsToUse = stablecoinPairs.length > 0 ? stablecoinPairs : pairs
-
-        // For each pair, find the latest snapshot from 24h ago
-        const historicalSnapshots = await Promise.all(
-          pairsToUse.map((pair) =>
-            prisma.priceSnapshot.findFirst({
-              where: {
-                pairId: pair.id,
-                timestamp: { lte: oneDayAgo },
-              },
-              orderBy: { timestamp: 'desc' },
-            })
-          )
-        )
-
-        // Filter out null results
-        const validSnapshots = historicalSnapshots
-          .filter((snapshot, index): snapshot is NonNullable<typeof snapshot> => {
-            return snapshot !== null && pairsToUse[index] !== undefined
-          })
-          .map((snapshot, index) => ({
-            snapshot,
-            pair: pairsToUse[index],
-          }))
-
-        if (validSnapshots.length === 0) {
-          return 0 // No historical snapshots, so no price change
-        }
-
-        // Sort by timestamp to get the most recent first
-        validSnapshots.sort((a, b) => b.snapshot.timestamp - a.snapshot.timestamp)
-
-        // Get historical price from the most recent snapshot
-        const { snapshot, pair } = validSnapshots[0]
-
-        // Check if our token is token0 or token1 in the pair
-        const isToken0 = pair.token0Id === parent.id
-
-        // Get the counterpart token's decimals
-        const counterpartDecimals = isToken0
-          ? pair.token1.decimals || 18
-          : pair.token0.decimals || 18
-
-        // Get the appropriate price based on token position
-        const rawHistoricalPrice = isToken0 ? snapshot.token0Price : snapshot.token1Price
-
-        // Convert to human-readable number using proper decimal handling
-        let historicalPrice: number
-        try {
-          // Adjust for difference in decimals between the tokens
-          const decimalAdjustment = counterpartDecimals - tokenDecimals
-
-          if (decimalAdjustment !== 0) {
-            // Use viem to handle decimal conversion correctly
-            const rawPriceBigInt = parseUnits(rawHistoricalPrice, counterpartDecimals)
-            historicalPrice = parseFloat(
-              formatUnits(rawPriceBigInt, counterpartDecimals - decimalAdjustment)
-            )
-          } else {
-            historicalPrice = parseFloat(rawHistoricalPrice)
-          }
-        } catch (error) {
-          // Fallback to standard parsing if viem conversion fails
-          historicalPrice = parseFloat(rawHistoricalPrice)
-        }
-
-        // Check if the historical price is for a stablecoin pair
-        // If not, we might need to convert it to USD
-        const isStablecoinPair = isToken0
-          ? stablecoinAddresses.includes(pair.token1.address.toLowerCase())
-          : stablecoinAddresses.includes(pair.token0.address.toLowerCase())
-
-        // For non-stablecoin pairs, adjust historical price (if possible)
-        if (!isStablecoinPair) {
-          // This would be a more complex conversion in a production environment
-          // For simplicity, we're assuming historicalPrice is already in USD or equivalent
-        }
-
-        if (historicalPrice === 0 || currentPrice === 0) {
-          return 0 // Avoid division by zero
-        }
-
-        // Calculate percentage change
-        const priceChange = ((currentPrice - historicalPrice) / historicalPrice) * 100
-
-        return parseFloat(priceChange.toFixed(2))
-      } catch (error) {
-        console.error(`Error calculating price change for token ${parent.id}:`, error)
-        return 0
-      }
-    },
-    volumeUSD24h: async (parent: any, _: any, { prisma }: Context) => {
-      try {
-        // Calculate 24h ago timestamp
-        const now = Math.floor(Date.now() / 1000)
-        const oneDayAgo = now - 24 * 60 * 60
-
-        // Find all pairs containing this token
-        const pairs = await prisma.pair.findMany({
-          where: {
-            OR: [{ token0Id: parent.id }, { token1Id: parent.id }],
-          },
-          include: {
-            token0: true,
-            token1: true,
-          },
-        })
-
-        const pairIds = pairs.map((pair) => pair.id)
-
-        // If no pairs, return 0 volume
-        if (pairIds.length === 0) return '0'
-
-        // Fetch all swaps in the last 24h for these pairs
-        const swaps = await prisma.swap.findMany({
-          where: {
-            pairId: { in: pairIds },
-            timestamp: { gte: oneDayAgo },
-          },
-        })
-
-        // Calculate token volume
-        let volumeUSD = 0
-
-        for (const swap of swaps) {
-          // Find which pair this swap belongs to
-          const pair = pairs.find((p) => p.id === swap.pairId)
-          if (!pair) continue
-
-          // Determine if token is token0 or token1 in this pair
-          const isToken0 = pair.token0Id === parent.id
-
-          // Get token price
-          const tokenPrice = parseFloat(
-            await resolvers.Token.priceUSD(parent, _, { loaders: {} as any, prisma })
-          )
-
-          if (tokenPrice <= 0) continue // Skip if we can't determine price
-
-          // Get token decimals
-          const tokenDecimals = isToken0
-            ? pair.token0.decimals || 18
-            : pair.token1.decimals || 18
-
-          try {
-            // Calculate volume in USD using viem for proper decimal handling
-            if (isToken0) {
-              const amountIn0 = formatUnits(BigInt(swap.amountIn0), tokenDecimals)
-              const amountOut0 = formatUnits(BigInt(swap.amountOut0), tokenDecimals)
-              volumeUSD += (parseFloat(amountIn0) + parseFloat(amountOut0)) * tokenPrice
-            } else {
-              const amountIn1 = formatUnits(BigInt(swap.amountIn1), tokenDecimals)
-              const amountOut1 = formatUnits(BigInt(swap.amountOut1), tokenDecimals)
-              volumeUSD += (parseFloat(amountIn1) + parseFloat(amountOut1)) * tokenPrice
-            }
-          } catch (error) {
-            // Fallback to standard decimal division if BigInt conversion fails
-            if (isToken0) {
-              volumeUSD +=
-                (parseFloat(swap.amountIn0) / 10 ** tokenDecimals +
-                  parseFloat(swap.amountOut0) / 10 ** tokenDecimals) *
-                tokenPrice
-            } else {
-              volumeUSD +=
-                (parseFloat(swap.amountIn1) / 10 ** tokenDecimals +
-                  parseFloat(swap.amountOut1) / 10 ** tokenDecimals) *
-                tokenPrice
-            }
-          }
-        }
-
-        return volumeUSD.toString()
-      } catch (error) {
-        console.error(`Error calculating volume for token ${parent.id}:`, error)
-        return '0'
-      }
-    },
-    // ADDED RESOLVERS FOR TOKEN METRICS
-    tvl: async (parent: any, _: any, { prisma, loaders }: Context) => {
-      try {
-        // Find all pairs containing this token
-        const pairs = await prisma.pair.findMany({
-          where: {
-            OR: [{ token0Id: parent.id }, { token1Id: parent.id }],
-          },
-        })
-
-        if (pairs.length === 0) return '0'
-
-        // Calculate TVL from all pairs that contain this token
-        let totalTVL = 0
-        await Promise.all(
-          pairs.map(async (pair) => {
-            const pairTVL = await resolvers.Pair.tvl(pair, _, { loaders, prisma })
-            const isToken0 = pair.token0Id === parent.id
-            const isToken1 = pair.token1Id === parent.id
-
-            // If token appears on both sides, avoid double counting
-            if (isToken0 && isToken1) {
-              totalTVL += pairTVL
-            } else {
-              // If token is only on one side, estimate its portion of the TVL (simplified)
-              totalTVL += pairTVL / 2
-            }
-          })
-        )
-
-        return totalTVL.toString()
-      } catch (error) {
-        console.error(`Error calculating TVL for token ${parent.id}:`, error)
-        return '0'
-      }
+      const totalRaised = BigInt(launch.kubRaised) + BigInt(launch.ponderRaised)
+      const targetRaise = BigInt(5555) * BigInt(10) ** BigInt(18) // 5,555 KUB
+      const progress = Number((totalRaised * BigInt(100)) / targetRaise)
+      return Math.min(progress, 100)
     },
 
-    totalSupply: async (parent: any, _: any, { prisma, loaders }: Context) => {
-      try {
-        // For ERC20 tokens, we'd typically fetch this from blockchain
-        // This is a simplified example that could be replaced with on-chain data
-        // Using a public client to fetch totalSupply from the token contract
-        
-        // For demonstration purposes, returning a placeholder value
-        // In production, you would fetch this from the blockchain
-        return '1000000000' // Mock value of 1 billion tokens
-      } catch (error) {
-        console.error(`Error fetching total supply for token ${parent.id}:`, error)
-        return '0'
+    launchTimeRemaining: async (_: any, { launchId }: { launchId: number }, { prisma }: Context) => {
+      const launch = await prisma.launch.findUnique({
+        where: { launchId }
+      });
+      
+      if (!launch) return null;
+      
+      // If launch is completed or cancelled, no time remaining
+      if (launch.status === 'COMPLETED' || launch.status === 'CANCELLED') {
+        return 0;
       }
-    },
-
-    circulatingSupply: async (parent: any, _: any, { prisma, loaders }: Context) => {
-      try {
-        // Circulating supply calculation typically involves:
-        // 1. Getting total supply
-        // 2. Subtracting known locked tokens (team, treasury, etc.)
-        
-        // For demonstration purposes, returning 70% of total supply as circulating
-        const totalSupply = await resolvers.Token.totalSupply(parent, _, { prisma, loaders })
-        const circulatingSupply = (parseFloat(totalSupply) * 0.7).toString()
-        
-        return circulatingSupply
-      } catch (error) {
-        console.error(`Error calculating circulating supply for token ${parent.id}:`, error)
-        return '0'
-      }
-    },
-
-    marketCap: async (parent: any, _: any, { prisma, loaders }: Context) => {
-      try {
-        // Market cap = price * circulating supply
-        const price = parseFloat(await resolvers.Token.priceUSD(parent, _, { loaders, prisma }))
-        const circulatingSupply = parseFloat(
-          await resolvers.Token.circulatingSupply(parent, _, { prisma, loaders })
-        )
-        
-        const marketCap = price * circulatingSupply
-        return marketCap.toString()
-      } catch (error) {
-        console.error(`Error calculating market cap for token ${parent.id}:`, error)
-        return '0'
-      }
-    },
-
-    fdv: async (parent: any, _: any, { prisma, loaders }: Context) => {
-      try {
-        // Fully Diluted Valuation = price * total supply
-        const price = parseFloat(await resolvers.Token.priceUSD(parent, _, { loaders, prisma }))
-        const totalSupply = parseFloat(
-          await resolvers.Token.totalSupply(parent, _, { prisma, loaders })
-        )
-        
-        const fdv = price * totalSupply
-        return fdv.toString()
-      } catch (error) {
-        console.error(`Error calculating FDV for token ${parent.id}:`, error)
-        return '0'
-      }
+      
+      // For active launches, calculate time based on creation + 7 days
+      const creationTime = Math.floor(launch.createdAt.getTime() / 1000);
+      const deadline = creationTime + (7 * 24 * 60 * 60); // 7 days in seconds
+      const now = Math.floor(Date.now() / 1000);
+      
+      return Math.max(0, deadline - now);
     },
   },
 
-  Pair: {
-    token0: async (parent: any, _: any, { loaders }: Context) => {
-      return loaders.tokenLoader.load(parent.token0Id)
-    },
-    token1: async (parent: any, _: any, { loaders }: Context) => {
-      return loaders.tokenLoader.load(parent.token1Id)
-    },
-    reserveUSD: async (parent: any, _: any, { loaders, prisma }: Context) => {
-      // If we already have the calculated value, return it immediately
-      if (parent.reserveUSD) return parent.reserveUSD
-
-      const cacheKey = `pair:${parent.id}:reserveUSD`
-      try {
-        // Use a single Redis MGET operation for all cache lookups
-        const redis = getRedisClient()
-        const cachedValue = await redis.get(cacheKey)
-        if (cachedValue) return cachedValue
-      } catch (error) {
-        // Just log and continue if cache fails
-        console.error(`Cache error for ${parent.id}:`, error)
-      }
-
-      // Use dataloader to batch snapshot queries
-      return loaders.reserveUSDLoader.load(parent.id)
-    },
-    // Now update the tvl resolver to be more efficient
-    tvl: async (parent: any, _: any, { loaders, prisma }: Context) => {
-      // If we already have the TVL value, use it
-      if (parent.tvl !== undefined) return parent.tvl
-
-      // Otherwise, calculate from reserveUSD
-      try {
-        const reserveUSD = await resolvers.Pair.reserveUSD(parent, _, { loaders, prisma })
-        return parseFloat(reserveUSD)
-      } catch (error) {
-        console.error(`Error calculating TVL for pair ${parent.id}:`, error)
-        return 0
-      }
+  Contribution: {
+    // Get contribution amounts
+    kubAmount: async (parent: any, _: any, { prisma }: Context) => {
+      return parent.kubAmount
     },
 
-    liquidityPositions: async (
-      parent: any,
-      { first = 10, after }: { first?: number; after?: string },
-      { prisma }: Context
-    ) => {
-      try {
-        // Set up query params
-        const queryParams: any = {
-          where: {
-            pairId: parent.id,
-            // Only return positions with non-zero liquidity tokens
-            liquidityTokens: { not: '0' },
-          },
-          take: first + 1, // Take one extra to check if there's a next page
-        }
-
-        // Add cursor if provided
-        if (after) {
-          const cursorId = decodeCursor(after)
-          queryParams.cursor = { id: cursorId }
-          queryParams.skip = 1 // Skip the cursor itself
-        }
-
-        // Fetch liquidity positions with pagination
-        const positions = await prisma.liquidityPosition.findMany(queryParams)
-
-        // Get total count - only count non-zero positions
-        const totalCount = await prisma.liquidityPosition.count({
-          where: {
-            pairId: parent.id,
-            liquidityTokens: { not: '0' },
-          },
-        })
-
-        // Create pagination response
-        const paginationResult = createCursorPagination(
-          positions,
-          first,
-          after ? decodeCursor(after) : undefined
-        )
-
-        return {
-          ...paginationResult,
-          totalCount,
-        }
-      } catch (error) {
-        console.error('Error fetching liquidity positions:', error)
-        return {
-          edges: [],
-          pageInfo: {
-            hasNextPage: false,
-            hasPreviousPage: false,
-            startCursor: null,
-            endCursor: null,
-          },
-          totalCount: 0,
-        }
-      }
-    },
-    swaps: async (
-      parent: any,
-      { first = 10, after }: { first?: number; after?: string },
-      { prisma }: Context
-    ) => {
-      try {
-        // Set up query params
-        const queryParams: any = {
-          where: { pairId: parent.id },
-          take: first + 1, // Take one extra to check if there's a next page
-          orderBy: { timestamp: 'desc' },
-        }
-
-        // Add cursor if provided
-        if (after) {
-          const cursorId = decodeCursor(after)
-          queryParams.cursor = { id: cursorId }
-          queryParams.skip = 1 // Skip the cursor itself
-        }
-
-        // Fetch swaps with pagination
-        const swaps = await prisma.swap.findMany(queryParams)
-
-        // Get total count
-        const totalCount = await prisma.swap.count({
-          where: { pairId: parent.id },
-        })
-
-        // Create pagination response
-        const paginationResult = createCursorPagination(
-          swaps,
-          first,
-          after ? decodeCursor(after) : undefined
-        )
-
-        return {
-          ...paginationResult,
-          totalCount,
-        }
-      } catch (error) {
-        console.error('Error fetching swaps:', error)
-        return {
-          edges: [],
-          pageInfo: {
-            hasNextPage: false,
-            hasPreviousPage: false,
-            startCursor: null,
-            endCursor: null,
-          },
-          totalCount: 0,
-        }
-      }
+    ponderAmount: async (parent: any, _: any, { prisma }: Context) => {
+      return parent.ponderAmount
     },
 
-    priceHistory: async (
-      parent: any,
-      {
-        days,
-        interval = 'day',
-        first = 100,
-        after,
-      }: { days: number; interval?: string; first?: number; after?: string },
-      { prisma }: Context
-    ) => {
-      try {
-        const startTime = Math.floor(Date.now() / 1000) - days * 86400
-
-        // Set up query params
-        const queryParams: any = {
-          where: {
-            pairId: parent.id,
-            timestamp: { gte: startTime },
-          },
-          take: first + 1, // Take one extra to check if there's a next page
-          orderBy: { timestamp: 'asc' },
-        }
-
-        // Add cursor if provided
-        if (after) {
-          const cursorId = decodeCursor(after)
-          queryParams.cursor = { id: cursorId }
-          queryParams.skip = 1 // Skip the cursor itself
-        }
-
-        // Fetch price snapshots with pagination
-        const snapshots = await prisma.priceSnapshot.findMany(queryParams)
-
-        // Get total count
-        const totalCount = await prisma.priceSnapshot.count({
-          where: {
-            pairId: parent.id,
-            timestamp: { gte: startTime },
-          },
-        })
-
-        // Create pagination response
-        const paginationResult = createCursorPagination(
-          snapshots,
-          first,
-          after ? decodeCursor(after) : undefined
-        )
-
-        return {
-          ...paginationResult,
-          totalCount,
-        }
-      } catch (error) {
-        console.error('Error fetching price history:', error)
-        return {
-          edges: [],
-          pageInfo: {
-            hasNextPage: false,
-            hasPreviousPage: false,
-            startCursor: null,
-            endCursor: null,
-          },
-          totalCount: 0,
-        }
-      }
+    ponderValue: async (parent: any, _: any, { prisma }: Context) => {
+      return parent.ponderValue
     },
-  },
 
-  FarmingPool: {
-    positions: async (
-      parent: any,
-      { first = 10, after }: { first?: number; after?: string },
-      { prisma }: Context
-    ) => {
-      try {
-        // Set up query params
-        const queryParams: any = {
-          where: { poolId: parent.id },
-          take: first + 1, // Take one extra to check if there's a next page
-        }
-
-        // Add cursor if provided
-        if (after) {
-          const cursorId = decodeCursor(after)
-          queryParams.cursor = { id: cursorId }
-          queryParams.skip = 1 // Skip the cursor itself
-        }
-
-        // Fetch farming positions with pagination
-        const positions = await prisma.farmingPosition.findMany(queryParams)
-
-        // Get total count
-        const totalCount = await prisma.farmingPosition.count({
-          where: { poolId: parent.id },
-        })
-
-        // Create pagination response
-        const paginationResult = createCursorPagination(
-          positions,
-          first,
-          after ? decodeCursor(after) : undefined
-        )
-
-        return {
-          ...paginationResult,
-          totalCount,
-        }
-      } catch (error) {
-        console.error('Error fetching farming positions:', error)
-        return {
-          edges: [],
-          pageInfo: {
-            hasNextPage: false,
-            hasPreviousPage: false,
-            startCursor: null,
-            endCursor: null,
-          },
-          totalCount: 0,
-        }
-      }
+    tokensReceived: async (parent: any, _: any, { prisma }: Context) => {
+      return parent.tokensReceived
     },
-  },
 
-  Launch: {
-    contributions: async (
-      parent: any,
-      { first = 10, after }: { first?: number; after?: string },
-      { prisma }: Context
-    ) => {
-      try {
-        // Set up query params
-        const queryParams: any = {
-          where: { launchId: parent.launchId },
-          take: first + 1, // Take one extra to check if there's a next page
-        }
+    // Get refund information
+    refunded: async (parent: any, _: any, { prisma }: Context) => {
+      return parent.refunded || false
+    },
 
-        // Add cursor if provided
-        if (after) {
-          const cursorId = decodeCursor(after)
-          queryParams.cursor = { id: cursorId }
-          queryParams.skip = 1 // Skip the cursor itself
-        }
+    refundedKubAmount: async (parent: any, _: any, { prisma }: Context) => {
+      return parent.refundedKubAmount
+    },
 
-        // Fetch contributions with pagination
-        const contributions = await prisma.contribution.findMany(queryParams)
+    refundedPonderAmount: async (parent: any, _: any, { prisma }: Context) => {
+      return parent.refundedPonderAmount
+    },
 
-        // Get total count
-        const totalCount = await prisma.contribution.count({
-          where: { launchId: parent.launchId },
-        })
+    refundedTokenAmount: async (parent: any, _: any, { prisma }: Context) => {
+      return parent.refundedTokenAmount
+    },
 
-        // Create pagination response
-        const paginationResult = createCursorPagination(
-          contributions,
-          first,
-          after ? decodeCursor(after) : undefined
-        )
+    vestingAmount: async (parent: any) => {
+      if (!parent.vestingAmount) return null;
+      return parent.vestingAmount;
+    },
 
-        return {
-          ...paginationResult,
-          totalCount,
-        }
-      } catch (error) {
-        console.error('Error fetching contributions:', error)
-        return {
-          edges: [],
-          pageInfo: {
-            hasNextPage: false,
-            hasPreviousPage: false,
-            startCursor: null,
-            endCursor: null,
-          },
-          totalCount: 0,
-        }
-      }
+    vestingReleased: async (parent: any) => {
+      if (!parent.vestingReleased) return null;
+      return parent.vestingReleased;
+    },
+
+    vestingRemaining: async (parent: any) => {
+      if (!parent.vestingRemaining) return null;
+      return parent.vestingRemaining;
+    },
+
+    vestingLastClaim: async (parent: any) => {
+      if (!parent.vestingLastClaim) return null;
+      return parent.vestingLastClaim;
+    },
+
+    vestingNextClaim: async (parent: any) => {
+      if (!parent.vestingNextClaim) return null;
+      return parent.vestingNextClaim;
     },
   },
 
@@ -2579,6 +1831,163 @@ export const resolvers = {
       })
     },
   },
+
+  Token: {
+    id: async (parent: PrismaToken) => parent.id,
+    address: async (parent: PrismaToken) => parent.address,
+    name: async (parent: PrismaToken) => parent.name,
+    symbol: async (parent: PrismaToken) => parent.symbol,
+    decimals: async (parent: PrismaToken) => parent.decimals,
+    imageURI: async (parent: PrismaToken) => parent.imageURI,
+    priceUSD: async (parent: PrismaToken, _: any, { prisma }: Context) => {
+      try {
+        // Get fresh price using TokenPriceService
+        const price = await TokenPriceService.getTokenPriceUSD(parent.id)
+        
+        // Helper function to scale price based on decimals
+        const scalePrice = (rawPrice: number, decimals: number | null = 18) => {
+          if (decimals === null) decimals = 18;
+          if (rawPrice > 1e6) { // If price is likely in blockchain format
+            return rawPrice / Math.pow(10, decimals)
+          }
+          return rawPrice
+        }
+        
+        // Format the price to a reasonable number of decimal places
+        // and ensure it's within a reasonable range
+        const scaledPrice = scalePrice(price, parent.decimals)
+        
+        if (scaledPrice > 0.000001) {
+          // For very small prices (less than 1), keep more decimals
+          if (scaledPrice < 1) {
+            return scaledPrice.toFixed(6)
+          }
+          // For larger prices, use fewer decimals
+          return scaledPrice.toFixed(2)
+        }
+        
+        // If the price is too small or zero, try to get it from the database
+        if (parent.priceUSD) {
+          const dbPrice = scalePrice(parseFloat(parent.priceUSD), parent.decimals)
+          if (dbPrice > 0.000001) {
+            return dbPrice < 1 ? dbPrice.toFixed(6) : dbPrice.toFixed(2)
+          }
+        }
+        
+        // If we still don't have a valid price, return null
+        return null
+      } catch (error) {
+        console.error(`Error getting price for token ${parent.id}:`, error)
+        return null
+      }
+    },
+    priceChange24h: async (parent: PrismaToken) => parent.priceChange24h || 0,
+    volumeUSD24h: async (parent: PrismaToken) => parent.volumeUSD24h || '0',
+    lastPriceUpdate: async (parent: PrismaToken) => parent.lastPriceUpdate,
+    createdAt: async (parent: PrismaToken) => parent.createdAt,
+    updatedAt: async (parent: PrismaToken) => parent.updatedAt,
+  },
+
+  Launch: {
+    id: (parent: PrismaLaunch) => parent.id,
+    launchId: (parent: PrismaLaunch) => parent.launchId,
+    tokenAddress: (parent: PrismaLaunch) => parent.tokenAddress,
+    creatorAddress: (parent: PrismaLaunch) => parent.creatorAddress,
+    imageURI: (parent: PrismaLaunch) => parent.imageURI,
+    kubRaised: (parent: PrismaLaunch) => parent.kubRaised,
+    ponderRaised: (parent: PrismaLaunch) => parent.ponderRaised,
+    status: (parent: PrismaLaunch) => parent.status,
+    kubPairAddress: (parent: PrismaLaunch) => parent.kubPairAddress,
+    ponderPairAddress: (parent: PrismaLaunch) => parent.ponderPairAddress,
+    hasDualPools: (parent: PrismaLaunch) => parent.hasDualPools,
+    ponderPoolSkipped: (parent: PrismaLaunch) => parent.ponderPoolSkipped,
+    skippedPonderAmount: (parent: PrismaLaunch) => parent.skippedPonderAmount,
+    skippedPonderValue: (parent: PrismaLaunch) => parent.skippedPonderValue,
+    kubLiquidity: (parent: PrismaLaunch) => parent.kubLiquidity,
+    ponderLiquidity: (parent: PrismaLaunch) => parent.ponderLiquidity,
+    ponderBurned: (parent: PrismaLaunch) => parent.ponderBurned,
+    lpWithdrawn: (parent: PrismaLaunch) => parent.lpWithdrawn,
+    lpWithdrawnAt: (parent: PrismaLaunch) => parent.lpWithdrawnAt,
+    completedAt: (parent: PrismaLaunch) => parent.completedAt,
+    cancelledAt: (parent: PrismaLaunch) => parent.cancelledAt,
+    createdAt: (parent: PrismaLaunch) => parent.createdAt,
+    updatedAt: (parent: PrismaLaunch) => parent.updatedAt,
+    contributions: async (parent: PrismaLaunch, args: { first?: number; after?: string }, { prisma }: Context) => {
+      try {
+        const { first = 10, after } = args;
+        const queryParams: any = {
+          where: { launchId: parent.launchId },
+          take: first + 1,
+          orderBy: { createdAt: 'desc' },
+        };
+
+        // Add cursor if provided
+        if (after) {
+          try {
+            const cursorId = decodeCursor(after);
+            queryParams.cursor = { id: cursorId };
+            queryParams.skip = 1; // Skip the cursor itself
+          } catch (error) {
+            console.error('Invalid cursor:', error);
+            return {
+              edges: [],
+              pageInfo: {
+                hasNextPage: false,
+                hasPreviousPage: false,
+                startCursor: null,
+                endCursor: null,
+              },
+              totalCount: 0,
+            };
+          }
+        }
+
+        // Fetch contributions with pagination
+        const contributions = await prisma.contribution.findMany(queryParams);
+
+        // Get total count
+        const totalCount = await prisma.contribution.count({
+          where: { launchId: parent.launchId },
+        });
+
+        // Create pagination response
+        const paginationResult = createCursorPagination(
+          contributions,
+          first,
+          after ? decodeCursor(after) : undefined
+        );
+
+        return {
+          ...paginationResult,
+          totalCount,
+        };
+      } catch (error) {
+        console.error('Error fetching contributions:', error);
+        return {
+          edges: [],
+          pageInfo: {
+            hasNextPage: false,
+            hasPreviousPage: false,
+            startCursor: null,
+            endCursor: null,
+          },
+          totalCount: 0,
+        };
+      }
+    },
+    myContribution: async (parent: PrismaLaunch, _: any, context: Context) => {
+      const userAddress = context.req?.headers.get('x-user-address');
+      if (!userAddress || !context.prisma) return null;
+      return await context.prisma.contribution.findUnique({
+        where: {
+          launchId_contributorAddress: {
+            launchId: parent.launchId,
+            contributorAddress: userAddress.toLowerCase(),
+          },
+        },
+      });
+    },
+  } as LaunchResolvers,
 }
 
 async function getTokenPriceFromOracle(params: {
