@@ -3,7 +3,7 @@
 
 import { formatUnits, parseUnits } from 'viem'
 import { getRedisClient } from '@/src/lib/redis/client'
-import { PrismaClient, Token, Pair } from '@prisma/client'
+import prismaClient from '@/src/lib/db/prisma'
 import { createPublicClient, http } from 'viem'
 import { CURRENT_CHAIN } from '@/src/constants/chains'
 import { ORACLE_ABI } from '@/src/constants/abis'
@@ -24,6 +24,25 @@ const publicClient = createPublicClient({
   transport: http(CURRENT_CHAIN.rpcUrls.default.http[0]),
 })
 
+// Define types for Prisma models we use
+type Token = {
+  id: string;
+  address: string;
+  name?: string | null;
+  symbol?: string | null;
+  decimals?: number | null;
+  priceUSD?: string | null;
+}
+
+type Pair = {
+  id: string;
+  address: string;
+  token0Id: string;
+  token1Id: string;
+  reserve0: string;
+  reserve1: string;
+}
+
 type PairWithTokens = Pair & {
   token0: Token
   token1: Token
@@ -34,6 +53,9 @@ interface TokenInfo {
   decimals: number
   address: string
 }
+
+// Define a type for any Prisma client instance
+type PrismaClientType = typeof prismaClient;
 
 /**
  * Service for handling token prices and conversions to USD
@@ -55,10 +77,8 @@ export const TokenPriceService = {
         return cachedPrice
       }
 
-      const prisma = new PrismaClient()
-
       // Get the token info
-      const token = await prisma.token.findUnique({
+      const token = await prismaClient.token.findUnique({
         where: { id: tokenId },
         select: {
           id: true,
@@ -81,7 +101,7 @@ export const TokenPriceService = {
         address: token.address,
         decimals: token.decimals || 18,
         symbol: token.symbol || undefined
-      }, prisma)
+      }, prismaClient)
       
       if (price > 0) {
         console.log(`Got valid price ${price} for token ${token.symbol}`)
@@ -99,15 +119,109 @@ export const TokenPriceService = {
   },
 
   /**
+   * Get prices for multiple tokens in a single batch operation
+   * This is much more efficient than calling getTokenPriceUSD multiple times
+   */
+  async getTokenPricesUSDBulk(tokenIds: string[]): Promise<Record<string, string>> {
+    try {
+      const redis = getRedisClient()
+      const results: Record<string, string> = {}
+      
+      // Step 1: Try to get all prices from Redis cache in one batch
+      const cacheKeys = tokenIds.map(id => `token:${id}:priceUSD`)
+      const cachedPrices = await redis.mget(cacheKeys)
+      
+      // Process cached results and identify missing prices
+      const missingPriceIds: string[] = []
+      
+      tokenIds.forEach((id, index) => {
+        const cachedPrice = cachedPrices[index]
+        if (cachedPrice) {
+          results[id] = cachedPrice
+        } else {
+          missingPriceIds.push(id)
+        }
+      })
+      
+      if (missingPriceIds.length === 0) {
+        return results
+      }
+      
+      // Step 2: For missing prices, get tokens information in one batch query
+      const tokens = await prismaClient.token.findMany({
+        where: { id: { in: missingPriceIds } },
+        select: {
+          id: true,
+          address: true,
+          symbol: true,
+          decimals: true,
+          priceUSD: true
+        }
+      })
+      
+      // First use any prices already in the database
+      const tokensNeedingPrices = tokens.filter((token: Token) => {
+        if (token.priceUSD) {
+          // Use the database price if available
+          results[token.id] = token.priceUSD
+          return false
+        }
+        return true
+      })
+      
+      if (tokensNeedingPrices.length === 0) {
+        return results
+      }
+      
+      // Step 3: Process all remaining tokens in parallel
+      const pricePromises = tokensNeedingPrices.map(async (token: Token) => {
+        try {
+          // Use the comprehensive price lookup for each token
+          const price = await this.getReliableTokenUsdPrice({
+            id: token.id,
+            address: token.address,
+            decimals: token.decimals || 18,
+            symbol: token.symbol || undefined
+          }, prismaClient)
+          
+          // Cache the price for future use
+          if (price > 0) {
+            await this.cacheTokenPrice(token.id, price)
+            return { id: token.id, price: price.toString() }
+          }
+          
+          return { id: token.id, price: '0' }
+        } catch (error) {
+          console.error(`Error getting price for token ${token.id}:`, error)
+          return { id: token.id, price: '0' }
+        }
+      })
+      
+      // Wait for all price calculations
+      const newPrices = await Promise.all(pricePromises)
+      
+      // Add new prices to results
+      newPrices.forEach(({ id, price }: { id: string, price: string }) => {
+        results[id] = price
+      })
+      
+      return results
+    } catch (error) {
+      console.error('Error in getTokenPricesUSDBulk:', error)
+      return {}
+    }
+  },
+
+  /**
    * Get token price from stablecoin pairs in the database
    */
   async getPriceFromStablecoinPairs(
     tokenId: string,
     tokenDecimals?: number,
-    prismaClient?: PrismaClient
+    prismaDb?: PrismaClientType
   ): Promise<number> {
     try {
-      const prisma = prismaClient || new PrismaClient()
+      const prisma = prismaDb || prismaClient;
 
       const token = await prisma.token.findUnique({
         where: { id: tokenId },
@@ -305,7 +419,7 @@ export const TokenPriceService = {
    */
   async getReliableTokenUsdPrice(
     token: { id: string; address: string; decimals?: number; symbol?: string },
-    prismaClient?: any
+    prismaDb?: PrismaClientType
   ): Promise<number> {
     const tokenId = token.id
     const tokenAddress = token.address
@@ -329,16 +443,13 @@ export const TokenPriceService = {
       console.warn(`Cache lookup failed for ${tokenSymbol} (${tokenId})`, error)
     }
 
-    // Import Prisma if not provided
-    if (!prismaClient) {
-      const { PrismaClient } = await import('@prisma/client')
-      prismaClient = new PrismaClient()
-    }
+    // Use the provided prisma client or the global instance
+    const db = prismaDb || prismaClient
 
     // 2. Try database stored value
     attemptMethods.push('database')
     try {
-      const tokenData = await prismaClient.token.findUnique({
+      const tokenData = await db.token.findUnique({
         where: { id: tokenId },
         select: { priceUSD: true },
       })
@@ -353,7 +464,7 @@ export const TokenPriceService = {
         } else {
           console.log(`Found invalid database price ${dbPrice} for ${tokenSymbol}, will recalculate`)
           // Clear invalid price from database
-          await prismaClient.token.update({
+          await db.token.update({
             where: { id: tokenId },
             data: { priceUSD: null }
           })
@@ -369,14 +480,14 @@ export const TokenPriceService = {
       const priceFromPairs = await this.getPriceFromStablecoinPairs(
         tokenId,
         tokenDecimals,
-        prismaClient
+        db
       )
 
       if (priceFromPairs > 0.000001) {  // Only accept reasonable prices
         console.log(`Found valid price ${priceFromPairs} from stablecoin pairs for ${tokenSymbol}`)
         // Store in database and cache
         try {
-          await prismaClient.token.update({
+          await db.token.update({
             where: { id: tokenId },
             data: { priceUSD: priceFromPairs.toString() }
           })
@@ -397,7 +508,7 @@ export const TokenPriceService = {
     attemptMethods.push('reference tokens')
     try {
       // Get list of tokens that have known prices
-      const tokensWithPrices = await prismaClient.token.findMany({
+      const tokensWithPrices = await db.token.findMany({
         where: {
           priceUSD: { not: null },
           id: { not: tokenId }, // Exclude the current token
@@ -419,7 +530,7 @@ export const TokenPriceService = {
 
       // Filter to tokens with valid prices
       const referenceTokens = tokensWithPrices.filter(
-        (t: { priceUSD: string }) => t.priceUSD && parseFloat(t.priceUSD) > 0
+        (t: Token) => t.priceUSD && parseFloat(t.priceUSD) > 0
       )
 
       for (const refToken of referenceTokens) {
@@ -427,7 +538,7 @@ export const TokenPriceService = {
         console.log(`Trying reference token ${refToken.symbol} with price ${refTokenPrice}`)
 
         // Find pair between our token and this reference token
-        const pair = await prismaClient.pair.findFirst({
+        const pair = await db.pair.findFirst({
           where: {
             OR: [
               {
@@ -449,7 +560,7 @@ export const TokenPriceService = {
         if (pair) {
           console.log(`Found pair ${pair.address} with reference token ${refToken.symbol}`)
           // Get the most recent price snapshot
-          const snapshot = await prismaClient.priceSnapshot.findFirst({
+          const snapshot = await db.priceSnapshot.findFirst({
             where: { pairId: pair.id },
             orderBy: { timestamp: 'desc' },
           })
@@ -465,7 +576,7 @@ export const TokenPriceService = {
 
               if (price > 0) {
                 try {
-                  await prismaClient.token.update({
+                  await db.token.update({
                     where: { id: tokenId },
                     data: { priceUSD: price.toString() }
                   })
@@ -483,7 +594,7 @@ export const TokenPriceService = {
 
               if (price > 0) {
                 try {
-                  await prismaClient.token.update({
+                  await db.token.update({
                     where: { id: tokenId },
                     data: { priceUSD: price.toString() }
                   })
@@ -506,7 +617,7 @@ export const TokenPriceService = {
     attemptMethods.push('price snapshots')
     try {
       // Find most liquid pair for this token
-      const mostLiquidPair = await prismaClient.pair.findFirst({
+      const mostLiquidPair = await db.pair.findFirst({
         where: {
           OR: [{ token0Id: tokenId }, { token1Id: tokenId }],
         },
@@ -521,7 +632,7 @@ export const TokenPriceService = {
 
       if (mostLiquidPair) {
         console.log(`Found most liquid pair ${mostLiquidPair.address} for ${tokenSymbol}`)
-        const snapshot = await prismaClient.priceSnapshot.findFirst({
+        const snapshot = await db.priceSnapshot.findFirst({
           where: { pairId: mostLiquidPair.id },
           orderBy: { timestamp: 'desc' },
         })
@@ -536,7 +647,7 @@ export const TokenPriceService = {
           // Try to get counterpart token's price
           const counterpartPrice = await this.getTokenPriceUSD(
             counterpartToken.id,
-            counterpartToken.decimals
+            counterpartToken.decimals ?? undefined
           )
 
           if (counterpartPrice > 0) {
@@ -555,7 +666,7 @@ export const TokenPriceService = {
 
             if (price > 0) {
               try {
-                await prismaClient.token.update({
+                await db.token.update({
                   where: { id: tokenId },
                   data: { priceUSD: price.toString() }
                 })
@@ -619,7 +730,7 @@ export const TokenPriceService = {
   async getPriceFromOracle(tokenAddress: string): Promise<number> {
     try {
       // Find a stablecoin pair for this token
-      const prisma = new PrismaClient()
+      const prisma = prismaClient;
       const token = await prisma.token.findUnique({
         where: { address: tokenAddress },
         include: {
@@ -869,5 +980,37 @@ export const TokenPriceService = {
 
     // For non-stablecoin pairs, apply similar reasonable bounds
     return price > 0.000000001 && price < 1000000000
+  },
+
+  /**
+   * Normalize a token price to human-readable format
+   * This ensures that raw blockchain values are properly scaled down
+   */
+  async normalizeTokenPrice(tokenId: string, price: number): Promise<number> {
+    try {
+      // Get token info for decimals
+      const token = await prismaClient.token.findUnique({
+        where: { id: tokenId },
+        select: { decimals: true, symbol: true }
+      });
+      
+      if (!token) return price;
+      const decimals = token.decimals || 18;
+      
+      // Check if price seems to be in blockchain format (very large)
+      const magnitude = Math.floor(Math.log10(Math.abs(price || 1)));
+      
+      // If price is suspiciously large and decimals are available
+      if (magnitude >= decimals - 3) {
+        const normalizedPrice = price / Math.pow(10, decimals);
+        console.log(`Normalized price for ${token.symbol || tokenId}: ${price} -> ${normalizedPrice} (using ${decimals} decimals)`);
+        return normalizedPrice;
+      }
+      
+      return price;
+    } catch (error) {
+      console.error(`Error normalizing price for token ${tokenId}:`, error);
+      return price;
+    }
   },
 }

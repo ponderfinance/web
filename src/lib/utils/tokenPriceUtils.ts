@@ -70,10 +70,13 @@ export function detectNeedsDecimalNormalization(
  * This is specifically for the issue we saw with extremely large price values
  */
 export function normalizePrice(value: number, tokenDecimals?: number): number {
+  console.log(`normalizePrice called with value: ${value}, tokenDecimals: ${tokenDecimals}`);
+  
   if (value === 0 || isNaN(value)) return value
 
   // Detect the magnitude of the value
   const magnitude = Math.floor(Math.log10(Math.abs(value)))
+  console.log(`Price magnitude: ${magnitude}`);
 
   // If we know the token's decimals, use that for normalization
   if (tokenDecimals !== undefined && tokenDecimals > 0) {
@@ -81,10 +84,14 @@ export function normalizePrice(value: number, tokenDecimals?: number): number {
     if (magnitude >= tokenDecimals - 3) {
       try {
         // Use viem to format the value
-        return parseFloat(formatUnits(BigInt(Math.round(value)), tokenDecimals))
+        const normalized = parseFloat(formatUnits(BigInt(Math.round(value)), tokenDecimals));
+        console.log(`Normalized with tokenDecimals (${tokenDecimals}): ${normalized}`);
+        return normalized;
       } catch (error) {
         // Fallback to traditional calculation if BigInt conversion fails
-        return value / Math.pow(10, tokenDecimals)
+        const normalized = value / Math.pow(10, tokenDecimals);
+        console.log(`Fallback normalized with tokenDecimals (${tokenDecimals}): ${normalized}`);
+        return normalized;
       }
     }
   }
@@ -94,24 +101,33 @@ export function normalizePrice(value: number, tokenDecimals?: number): number {
   if (magnitude >= 15) {
     try {
       // Assume 18 decimals (common for ERC20 tokens)
-      return parseFloat(formatUnits(BigInt(Math.round(value)), 18))
+      const normalized = parseFloat(formatUnits(BigInt(Math.round(value)), 18));
+      console.log(`Normalized large value with 18 decimals: ${normalized}`);
+      return normalized;
     } catch (error) {
-      return value / 1e18
+      const normalized = value / 1e18;
+      console.log(`Fallback normalized large value with 18 decimals: ${normalized}`);
+      return normalized;
     }
   } else if (magnitude >= 8) {
     // For somewhat large values, use appropriate scaling
-    let decimals = 6
-    if (magnitude >= 12) decimals = 12
-    else if (magnitude >= 10) decimals = 10
-    else if (magnitude >= 9) decimals = 9
+    let decimals = 6;
+    if (magnitude >= 12) decimals = 12;
+    else if (magnitude >= 10) decimals = 10;
+    else if (magnitude >= 9) decimals = 9;
 
     try {
-      return parseFloat(formatUnits(BigInt(Math.round(value)), decimals))
+      const normalized = parseFloat(formatUnits(BigInt(Math.round(value)), decimals));
+      console.log(`Normalized medium value with ${decimals} decimals: ${normalized}`);
+      return normalized;
     } catch (error) {
-      return value / Math.pow(10, decimals)
+      const normalized = value / Math.pow(10, decimals);
+      console.log(`Fallback normalized medium value with ${decimals} decimals: ${normalized}`);
+      return normalized;
     }
   }
 
+  console.log(`Value not normalized, using as is: ${value}`);
   return value
 }
 

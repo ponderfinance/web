@@ -1,10 +1,9 @@
-import { PrismaClient, Launch as PrismaLaunch, Pair, Token as PrismaToken } from '@prisma/client'
-import { createPublicClient, formatUnits, parseUnits, PublicClient } from 'viem'
+import { prisma } from '@/src/lib/db/prisma'
+import { createPublicClient, formatUnits, parseUnits, PublicClient, http } from 'viem'
 import { calculateReservesUSD } from '@/src/lib/graphql/oracleUtils'
 import { CURRENT_CHAIN } from '@/src/constants/chains'
 import { KKUB_ADDRESS } from '@/src/constants/addresses'
 
-import { http } from 'wagmi'
 import { Context } from './types'
 import {
   cachePairReserveUSDBulk,
@@ -14,6 +13,67 @@ import {
 import { getRedisClient } from '@/src/lib/redis/client'
 import { TokenPriceService } from '@/src/lib/services/tokenPriceService'
 import { createCursorPagination, decodeCursor } from './utils'
+import DataLoader from 'dataloader'
+
+// Define types for Prisma models
+type PrismaToken = {
+  id: string;
+  address: string;
+  name: string | null;
+  symbol: string | null;
+  decimals: number | null;
+  imageURI: string | null;
+  priceUSD: string | null;
+  priceChange24h: number | null;
+  volumeUSD24h: string | null;
+  lastPriceUpdate: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+type PrismaPair = {
+  id: string;
+  address: string;
+  token0Id: string;
+  token1Id: string;
+  reserve0: string;
+  reserve1: string;
+  totalSupply: string;
+  feesPending0: string;
+  feesPending1: string;
+  feesCollected0: string;
+  feesCollected1: string;
+  token0: PrismaToken;
+  token1: PrismaToken;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+type PrismaLaunch = {
+  id: string;
+  launchId: number;
+  tokenAddress: string;
+  creatorAddress: string;
+  imageURI: string;
+  kubRaised: string;
+  ponderRaised: string;
+  status: string;
+  kubPairAddress: string | null;
+  ponderPairAddress: string | null;
+  hasDualPools: boolean | null;
+  ponderPoolSkipped: boolean | null;
+  skippedPonderAmount: string | null;
+  skippedPonderValue: string | null;
+  kubLiquidity: string | null;
+  ponderLiquidity: string | null;
+  ponderBurned: string | null;
+  lpWithdrawn: boolean | null;
+  lpWithdrawnAt: Date | null;
+  completedAt: Date | null;
+  cancelledAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
 
 // USDT address
 const USDT_ADDRESS = '0x7d984C24d2499D840eB3b7016077164e15E5faA6'
@@ -42,6 +102,95 @@ const publicClient = createPublicClient({
   transport: http(CURRENT_CHAIN.rpcUrls.default.http[0]),
 })
 
+// Create mock DataLoader for testing
+const createMockDataLoader = <K, V>(defaultValue: V): DataLoader<K, V> => {
+  const loader = new DataLoader<K, V>(async (keys: readonly K[]) => {
+    return keys.map(() => defaultValue)
+  })
+  loader.loadMany = async (keys: readonly K[]) => keys.map(() => defaultValue)
+  loader.clear = () => loader
+  loader.clearAll = () => loader
+  loader.prime = (key: K, value: V) => loader
+  loader.name = 'mockLoader'
+  return loader
+}
+
+// Update the createMockDataLoader calls with proper mock objects
+const createMockTokenDataLoader = (): DataLoader<string, PrismaToken> => {
+  const mockToken: PrismaToken = {
+    id: '',
+    address: '',
+    name: null,
+    symbol: null,
+    decimals: null,
+    imageURI: null,
+    priceUSD: null,
+    priceChange24h: null,
+    volumeUSD24h: null,
+    lastPriceUpdate: null,
+    createdAt: new Date(),
+    updatedAt: new Date()
+  };
+  
+  return createMockDataLoader<string, PrismaToken>(mockToken);
+};
+
+// Fix the recursive call in calculateTokenVolume24h
+const calculateTokenVolume24h = async (
+  tokenId: string,
+  prismaClient: typeof prisma,
+  loaders: Context['loaders']
+): Promise<Record<string, string>> => {
+  try {
+    // Get the token to check decimals
+    const token = await prismaClient.token.findUnique({
+      where: { id: tokenId },
+      select: { symbol: true, decimals: true }
+    });
+
+    if (!token) {
+      return { [tokenId]: '0' };
+    }
+
+    // Get 24h swap data for this token
+    const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    
+    const swaps = await prismaClient.swap.findMany({
+      where: {
+        OR: [
+          { pair: { token0Id: tokenId } },
+          { pair: { token1Id: tokenId } }
+        ],
+        timestamp: { gte: Math.floor(oneDayAgo.getTime() / 1000) }
+      },
+      include: {
+        pair: {
+          include: {
+            token0: true,
+            token1: true
+          }
+        }
+      }
+    });
+
+    // Calculate volume
+    let volume = 0;
+    for (const swap of swaps) {
+      const isToken0 = swap.pair.token0Id === tokenId;
+      const amount = isToken0 
+        ? parseFloat(formatUnits(BigInt(swap.amountIn0 || '0'), token.decimals || 18))
+        : parseFloat(formatUnits(BigInt(swap.amountIn1 || '0'), token.decimals || 18));
+      
+      volume += amount;
+    }
+
+    return { [tokenId]: volume.toString() };
+  } catch (error) {
+    console.error(`Error calculating volume for token ${tokenId}:`, error);
+    return { [tokenId]: '0' };
+  }
+}
+
 interface ChartDataPoint {
   time: number
   value: number
@@ -65,6 +214,41 @@ interface TokenWhereInput {
   name?: string;
 }
 
+// Define interfaces for type safety
+interface TokenPair extends PrismaPair {
+  token0: PrismaToken;
+  token1: PrismaToken;
+  lastBlockUpdate: number;
+}
+
+interface PriceSnapshot {
+  id: string;
+  createdAt: Date;
+  pairId: string;
+  timestamp: number;
+  blockNumber: number;
+  token0Price: string;
+  token1Price: string;
+}
+
+interface ChartPoint {
+  time: number;
+  value: number;
+}
+
+interface PairReserveSnapshot {
+  pairId: string;
+  reserveUSD: string;
+  timestamp: Date;
+}
+
+// Constants for major tokens
+const majorTokenAddresses: string[] = [
+  KKUB_ADDRESS[CURRENT_CHAIN.id],
+  // Add other major token addresses if needed
+].map((addr) => addr.toLowerCase())
+
+// Fix the LaunchResolvers interface by removing duplicates
 interface LaunchResolvers {
   id: (parent: PrismaLaunch) => string;
   launchId: (parent: PrismaLaunch) => number;
@@ -90,19 +274,79 @@ interface LaunchResolvers {
   createdAt: (parent: PrismaLaunch) => Date;
   updatedAt: (parent: PrismaLaunch) => Date;
   contributions: (parent: PrismaLaunch, args: { first?: number; after?: string }, context: Context) => Promise<any>;
-  myContribution: (parent: PrismaLaunch, args: any, context: Context) => Promise<any>;
+  myContribution: (parent: PrismaLaunch, _unused: Empty, context: Context) => Promise<any>;
+}
+
+// Add type annotations for pair parameters
+const processPair = (pair: PrismaPair) => {
+  return {
+    id: pair.id,
+    address: pair.address,
+    token0Id: pair.token0Id,
+    token1Id: pair.token1Id,
+    reserve0: pair.reserve0,
+    reserve1: pair.reserve1,
+    totalSupply: pair.totalSupply,
+    feesPending0: pair.feesPending0,
+    feesPending1: pair.feesPending1,
+    feesCollected0: pair.feesCollected0,
+    feesCollected1: pair.feesCollected1,
+    token0: pair.token0,
+    token1: pair.token1,
+    createdAt: pair.createdAt,
+    updatedAt: pair.updatedAt
+  }
+}
+
+// Add type annotations for snapshot parameters
+const processSnapshot = (snapshot: PairReserveSnapshot) => ({
+  pairId: snapshot.pairId,
+  reserveUSD: snapshot.reserveUSD,
+  timestamp: snapshot.timestamp
+})
+
+// Define Empty interface after the existing interfaces (around line 175)
+// Add this after the PairReserveSnapshot interface
+interface Empty {}
+
+// Add this interface before the resolvers (around line 175)
+interface Contribution {
+  id: string;
+  kubAmount: string;
+  ponderAmount: string;
+  ponderValue: string;
+  tokensReceived: string;
+  refunded?: boolean;
+  refundedKubAmount?: string;
+  refundedPonderAmount?: string;
+  refundedTokenAmount?: string;
+  vestingAmount?: string;
+  vestingReleased?: string;
+  vestingRemaining?: string;
+  vestingLastClaim?: Date | null;
+  vestingNextClaim?: Date | null;
+}
+
+// Add this before the resolvers (after the other interfaces)
+interface UserStats {
+  id: string;
+  address: string;
+  totalSwapCount: number;
+  totalLpCount: number;
+  swapVolumeUSD: string;
+  liquidityProvidedUSD: string;
 }
 
 export const resolvers = {
   Query: {
     // Token resolvers
-    token: async (_: any, { id }: { id: string }, { prisma }: Context) => {
+    token: async (_parent: Empty, { id }: { id: string }, { prisma }: Context) => {
       return prisma.token.findUnique({
         where: { id },
       })
     },
     tokens: async (
-      _: any,
+      _parent: Empty,
       args: {
         first?: number;
         after?: string;
@@ -114,6 +358,7 @@ export const resolvers = {
     ) => {
       const { first = 10, after, where, orderBy = 'createdAt', orderDirection = 'desc' } = args;
 
+      // Fetch tokens in a single query
       let tokens = await prisma.token.findMany({
         take: first + 1,
         where: {
@@ -130,7 +375,18 @@ export const resolvers = {
         tokens = tokens.slice(0, -1);
       }
 
-      const edges = tokens.map((token) => ({
+      // Efficiently fetch all token prices in bulk
+      const tokenIds = tokens.map((token: PrismaToken) => token.id);
+      const pricesMap = await TokenPriceService.getTokenPricesUSDBulk(tokenIds);
+      
+      // Attach prices to tokens
+      tokens = tokens.map((token: PrismaToken) => ({
+        ...token,
+        priceUSD: pricesMap[token.id] || token.priceUSD
+      }));
+
+      // Add type for edges map
+      const edges = tokens.map((token: PrismaToken) => ({
         node: token,
         cursor: token.id,
       }));
@@ -147,7 +403,7 @@ export const resolvers = {
       };
     },
     tokenByAddress: async (
-      _: any,
+      _parent: Empty,
       { address }: { address: string },
       { prisma }: Context
     ) => {
@@ -156,7 +412,7 @@ export const resolvers = {
       })
     },
     pairByAddress: async (
-      _: any,
+      _parent: Empty,
       { address }: { address: string },
       { prisma }: Context
     ) => {
@@ -170,14 +426,14 @@ export const resolvers = {
     },
 
     // Pair resolvers
-    pair: async (_: any, { id }: { id: string }, { prisma }: Context) => {
+    pair: async (_parent: Empty, { id }: { id: string }, { prisma }: Context) => {
       return prisma.pair.findUnique({
         where: { id },
       })
     },
 
     pairs: async (
-      _: any,
+      _parent: Empty,
       {
         first = 10,
         after,
@@ -195,189 +451,178 @@ export const resolvers = {
         // Handle orderBy for reserveUSD specially since it's not a DB field
         const isOrderByReserveUSD = orderBy === 'reserveUSD'
 
-        if (isOrderByReserveUSD) {
-          // For pagination with cursor
-          let paginationFilter = {}
-          if (after) {
-            const cursorId = decodeCursor(after)
-            paginationFilter = {
-              cursor: { id: cursorId },
-              skip: 1, // Skip the cursor itself
-            }
+        // For pagination with cursor
+        let paginationFilter = {}
+        if (after) {
+          const cursorId = decodeCursor(after)
+          paginationFilter = {
+            cursor: { id: cursorId },
+            skip: 1, // Skip the cursor itself
           }
+        }
 
-          // Query all pairs at once with minimal token data to reduce roundtrips
-          const pairs = await prisma.pair.findMany({
-            take: first * 2, // Get more than needed for efficient sorting
-            ...paginationFilter,
-            include: {
-              token0: {
-                select: { id: true, address: true, symbol: true, decimals: true },
-              },
-              token1: {
-                select: { id: true, address: true, symbol: true, decimals: true },
-              },
+        // Query all pairs at once with minimal token data to reduce roundtrips
+        // We fetch more than needed to ensure we have enough after filtering
+        const pairs = await prisma.pair.findMany({
+          take: isOrderByReserveUSD ? first * 3 : first + 1,
+          ...paginationFilter,
+          include: {
+            token0: {
+              select: { id: true, address: true, symbol: true, decimals: true },
             },
-          })
+            token1: {
+              select: { id: true, address: true, symbol: true, decimals: true },
+            },
+          },
+        })
 
-          // Get all pair IDs
-          const pairIds = pairs.map((pair) => pair.id)
+        // Get all pair IDs and token IDs
+        const pairIds = pairs.map((pair: Record<string, any>) => pair.id)
+        const tokenIds = new Set<string>()
+        pairs.forEach((pair: Record<string, any>) => {
+          if (pair.token0?.id) tokenIds.add(pair.token0.id)
+          if (pair.token1?.id) tokenIds.add(pair.token1.id)
+        })
 
-          // Get reserveUSD values from Redis cache first in a single batch operation
-          const cachedValues: Record<string, string> = await getCachedPairReserveUSDBulk(pairIds).catch((err) => {
-            console.error('Error getting cached values from Redis:', err)
-            return {}
-          })
+        // Fetch all token prices in parallel
+        const tokenPricesPromise = TokenPriceService.getTokenPricesUSDBulk(Array.from(tokenIds))
 
-          // Identify which pairs need snapshot data
-          const missingPairIds = pairIds.filter((id) => !cachedValues[id])
+        // Get reserveUSD values from Redis cache first in a single batch operation
+        const cachedValuesPromise = getCachedPairReserveUSDBulk(pairIds).catch((err) => {
+          console.error('Error getting cached values from Redis:', err)
+          return {}
+        })
 
-          // Get snapshots for missing pairs in a single query
-          let snapshotValues: Record<string, string> = {}
-          if (missingPairIds.length > 0) {
-            // Find the latest snapshot for each missing pair in one query
-            const snapshots = await prisma.pairReserveSnapshot.findMany({
-              where: {
-                pairId: { in: missingPairIds },
-              },
+        // Wait for both promises to resolve
+        const [tokenPrices, cachedValues] = await Promise.all([
+          tokenPricesPromise,
+          cachedValuesPromise
+        ])
+
+        // Identify which pairs need snapshot data
+        const missingPairIds = pairIds.filter((id: string) => 
+          !cachedValues || typeof cachedValues !== 'object' || !(id in cachedValues)
+        );
+
+        // Get snapshots for missing pairs in a single query
+        const snapshotsPromise = missingPairIds.length > 0 
+          ? prisma.pairReserveSnapshot.findMany({
+              where: { pairId: { in: missingPairIds } },
               orderBy: { timestamp: 'desc' },
               distinct: ['pairId'],
             })
+          : Promise.resolve([])
 
-            // Create a map of the snapshot values
-            snapshotValues = snapshots.reduce(
-              (acc, snapshot) => {
-                acc[snapshot.pairId] = snapshot.reserveUSD
-                return acc
-              },
-              {} as Record<string, string>
-            )
-          }
-
-          // Keep track of pairs needing calculation
-          const pairsNeedingCalculation = pairs.filter(
-            (pair) => !cachedValues[pair.id] && !snapshotValues[pair.id]
-          )
-
-          // Calculate reserveUSD for remaining pairs in parallel
-          let calculatedValues: Record<string, string> = {}
-          if (pairsNeedingCalculation.length > 0) {
-            const calculations = await Promise.all(
-              pairsNeedingCalculation.map(async (pair) => {
-                try {
-                  const reserveUSD = await calculateReservesUSD(pair, prisma)
-                  return { pairId: pair.id, reserveUSD }
-                } catch (error) {
-                  console.error(
-                    `Error calculating reserveUSD for pair ${pair.id}:`,
-                    error
-                  )
-                  return { pairId: pair.id, reserveUSD: '0' }
-                }
-              })
-            )
-
-            // Convert to map
-            calculatedValues = calculations.reduce(
-              (acc, { pairId, reserveUSD }) => {
-                acc[pairId] = reserveUSD
-                return acc
-              },
-              {} as Record<string, string>
-            )
-
-            // Cache the newly calculated values for future use
-            const pairsToCache = calculations.map(({ pairId, reserveUSD }) => ({
-              id: pairId,
-              reserveUSD,
-            }))
-
-            if (pairsToCache.length > 0) {
-              // Don't await this to avoid blocking response
-              cachePairReserveUSDBulk(pairsToCache).catch((err) => {
-                console.error('Error caching calculated values:', err)
-              })
+        // Calculate missing reserves in parallel for any pairs without cache or snapshot data
+        const pairsWithReserves = await Promise.all(
+          pairs.map(async (pair: any) => {
+            // Check if we already have the reserve from cache
+            if (cachedValues && typeof cachedValues === 'object' && pair.id in cachedValues) {
+              const reserveUSD = cachedValues[pair.id as keyof typeof cachedValues] as string;
+              return {
+                ...pair,
+                reserveUSD,
+                tvl: parseFloat(reserveUSD)
+              }
             }
-          }
 
-          // Assemble all pairs with their reserveUSD values
-          const pairsWithReserves = pairs.map((pair) => {
-            // Use cached value, snapshot value, or calculated value (in that order of preference)
-            const reserveUSD =
-              cachedValues[pair.id] ||
-              snapshotValues[pair.id] ||
-              calculatedValues[pair.id] ||
-              '0'
+            // Try to calculate from token prices
+            try {
+              // Get the token prices
+              const token0Price = parseFloat(tokenPrices[pair.token0?.id || ''] || '0')
+              const token1Price = parseFloat(tokenPrices[pair.token1?.id || ''] || '0')
+              
+              // Calculate only if we have token prices
+              if ((token0Price > 0 || token1Price > 0) && pair.token0 && pair.token1) {
+                // Convert reserves to floats with appropriate decimal adjustment
+                const reserve0 = parseFloat(formatUnits(
+                  BigInt(pair.reserve0), 
+                  pair.token0.decimals || 18
+                ))
+                const reserve1 = parseFloat(formatUnits(
+                  BigInt(pair.reserve1), 
+                  pair.token1.decimals || 18
+                ))
+                
+                // Calculate the total value 
+                let reserveUSD = '0'
+                if (token0Price > 0) {
+                  reserveUSD = (reserve0 * token0Price * 2).toFixed(2) // multiply by 2 for both sides
+                } else if (token1Price > 0) {
+                  reserveUSD = (reserve1 * token1Price * 2).toFixed(2) // multiply by 2 for both sides
+                }
 
+                // Cache this value for future use (don't await)
+                cachePairReserveUSDBulk([{ id: pair.id, reserveUSD }]).catch(console.error)
+                
+                return {
+                  ...pair,
+                  reserveUSD,
+                  tvl: parseFloat(reserveUSD)
+                }
+              }
+            } catch (error) {
+              console.error(`Error calculating reserveUSD for pair ${pair.id}:`, error)
+            }
+            
+            // Fallback to 0 if calculation fails
             return {
               ...pair,
-              reserveUSD,
-              tvl: parseFloat(reserveUSD),
+              reserveUSD: '0',
+              tvl: 0
             }
           })
+        )
 
-          // Sort by reserveUSD
-          pairsWithReserves.sort((a, b) => {
-            const valA = a.tvl
-            const valB = b.tvl
-            return orderDirection === 'asc' ? valA - valB : valB - valA
-          })
-
-          // Apply pagination and take correct number of results
-          const page = pairsWithReserves.slice(0, first + 1)
-
-          // Get total count (consider caching this if it's expensive)
+        // If ordering by reserveUSD, sort results and take correct number
+        if (isOrderByReserveUSD) {
+          // Sort by TVL
+          const sortedPairs = pairsWithReserves.sort(
+            (a: Record<string, any>, b: Record<string, any>) => {
+              return orderDirection === 'desc' ? b.tvl - a.tvl : a.tvl - b.tvl
+            }
+          );
+          
+          // Take the requested number
+          const page = sortedPairs.slice(0, first + 1)
+          
+          // Get total count
           const totalCount = await prisma.pair.count()
-
-          // Create pagination response
-          const paginationResult = createCursorPagination(
-            page,
-            first,
-            after ? decodeCursor(after) : undefined
-          )
-
+          
+          // Handle pagination
+          const hasNextPage = page.length > first
+          const displayPairs = hasNextPage ? page.slice(0, first) : page
+          
           return {
-            ...paginationResult,
+            edges: displayPairs.map((pair: Record<string, any>) => ({
+              node: pair,
+              cursor: pair.id
+            })),
+            pageInfo: {
+              hasNextPage,
+              hasPreviousPage: !!after,
+              startCursor: displayPairs[0]?.id,
+              endCursor: displayPairs[displayPairs.length - 1]?.id,
+            },
             totalCount,
           }
         } else {
-          // For all other orderBy fields, use standard Prisma query with pagination
-          const orderByParam = { [orderBy]: orderDirection }
-
-          // For pagination with cursor
-          let paginationFilter = {}
-          if (after) {
-            const cursorId = decodeCursor(after)
-            paginationFilter = {
-              cursor: { id: cursorId },
-              skip: 1, // Skip the cursor itself
-            }
-          }
-
-          // Fetch pairs directly with Prisma's built-in ordering and pagination
-          const pairs = await prisma.pair.findMany({
-            take: first + 1, // Take one extra to check for next page
-            orderBy: orderByParam,
-            ...paginationFilter,
-            include: {
-              token0: true,
-              token1: true,
-            },
-          })
-
-          // Get total count
-          const totalCount = await prisma.pair.count()
-
-          // Create pagination response
-          const paginationResult = createCursorPagination(
-            pairs,
-            first,
-            after ? decodeCursor(after) : undefined
-          )
-
+          // For other orderBy fields, just apply standard pagination
+          const hasNextPage = pairs.length > first
+          const displayPairs = hasNextPage ? pairs.slice(0, first) : pairs
+          
           return {
-            ...paginationResult,
-            totalCount,
+            edges: displayPairs.map((pair: Record<string, any>) => ({
+              node: pair,
+              cursor: pair.id
+            })),
+            pageInfo: {
+              hasNextPage,
+              hasPreviousPage: !!after,
+              startCursor: displayPairs[0]?.id,
+              endCursor: displayPairs[displayPairs.length - 1]?.id,
+            },
+            totalCount: await prisma.pair.count(),
           }
         }
       } catch (error) {
@@ -395,7 +640,7 @@ export const resolvers = {
       }
     },
 
-    topPairs: async (_: any, { first = 10 }: { first?: number }, { prisma }: Context) => {
+    topPairs: async (_parent: Empty, { first = 10 }: { first?: number }, { prisma }: Context) => {
       try {
         // Fetch pairs ordered by a metric that defines "top"
         // You might use volumeUSD, TVL, or another metric
@@ -430,7 +675,7 @@ export const resolvers = {
     },
 
     pairPriceChart: async (
-      _: any,
+      _parent: Empty,
       {
         pairAddress,
         timeframe = '1d',
@@ -440,11 +685,11 @@ export const resolvers = {
         timeframe?: string
         limit?: number
       },
-      { prisma }: Context
+      { prisma: db }: Context
     ): Promise<ChartDataPoint[]> => {
       try {
         // Find the pair
-        const pair = await prisma.pair.findFirst({
+        const pair = await db.pair.findFirst({
           where: { address: pairAddress.toLowerCase() },
           include: {
             token0: true,
@@ -495,7 +740,7 @@ export const resolvers = {
         const startTime = now - timeWindow
 
         // Get price snapshots from the specified time range
-        const priceSnapshots = await prisma.priceSnapshot.findMany({
+        const priceSnapshots = await db.priceSnapshot.findMany({
           where: {
             pairId: pair.id,
             timestamp: { gte: startTime },
@@ -510,33 +755,24 @@ export const resolvers = {
         // Choose the correct display strategy based on the pair composition
         if (isToken1Stablecoin) {
           // If token1 is a stablecoin, we want to show token0's price in USD
-          chartData = priceSnapshots.map((snapshot) => {
-            // Get token0's price in terms of token1 (the stablecoin)
+          chartData = priceSnapshots.map((snapshot: Record<string, any>) => {
             const rawPrice = snapshot.token0Price
-
             try {
-              // Convert the raw price to a human-readable format using viem
-              // We need to account for the difference in token decimals
               const decimalAdjustment = token1Decimals - token0Decimals
-
               let price: number
               if (decimalAdjustment !== 0) {
-                // Parse the raw price to a BigInt with the stablecoin's decimals precision
                 const rawPriceBigInt = parseUnits(rawPrice, token1Decimals)
-                // Format back to a number, adjusting for the decimal difference
                 price = parseFloat(
                   formatUnits(rawPriceBigInt, token1Decimals - decimalAdjustment)
                 )
               } else {
                 price = parseFloat(rawPrice)
               }
-
               return {
                 time: snapshot.timestamp,
                 value: price,
               }
             } catch (error) {
-              // Fallback for any parsing errors
               return {
                 time: snapshot.timestamp,
                 value: parseFloat(rawPrice),
@@ -546,7 +782,7 @@ export const resolvers = {
         } else if (isToken0Stablecoin) {
           // If token0 is a stablecoin, we want to show token1's price in USD
           // We need to take the reciprocal of token0Price
-          chartData = priceSnapshots.map((snapshot) => {
+          chartData = priceSnapshots.map((snapshot: Record<string, any>) => {
             // We need the reciprocal since we want token1's price in terms of token0
             const rawPrice = snapshot.token0Price
 
@@ -588,7 +824,7 @@ export const resolvers = {
           // We'll use token0's price and try to get USD conversion
           // This is more complex and would typically involve oracles
           chartData = await Promise.all(
-            priceSnapshots.map(async (snapshot) => {
+            priceSnapshots.map(async (snapshot: Record<string, any>) => {
               const rawPrice = snapshot.token0Price
 
               try {
@@ -626,20 +862,20 @@ export const resolvers = {
         }
 
         // Final pass to check for and fix any abnormal values
-        // These might occur if our decimal handling wasn't perfect
         const values = chartData.map((point) => point.value)
         const needsNormalization =
           TokenPriceService.detectNeedsDecimalNormalization(values)
 
         if (needsNormalization) {
           // Use our dedicated service to normalize the values
-          return chartData.map((point) => ({
+          const normalizedChartData = chartData.map((point: ChartPoint) => ({
             time: point.time,
             value: TokenPriceService.normalizePrice(
               point.value,
               Math.max(token0Decimals, token1Decimals)
             ),
           }))
+          return normalizedChartData
         }
 
         return chartData
@@ -651,7 +887,7 @@ export const resolvers = {
 
     // Get volume chart data for a pair
     pairVolumeChart: async (
-      _: any,
+      _parent: Empty,
       {
         pairAddress,
         timeframe = '1d',
@@ -839,7 +1075,7 @@ export const resolvers = {
 
     // Get price chart data for a token across all its pairs
     tokenPriceChart: async (
-      _: any,
+      _parent: Empty,
       { tokenAddress, timeframe = '1d', limit = 100 }: TokenPriceChartArgs,
       { prisma }: Context
     ): Promise<ChartDataPoint[]> => {
@@ -903,12 +1139,12 @@ export const resolvers = {
         const startTime: number = now - timeWindow
 
         // Prioritize pairs for best USD price derivation
-        let orderedPairs = []
+        let orderedPairs: TokenPair[] = []
 
         // For non-stablecoins, prioritize stablecoin pairs
         if (!isTokenStablecoin) {
           // Find pairs where counterpart is a stablecoin
-          const stablecoinPairs = pairs.filter((pair) => {
+          const stablecoinPairs = pairs.filter((pair: TokenPair) => {
             return pair.token0Id === token.id
               ? stablecoinAddresses.includes(pair.token1.address.toLowerCase())
               : stablecoinAddresses.includes(pair.token0.address.toLowerCase())
@@ -917,19 +1153,13 @@ export const resolvers = {
           // Prioritize stablecoin pairs, then add remaining pairs
           orderedPairs = [
             ...stablecoinPairs,
-            ...pairs.filter((pair) => !stablecoinPairs.includes(pair)),
+            ...pairs.filter((pair: TokenPair) => !stablecoinPairs.includes(pair)),
           ]
         }
         // For stablecoins, prioritize pairs with other tokens to see market values
         else {
-          // For stablecoins, prioritize pairs with major tokens
-          const majorTokenAddresses: string[] = [
-            KKUB_ADDRESS[CURRENT_CHAIN.id], // Replace with your KKUB address
-            // Add other major token addresses if relevant
-          ].map((addr) => addr.toLowerCase())
-
           // Find pairs with major tokens
-          const majorTokenPairs = pairs.filter((pair) => {
+          const majorTokenPairs = pairs.filter((pair: TokenPair) => {
             return pair.token0Id === token.id
               ? majorTokenAddresses.includes(pair.token1.address.toLowerCase())
               : majorTokenAddresses.includes(pair.token0.address.toLowerCase())
@@ -938,7 +1168,7 @@ export const resolvers = {
           // Prioritize major token pairs, then add remaining pairs
           orderedPairs = [
             ...majorTokenPairs,
-            ...pairs.filter((pair) => !majorTokenPairs.includes(pair)),
+            ...pairs.filter((pair: TokenPair) => !majorTokenPairs.includes(pair)),
           ]
         }
 
@@ -1027,7 +1257,7 @@ export const resolvers = {
 
           // Now process the snapshots with the reliable counterpart price
           const pairPriceData: ChartDataPoint[] = snapshots
-            .map((snapshot) => {
+            .map((snapshot: Record<string, any>) => {
               // Get the raw exchange rates from the snapshot
               const token0PriceRaw: string = snapshot.token0Price
               const token1PriceRaw: string = snapshot.token1Price
@@ -1119,7 +1349,7 @@ export const resolvers = {
                 value: usdPrice,
               }
             })
-            .filter((point) => point !== null)
+            .filter((point: ChartDataPoint | null): point is ChartDataPoint => point !== null)
           // Add to our price series
           priceSeries = [...priceSeries, ...pairPriceData]
 
@@ -1140,7 +1370,7 @@ export const resolvers = {
 
     // Inside the Query object in your resolvers
     recentTransactions: async (
-      _: any,
+      _parent: Empty,
       { first = 20, after }: { first?: number; after?: string },
       { prisma }: Context
     ) => {
@@ -1169,39 +1399,41 @@ export const resolvers = {
         // Fetch recent swaps with pagination
         const swaps = await prisma.swap.findMany(queryParams)
 
-        // Map the swaps and calculate USD values
-        const mappedSwapsPromises = swaps.map(async (swap: any) => {
-          // Calculate USD value
+        // Collect all unique token IDs
+        const tokenIds = new Set<string>()
+        swaps.forEach((swap: any) => {
+          if (swap.pair?.token0?.id) tokenIds.add(swap.pair.token0.id)
+          if (swap.pair?.token1?.id) tokenIds.add(swap.pair.token1.id)
+        });
+
+        // Fetch all token prices in a single batch
+        const pricesMap = await TokenPriceService.getTokenPricesUSDBulk(Array.from(tokenIds))
+
+        // Calculate USD values using the prefetched prices
+        const mappedSwaps = swaps.map((swap: any) => {
           let valueUSD = '0'
+          
           try {
-            // Get token prices
-            const [token0Price, token1Price] = await Promise.all([
-              TokenPriceService.getTokenPriceUSD(swap.pair.token0.id),
-              TokenPriceService.getTokenPriceUSD(swap.pair.token1.id)
-            ])
+            const token0Price = pricesMap[swap.pair?.token0?.id || '']
+            const token1Price = pricesMap[swap.pair?.token1?.id || '']
             
-            // Scale amounts based on token decimals
-            const token0Decimals = swap.pair.token0.decimals || 18
-            const token1Decimals = swap.pair.token1.decimals || 18
-            
-            // Convert amounts to proper decimal representation
-            const amount0In = parseFloat(swap.amountIn0) / Math.pow(10, token0Decimals)
-            const amount0Out = parseFloat(swap.amountOut0) / Math.pow(10, token0Decimals)
-            const amount1In = parseFloat(swap.amountIn1) / Math.pow(10, token1Decimals)
-            const amount1Out = parseFloat(swap.amountOut1) / Math.pow(10, token1Decimals)
-            
-            // Scale token prices (assuming they're in raw form like the amounts)
-            const scaledToken0Price = token0Price / Math.pow(10, token0Decimals)
-            const scaledToken1Price = token1Price / Math.pow(10, token1Decimals)
-            
-            // Calculate USD values for both sides of the swap
-            const amount0USD = (amount0In + amount0Out) * scaledToken0Price
-            const amount1USD = (amount1In + amount1Out) * scaledToken1Price
-            
-            // Use the larger value (since one side might be more accurate)
-            valueUSD = Math.max(amount0USD, amount1USD).toString()
+            if (token0Price && parseFloat(token0Price) > 0) {
+              // Calculate based on token0
+              const amountToken0 = parseFloat(formatUnits(
+                BigInt(swap.amountIn0 || '0'), 
+                swap.pair?.token0?.decimals || 18
+              ))
+              valueUSD = (amountToken0 * parseFloat(token0Price)).toFixed(2)
+            } else if (token1Price && parseFloat(token1Price) > 0) {
+              // Calculate based on token1
+              const amountToken1 = parseFloat(formatUnits(
+                BigInt(swap.amountIn1 || '0'), 
+                swap.pair?.token1?.decimals || 18
+              ))
+              valueUSD = (amountToken1 * parseFloat(token1Price)).toFixed(2)
+            }
           } catch (error) {
-            console.error('Error calculating swap value:', error)
+            console.error('Error calculating USD value for swap:', error)
           }
 
           return {
@@ -1209,8 +1441,8 @@ export const resolvers = {
             txHash: swap.txHash,
             timestamp: swap.timestamp,
             userAddress: swap.userAddress,
-            token0: swap.pair.token0,
-            token1: swap.pair.token1,
+            token0: swap.pair?.token0,
+            token1: swap.pair?.token1,
             amountIn0: swap.amountIn0,
             amountIn1: swap.amountIn1,
             amountOut0: swap.amountOut0,
@@ -1219,21 +1451,25 @@ export const resolvers = {
           }
         })
 
-        // Wait for all USD calculations to complete
-        const mappedSwaps = await Promise.all(mappedSwapsPromises)
-
         // Get total count
         const totalCount = await prisma.swap.count()
 
-        // Create pagination response with mapped swaps
-        const paginationResult = createCursorPagination(
-          mappedSwaps,
-          first,
-          after ? decodeCursor(after) : undefined
-        )
+        // Handle pagination
+        const hasNextPage = mappedSwaps.length > first
+        const displaySwaps = hasNextPage ? mappedSwaps.slice(0, first) : mappedSwaps
 
+        // Create pagination response with mapped swaps
         return {
-          ...paginationResult,
+          edges: displaySwaps.map((swap: any) => ({
+            node: swap,
+            cursor: swap.id
+          })),
+          pageInfo: {
+            hasNextPage,
+            hasPreviousPage: false,
+            startCursor: displaySwaps[0]?.id,
+            endCursor: displaySwaps[displaySwaps.length - 1]?.id,
+          },
           totalCount,
         }
       } catch (error) {
@@ -1252,7 +1488,7 @@ export const resolvers = {
     },
 
     // User resolvers
-    user: async (_: any, { id }: { id: string }, { prisma }: Context) => {
+    user: async (_parent: Empty, { id }: { id: string }, { prisma }: Context) => {
       const user = await prisma.userStat.findUnique({
         where: { userAddress: id },
       })
@@ -1268,7 +1504,7 @@ export const resolvers = {
         : null
     },
     userPositions: async (
-      _: any,
+      _parent: Empty,
       { userAddress }: { userAddress: string },
       { prisma }: Context
     ) => {
@@ -1309,7 +1545,7 @@ export const resolvers = {
     },
 
     // Protocol metrics
-    protocolMetrics: async (_: any, {}: {}, { prisma }: Context) => {
+    protocolMetrics: async (_parent: Empty, {}: {}, { prisma }: Context) => {
       // Get the latest protocol metrics
       const metrics = await prisma.protocolMetric.findFirst({
         orderBy: { timestamp: 'desc' },
@@ -1341,7 +1577,7 @@ export const resolvers = {
 
     // Farm pool resolvers
     farmingPools: async (
-      _: any,
+      _parent: Empty,
       { first = 10, after }: { first?: number; after?: string },
       { prisma }: Context
     ) => {
@@ -1390,14 +1626,14 @@ export const resolvers = {
         }
       }
     },
-    farmingPool: async (_: any, { pid }: { pid: number }, { prisma }: Context) => {
+    farmingPool: async (_parent: Empty, { pid }: { pid: number }, { prisma }: Context) => {
       return prisma.farmingPool.findUnique({
         where: { pid },
       })
     },
 
     // Staking metrics
-    stakingMetrics: async (_: any, {}: {}, { prisma }: Context) => {
+    stakingMetrics: async (_parent: Empty, {}: {}, { prisma }: Context) => {
       // Get the latest staking metrics
       const metrics = await prisma.stakingMetric.findFirst({
         orderBy: { timestamp: 'desc' },
@@ -1419,7 +1655,7 @@ export const resolvers = {
 
     // Launch resolvers
     activeLaunches: async (
-      _: any,
+      _parent: Empty,
       { first = 10, after }: { first?: number; after?: string },
       { prisma }: Context
     ) => {
@@ -1486,7 +1722,7 @@ export const resolvers = {
       }
     },
     completedLaunches: async (
-      _: any,
+      _parent: Empty,
       { first = 10, after }: { first?: number; after?: string },
       { prisma }: Context
     ) => {
@@ -1538,13 +1774,13 @@ export const resolvers = {
         }
       }
     },
-    launch: async (_: any, { launchId }: { launchId: number }, { prisma }: Context) => {
+    launch: async (_parent: Empty, { launchId }: { launchId: number }, { prisma }: Context) => {
       return prisma.launch.findUnique({
         where: { launchId },
       })
     },
 
-    myLaunches: async (_: any, args: any, context: Context) => {
+    myLaunches: async (_parent: Empty, _args: Empty, context: Context) => {
       const userAddress = context.req?.headers.get('x-user-address');
       if (!userAddress || !context.prisma) return [];
       return await context.prisma.launch.findMany({
@@ -1557,7 +1793,7 @@ export const resolvers = {
       });
     },
 
-    launchProgress: async (_: any, { launchId }: { launchId: number }, { prisma }: Context) => {
+    launchProgress: async (_parent: Empty, { launchId }: { launchId: number }, { prisma }: Context) => {
       const launch = await prisma.launch.findUnique({
         where: { launchId },
       })
@@ -1569,7 +1805,7 @@ export const resolvers = {
       return Math.min(progress, 100)
     },
 
-    launchTimeRemaining: async (_: any, { launchId }: { launchId: number }, { prisma }: Context) => {
+    launchTimeRemaining: async (_parent: Empty, { launchId }: { launchId: number }, { prisma }: Context) => {
       const launch = await prisma.launch.findUnique({
         where: { launchId }
       });
@@ -1592,60 +1828,60 @@ export const resolvers = {
 
   Contribution: {
     // Get contribution amounts
-    kubAmount: async (parent: any, _: any, { prisma }: Context) => {
+    kubAmount: async (parent: Contribution, _unused: Empty, { prisma }: Context) => {
       return parent.kubAmount
     },
 
-    ponderAmount: async (parent: any, _: any, { prisma }: Context) => {
+    ponderAmount: async (parent: Contribution, _unused: Empty, { prisma }: Context) => {
       return parent.ponderAmount
     },
 
-    ponderValue: async (parent: any, _: any, { prisma }: Context) => {
+    ponderValue: async (parent: Contribution, _unused: Empty, { prisma }: Context) => {
       return parent.ponderValue
     },
 
-    tokensReceived: async (parent: any, _: any, { prisma }: Context) => {
+    tokensReceived: async (parent: Contribution, _unused: Empty, { prisma }: Context) => {
       return parent.tokensReceived
     },
 
     // Get refund information
-    refunded: async (parent: any, _: any, { prisma }: Context) => {
+    refunded: async (parent: Contribution, _unused: Empty, { prisma }: Context) => {
       return parent.refunded || false
     },
 
-    refundedKubAmount: async (parent: any, _: any, { prisma }: Context) => {
+    refundedKubAmount: async (parent: Contribution, _unused: Empty, { prisma }: Context) => {
       return parent.refundedKubAmount
     },
 
-    refundedPonderAmount: async (parent: any, _: any, { prisma }: Context) => {
+    refundedPonderAmount: async (parent: Contribution, _unused: Empty, { prisma }: Context) => {
       return parent.refundedPonderAmount
     },
 
-    refundedTokenAmount: async (parent: any, _: any, { prisma }: Context) => {
+    refundedTokenAmount: async (parent: Contribution, _unused: Empty, { prisma }: Context) => {
       return parent.refundedTokenAmount
     },
 
-    vestingAmount: async (parent: any) => {
+    vestingAmount: async (parent: Contribution) => {
       if (!parent.vestingAmount) return null;
       return parent.vestingAmount;
     },
 
-    vestingReleased: async (parent: any) => {
+    vestingReleased: async (parent: Contribution) => {
       if (!parent.vestingReleased) return null;
       return parent.vestingReleased;
     },
 
-    vestingRemaining: async (parent: any) => {
+    vestingRemaining: async (parent: Contribution) => {
       if (!parent.vestingRemaining) return null;
       return parent.vestingRemaining;
     },
 
-    vestingLastClaim: async (parent: any) => {
+    vestingLastClaim: async (parent: Contribution) => {
       if (!parent.vestingLastClaim) return null;
       return parent.vestingLastClaim;
     },
 
-    vestingNextClaim: async (parent: any) => {
+    vestingNextClaim: async (parent: Contribution) => {
       if (!parent.vestingNextClaim) return null;
       return parent.vestingNextClaim;
     },
@@ -1653,13 +1889,29 @@ export const resolvers = {
 
   User: {
     liquidityPositions: async (
-      parent: any,
+      parent: UserStats,
       { first = 10, after }: { first?: number; after?: string },
       { prisma }: Context
     ) => {
       try {
         // Set up query params
-        const queryParams: any = {
+        const queryParams: {
+          where: {
+            userAddress: string;
+            liquidityTokens: { not: string };
+          };
+          take: number;
+          include: {
+            pair: {
+              include: {
+                token0: boolean;
+                token1: boolean;
+              };
+            };
+          };
+          cursor?: { id: string };
+          skip?: number;
+        } = {
           where: {
             userAddress: parent.address,
             // Only return positions with non-zero liquidity tokens
@@ -1674,17 +1926,16 @@ export const resolvers = {
               },
             },
           },
-        }
+        };
 
         // Add cursor if provided
         if (after) {
-          const cursorId = decodeCursor(after)
-          queryParams.cursor = { id: cursorId }
-          queryParams.skip = 1 // Skip the cursor itself
+          queryParams.cursor = { id: decodeCursor(after) };
+          queryParams.skip = 1; // Skip the cursor itself
         }
 
         // Fetch liquidity positions with pagination
-        const positions = await prisma.liquidityPosition.findMany(queryParams)
+        const positions = await prisma.liquidityPosition.findMany(queryParams);
 
         // Get total count - only count non-zero positions
         const totalCount = await prisma.liquidityPosition.count({
@@ -1692,19 +1943,19 @@ export const resolvers = {
             userAddress: parent.address,
             liquidityTokens: { not: '0' },
           },
-        })
+        });
 
         // Create pagination response
         const paginationResult = createCursorPagination(
           positions,
           first,
           after ? decodeCursor(after) : undefined
-        )
+        );
 
         return {
           ...paginationResult,
           totalCount,
-        }
+        };
       } catch (error) {
         console.error('Error fetching user liquidity positions:', error)
         return {
@@ -1716,11 +1967,11 @@ export const resolvers = {
             endCursor: null,
           },
           totalCount: 0,
-        }
+        };
       }
     },
     swaps: async (
-      parent: any,
+      parent: UserStats,
       { first = 10, after }: { first?: number; after?: string },
       { prisma }: Context
     ) => {
@@ -1773,7 +2024,7 @@ export const resolvers = {
       }
     },
     farmingPositions: async (
-      parent: any,
+      parent: UserStats,
       { first = 10, after }: { first?: number; after?: string },
       { prisma }: Context
     ) => {
@@ -1825,7 +2076,7 @@ export const resolvers = {
         }
       }
     },
-    stakingPosition: async (parent: any, _: any, { prisma }: Context) => {
+    stakingPosition: async (parent: UserStats, _unused: Empty, { prisma }: Context) => {
       return prisma.stakingPosition.findUnique({
         where: { userAddress: parent.address },
       })
@@ -1839,46 +2090,60 @@ export const resolvers = {
     symbol: async (parent: PrismaToken) => parent.symbol,
     decimals: async (parent: PrismaToken) => parent.decimals,
     imageURI: async (parent: PrismaToken) => parent.imageURI,
-    priceUSD: async (parent: PrismaToken, _: any, { prisma }: Context) => {
+    priceUSD: async (parent: PrismaToken, _unused: Empty, { prisma }: Context) => {
       try {
-        // Get fresh price using TokenPriceService
-        const price = await TokenPriceService.getTokenPriceUSD(parent.id)
-        
-        // Helper function to scale price based on decimals
-        const scalePrice = (rawPrice: number, decimals: number | null = 18) => {
-          if (decimals === null) decimals = 18;
-          if (rawPrice > 1e6) { // If price is likely in blockchain format
-            return rawPrice / Math.pow(10, decimals)
+        // Import viem utilities
+        const { formatUnits } = await import('viem');
+
+        // Helper function to detect and scale large blockchain-style numbers
+        const formatBlockchainValue = (value: number | string, decimals: number = 18): string => {
+          if (typeof value === 'string') {
+            value = parseFloat(value);
           }
-          return rawPrice
-        }
-        
-        // Format the price to a reasonable number of decimal places
-        // and ensure it's within a reasonable range
-        const scaledPrice = scalePrice(price, parent.decimals)
-        
-        if (scaledPrice > 0.000001) {
-          // For very small prices (less than 1), keep more decimals
-          if (scaledPrice < 1) {
-            return scaledPrice.toFixed(6)
+          
+          // Skip empty or zero values
+          if (!value || value === 0) return "0";
+          
+          // Detect if this is likely a raw blockchain value (very large number)
+          const magnitude = Math.floor(Math.log10(Math.abs(value)));
+          
+          // If the number is very large, it's likely in wei or token base units
+          if (magnitude >= 6) {
+            try {
+              // We need to round to an integer to use BigInt
+              const bigValue = BigInt(Math.round(value));
+              return formatUnits(bigValue, decimals);
+            } catch (error) {
+              // Fallback to regular division if BigInt conversion fails
+              return (value / Math.pow(10, decimals)).toString();
+            }
           }
-          // For larger prices, use fewer decimals
-          return scaledPrice.toFixed(2)
-        }
+          
+          // For normal-sized numbers, return as is
+          return value.toString();
+        };
         
-        // If the price is too small or zero, try to get it from the database
+        // Check if we already have the price from the bulk fetch
         if (parent.priceUSD) {
-          const dbPrice = scalePrice(parseFloat(parent.priceUSD), parent.decimals)
-          if (dbPrice > 0.000001) {
-            return dbPrice < 1 ? dbPrice.toFixed(6) : dbPrice.toFixed(2)
+          const price = parseFloat(parent.priceUSD);
+          if (price > 0.000001) {
+            // Format in case it's a blockchain value
+            return formatBlockchainValue(price, parent.decimals || 18);
           }
         }
         
-        // If we still don't have a valid price, return null
-        return null
+        // If we don't have a price yet, fetch it now
+        const price = await TokenPriceService.getTokenPriceUSD(parent.id);
+        if (price > 0.000001) {
+          // Format in case it's a blockchain value
+          return formatBlockchainValue(price, parent.decimals || 18);
+        }
+        
+        // If we still don't have a valid price, return 0
+        return "0";
       } catch (error) {
-        console.error(`Error getting price for token ${parent.id}:`, error)
-        return null
+        console.error(`Error getting price for token ${parent.id}:`, error);
+        return "0";
       }
     },
     priceChange24h: async (parent: PrismaToken) => parent.priceChange24h || 0,
@@ -1975,7 +2240,7 @@ export const resolvers = {
         };
       }
     },
-    myContribution: async (parent: PrismaLaunch, _: any, context: Context) => {
+    myContribution: async (parent: PrismaLaunch, _unused: Empty, context: Context) => {
       const userAddress = context.req?.headers.get('x-user-address');
       if (!userAddress || !context.prisma) return null;
       return await context.prisma.contribution.findUnique({
@@ -2029,10 +2294,10 @@ async function getTokenPriceFromOracle(params: {
 
 async function findUSDTPair(
   tokenAddress: string,
-  prisma: PrismaClient
+  db: typeof prisma
 ): Promise<string | null> {
   // Find pairs where the token is paired with USDT
-  const pair = await prisma.pair.findFirst({
+  const pair = await db.pair.findFirst({
     where: {
       OR: [
         {
@@ -2049,3 +2314,41 @@ async function findUSDTPair(
 
   return pair ? pair.address : null
 }
+
+// Create a mock creation function for PrismaPair
+const createMockPairDataLoader = (): DataLoader<string, PrismaPair> => {
+  const mockToken: PrismaToken = {
+    id: '',
+    address: '',
+    name: null,
+    symbol: null,
+    decimals: null,
+    imageURI: null,
+    priceUSD: null,
+    priceChange24h: null,
+    volumeUSD24h: null,
+    lastPriceUpdate: null,
+    createdAt: new Date(),
+    updatedAt: new Date()
+  };
+  
+  const mockPair: PrismaPair = {
+    id: '',
+    address: '',
+    token0Id: '',
+    token1Id: '',
+    reserve0: '0',
+    reserve1: '0',
+    totalSupply: '0',
+    feesPending0: '0',
+    feesPending1: '0',
+    feesCollected0: '0',
+    feesCollected1: '0',
+    token0: mockToken,
+    token1: mockToken,
+    createdAt: new Date(),
+    updatedAt: new Date()
+  };
+  
+  return createMockDataLoader<string, PrismaPair>(mockPair);
+};
