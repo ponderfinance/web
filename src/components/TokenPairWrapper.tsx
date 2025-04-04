@@ -4,8 +4,8 @@ import { TokenPair, TokenPairProps } from './TokenPair'
 import { useTokenPairData, useMultipleTokenPairData } from '@/src/hooks/useTokenPairData'
 
 export interface TokenPairWrapperProps {
-  tokenAAddress: string | null
-  tokenBAddress: string | null
+  tokenAAddress: `0x${string}` | string | null
+  tokenBAddress: `0x${string}` | string | null
   size?: 'small' | 'large'
   showSymbols?: boolean
   fallback?: React.ReactNode

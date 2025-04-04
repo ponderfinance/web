@@ -1126,9 +1126,10 @@ const PoolCard = ({ pid, address, position, onManage }: PoolCardProps) => {
               <>
                 <View gap={1}>
                   <View direction="row" gap={4} align="center">
-                    <TokenPairWrapper 
-                      tokenAAddress={position.token0?.address || null} 
-                      tokenBAddress={position.token1?.address || null} 
+                    <TokenPairWrapper
+                      tokenAAddress={position.token0.address}
+                      tokenBAddress={position.token1.address}
+                      size="small"
                     />
                   </View>
                   <Text variant="body-3">Your Share: {position.poolShare}%</Text>

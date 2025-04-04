@@ -1,6 +1,6 @@
 import React from 'react'
 import { View, Text, Actionable } from 'reshaped'
-import { TokenPair } from '@/src/components/TokenPair'
+import { TokenPairWrapper } from '@/src/components/TokenPairWrapper'
 import { PoolsPageQuery } from '@/src/__generated__/PoolsPageQuery.graphql'
 
 // Helper to format currency values
@@ -95,10 +95,10 @@ export const Explore: React.FC<ExploreProps> = ({
 
             <View.Item columns={3}>
               <View direction="row" align="center" gap={2}>
-                {/* Use tokenAddressA and tokenAddressB instead of passing token objects */}
-                <TokenPair
-                  tokenAddressA={node.token0.address as `0x${string}`}
-                  tokenAddressB={node.token1.address as `0x${string}`}
+                {/* Use TokenPairWrapper component for token display */}
+                <TokenPairWrapper
+                  tokenAAddress={node.token0.address as `0x${string}`}
+                  tokenBAddress={node.token1.address as `0x${string}`}
                   size="small"
                 />
               </View>

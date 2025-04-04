@@ -882,8 +882,9 @@ const AddLiquidityStepper = ({
       >
         <View>
           <TokenPairWrapper 
-            tokenAAddress={tokenA} 
-            tokenBAddress={tokenB} 
+            tokenAAddress={tokenA || null}
+            tokenBAddress={tokenB || null}
+            size="small"
           />
         </View>
         <View>
