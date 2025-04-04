@@ -16,9 +16,14 @@ import {
   DetailedStakeInfo,
 } from '@ponderfinance/sdk'
 import StakeModal from '../../../components/StakeModal'
-import { TokenPair } from '../../../components/TokenPair'
-import { formatNumber } from '../../../utils/numbers'
+import { TokenPair, tokenFragment } from '../../../components/TokenPair'
+import { formatNumber, roundDecimal } from '@/src/utils/numbers'
 import { X, MagicWand } from '@phosphor-icons/react'
+import { TokenPairWrapper } from '@/src/components/TokenPairWrapper'
+import { useQuery } from '@tanstack/react-query'
+import { KKUB_ADDRESS } from '@/src/constants/addresses'
+import { CURRENT_CHAIN } from '@/src/constants/chains'
+import { usePrivy } from '@privy-io/react-auth'
 
 interface TokenInfo {
   address: Address
@@ -1120,11 +1125,12 @@ const PoolCard = ({ pid, address, position, onManage }: PoolCardProps) => {
             {position ? (
               <>
                 <View gap={1}>
-                  <TokenPair
-                    tokenAddressA={position.token0.address}
-                    tokenAddressB={position.token1.address}
-                    size="small"
-                  />
+                  <View direction="row" gap={4} align="center">
+                    <TokenPairWrapper 
+                      tokenAAddress={position.token0?.address || null} 
+                      tokenBAddress={position.token1?.address || null} 
+                    />
+                  </View>
                   <Text variant="body-3">Your Share: {position.poolShare}%</Text>
                   <Text variant="body-3">
                     {formatNumber(Number(position.token0Amount))} {position.token0.symbol} +{' '}
@@ -1183,14 +1189,6 @@ const PoolCard = ({ pid, address, position, onManage }: PoolCardProps) => {
 
               {hasStakedBalance && (
                 <>
-                  {/*<Button */}
-                  {/*  variant="outline" */}
-                  {/*  onClick={openBoostModal} */}
-                  {/*  fullWidth*/}
-                  {/*>*/}
-                  {/*  Boost*/}
-                  {/*</Button>*/}
-
                   {hasPendingRewards && (
                     <Button
                       onClick={handleHarvest}

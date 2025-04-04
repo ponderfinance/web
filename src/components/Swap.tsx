@@ -16,17 +16,18 @@ import {
   useTransaction,
   usePonderSDK,
 } from '@ponderfinance/sdk'
-import { ArrowDown, GasPump, X } from '@phosphor-icons/react'
+import { ArrowDown, GasPump, X, NotePencil } from '@phosphor-icons/react'
 import { usePrivy } from '@privy-io/react-auth'
 import { InterfaceTabs } from '@/src/modules/swap/components/InterfaceTabs'
 import { TokenBalanceDisplay } from '@/src/modules/swap/components/TokenBalanceDisplay'
 import TokenSelector from '@/src/components/TokenSelector'
 import { CURRENT_CHAIN } from '@/src/constants/chains'
 import { formatNumber, roundDecimal } from '@/src/utils/numbers'
-import { TokenPair, tokenByAddressQuery } from '@/src/components/TokenPair'
+import { TokenPair, tokenFragment } from '@/src/components/TokenPair'
 import { RelayEnvironmentProvider } from 'react-relay'
 import { environment } from '@/src/relay/environment'
 import { getClientEnvironment } from '@/src/lib/relay/environment'
+import { TokenPairWrapper } from '@/src/components/TokenPairWrapper'
 
 const kubTokenAbi = [
   {
@@ -552,11 +553,9 @@ export function SwapInterface({
                 gap={3}
                 position="relative"
               >
-                <TokenPair
-                  tokenAddressA={tokenIn}
-                  tokenAddressB={tokenOut}
-                  size="small"
-                  showSymbols={false}
+                <TokenPairWrapper
+                  tokenAAddress={tokenIn || null}
+                  tokenBAddress={tokenOut || null}
                 />
                 <View direction="column" gap={1}>
                   <Text variant="body-2">Swapped</Text>

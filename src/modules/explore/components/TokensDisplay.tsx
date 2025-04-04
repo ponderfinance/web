@@ -6,6 +6,7 @@ import { TokensPageQuery } from '@/src/__generated__/TokensPageQuery.graphql'
 import { getIpfsGateway } from '@/src/utils/ipfs'
 import { roundDecimal } from '@/src/utils/numbers'
 import Link from 'next/link'
+import { TokenPair } from '@/src/components/TokenPair'
 
 // Helper to format currency values
 const formatCurrency = (value: string | null | undefined): string => {
@@ -129,12 +130,14 @@ export const TokensDisplay: React.FC<TokensDisplayProps> = ({
               </View.Item>
               <View.Item columns={3}>
                 <View direction="row" gap={2} align="center">
-                  <Image
-                    src={getIpfsGateway(node.imageURI ?? '/tokens/coin.svg')}
-                    height={7}
-                    width={7}
-                    alt={'Selected Token Icon'}
-                  />
+                  <div className="flex items-center">
+                    <Image
+                      src={getIpfsGateway(node.imageURI ?? '/tokens/coin.svg')}
+                      height={7}
+                      width={7}
+                      alt={node.symbol || 'Token'}
+                    />
+                  </div>
                   <View direction="row" gap={1} align="center">
                     <Text>{node.name || node.address.slice(0, 10) + '...'}</Text>
                     <Text variant="caption-1" color="neutral-faded">

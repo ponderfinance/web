@@ -22,13 +22,14 @@ import {
 } from '@ponderfinance/sdk'
 import TokenSelector from '@/src/components/TokenSelector'
 import { GearSix, NotePencil, X, Warning } from '@phosphor-icons/react'
-import { TokenPair } from '@/src/components/TokenPair'
+import { TokenPair, tokenFragment } from '@/src/components/TokenPair'
 import { formatNumber, roundDecimal } from '@/src/utils/numbers'
 import { useQuery } from '@tanstack/react-query'
 import { KKUB_ADDRESS } from '@/src/constants/addresses'
 import { CURRENT_CHAIN } from '@/src/constants/chains'
 import { useEffect, useMemo, useState, useCallback } from 'react'
 import { usePrivy } from '@privy-io/react-auth'
+import { TokenPairWrapper } from '@/src/components/TokenPairWrapper'
 
 interface AddLiquidityStepperProps {
   defaultTokenA?: Address
@@ -880,7 +881,10 @@ const AddLiquidityStepper = ({
         align="center"
       >
         <View>
-          <TokenPair tokenAddressA={tokenA} tokenAddressB={tokenB} />
+          <TokenPairWrapper 
+            tokenAAddress={tokenA} 
+            tokenBAddress={tokenB} 
+          />
         </View>
         <View>
           <Button onClick={handleBack}>

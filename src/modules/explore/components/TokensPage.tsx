@@ -5,6 +5,7 @@ import { graphql, useLazyLoadQuery } from 'react-relay'
 import { TokensPageQuery } from '@/src/__generated__/TokensPageQuery.graphql'
 import { TokensDisplay } from '@/src/modules/explore/components/TokensDisplay'
 import { View, Text, Skeleton } from 'reshaped'
+import { tokenFragment } from '@/src/components/TokenPair'
 
 export const tokensPageQuery = graphql`
   query TokensPageQuery(
@@ -23,6 +24,7 @@ export const tokensPageQuery = graphql`
           priceUSD
           priceChange24h
           volumeUSD24h
+          ...TokenPairFragment
         }
       }
       pageInfo {
