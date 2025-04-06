@@ -38,31 +38,34 @@ export function processPriceHistoryData(
 }
 
 /**
- * Detect if a set of price values needs decimal normalization
- * This helps address the issue where prices are displayed as extremely large numbers
+ * Detect if a series of price values needs decimal normalization
+ * This happens when we have raw blockchain values instead of human-readable values
  */
 export function detectNeedsDecimalNormalization(
   values: number[],
   tokenDecimals?: number
 ): boolean {
-  // Filter out zeros and invalid values
-  const validValues = values.filter((v) => v !== 0 && !isNaN(v))
-  if (validValues.length === 0) return false
+  if (!values || values.length === 0) return false
 
-  // Calculate the average magnitude
-  const averageMagnitude =
-    validValues.reduce((sum, val) => sum + Math.log10(Math.abs(val)), 0) /
-    validValues.length
+  // Filter out zeros to avoid skewing detection
+  const nonZeroValues = values.filter((v) => v !== 0)
+  if (nonZeroValues.length === 0) return false
 
-  // If we know the token's decimals, we can use that to determine if normalization is needed
-  if (tokenDecimals !== undefined) {
-    // If average magnitude is significantly larger than expected based on decimals
-    return averageMagnitude > tokenDecimals / 2
+  // Check if all values are extremely large or small
+  const avgMagnitude =
+    nonZeroValues.reduce((sum, val) => {
+      return sum + Math.log10(Math.abs(val))
+    }, 0) / nonZeroValues.length
+
+  // If we know token decimals, use that as our primary criterion
+  if (tokenDecimals && tokenDecimals > 0) {
+    // If average magnitude is close to decimals, it's likely raw blockchain values
+    return avgMagnitude > tokenDecimals - 3
   }
 
-  // If we don't know the decimals, use a heuristic
-  // If average magnitude is very large (> 8), values likely need normalization
-  return averageMagnitude > 8
+  // Otherwise, use heuristics
+  // Extremely high values are likely raw blockchain values (e.g., values in wei)
+  return avgMagnitude > 10
 }
 
 /**
@@ -88,7 +91,7 @@ export function normalizePrice(value: number, tokenDecimals?: number): number {
         console.log(`Normalized with tokenDecimals (${tokenDecimals}): ${normalized}`);
         return normalized;
       } catch (error) {
-        // Fallback to traditional calculation if BigInt conversion fails
+        // Fallback to traditional calculation
         const normalized = value / Math.pow(10, tokenDecimals);
         console.log(`Fallback normalized with tokenDecimals (${tokenDecimals}): ${normalized}`);
         return normalized;
@@ -167,7 +170,7 @@ export function formatCurrency(
 
     if (currency === 'USD') {
       // Special handling for different value ranges
-      if (Math.abs(amount) < 0.0001) {
+      if (Math.abs(amount) < 0.000001) {
         // Extremely small values (show scientific notation to avoid truncating to zero)
         return new Intl.NumberFormat('en-US', {
           style: 'currency',
@@ -178,7 +181,7 @@ export function formatCurrency(
         }).format(amount)
       }
       
-      if (Math.abs(amount) < 0.001) {
+      if (Math.abs(amount) < 0.0001) {
         // Very small values (show up to 8 decimals)
         return new Intl.NumberFormat('en-US', {
           style: 'currency',
@@ -188,7 +191,8 @@ export function formatCurrency(
         }).format(amount)
       }
 
-      if (Math.abs(amount) < 0.01) {
+      if (Math.abs(amount) < 0.001) {
+        // Small values (show up to 6 decimals)
         return new Intl.NumberFormat('en-US', {
           style: 'currency',
           currency: 'USD',
@@ -197,7 +201,8 @@ export function formatCurrency(
         }).format(amount)
       }
 
-      if (Math.abs(amount) < 1) {
+      if (Math.abs(amount) < 0.01) {
+        // Values less than 1 cent (show up to 4 decimals)
         return new Intl.NumberFormat('en-US', {
           style: 'currency',
           currency: 'USD',
@@ -206,6 +211,17 @@ export function formatCurrency(
         }).format(amount)
       }
 
+      if (Math.abs(amount) < 1) {
+        // Values less than $1 (show up to 4 decimals)
+        return new Intl.NumberFormat('en-US', {
+          style: 'currency',
+          currency: 'USD',
+          minimumFractionDigits: 3,
+          maximumFractionDigits: 4,
+        }).format(amount)
+      }
+
+      // Default formatting for normal values
       return new Intl.NumberFormat('en-US', {
         style: 'currency',
         currency: 'USD',
@@ -223,6 +239,11 @@ export function formatCurrency(
     }).format(amount)
   } catch (error) {
     console.error('Error formatting currency:', error)
+    // If we have a very small but non-zero value and an error occurred,
+    // return a reasonable string rather than default to $0.00
+    if (amount > 0 && amount < 0.01) {
+      return '<$0.01'
+    }
     return '$0.00'
   }
 }
@@ -242,7 +263,9 @@ export function formatTokenAmount(
 
     // Adjust decimal places based on amount
     let displayDecimals = decimals
-    if (Math.abs(amount) < 0.01) {
+    if (Math.abs(amount) < 0.0001) {
+      displayDecimals = 8
+    } else if (Math.abs(amount) < 0.01) {
       displayDecimals = 6
     } else if (Math.abs(amount) < 1) {
       displayDecimals = 4

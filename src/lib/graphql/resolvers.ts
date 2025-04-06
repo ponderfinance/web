@@ -782,6 +782,8 @@ export const resolvers = {
           where: {
             pairId: pair.id,
             timestamp: { gte: startTime },
+            price0: { gt: "" },
+            price1: { gt: "" }
           },
           orderBy: { timestamp: 'asc' },
           distinct: ['timestamp'],
@@ -1239,7 +1241,9 @@ export const resolvers = {
           prisma.priceSnapshot.findMany({
             where: {
               pairId: pair.id,
-              timestamp: { gte: startTime }
+              timestamp: { gte: startTime },
+              price0: { gt: "" },
+              price1: { gt: "" }
             },
             select: {
               timestamp: true,
@@ -2379,7 +2383,6 @@ export const resolvers = {
         let totalTVL = 0;
 
         for (const pair of pairs) {
-          // Calculate TVL directly
           try {
             // Get token prices with appropriate decimal handling
             const token0Price = pair.token0.priceUSD ? parseFloat(pair.token0.priceUSD) : 0;
@@ -2392,24 +2395,66 @@ export const resolvers = {
             // Parse reserves exactly once with viem
             let reserve0 = 0, reserve1 = 0;
             
-            try {
-              // Use Number() instead of parseFloat for consistency
-              reserve0 = Number(formatUnits(BigInt(pair.reserve0), token0Decimals));
-              reserve1 = Number(formatUnits(BigInt(pair.reserve1), token1Decimals));
-            } catch (error) {
-              console.warn(`Error formatting reserves for pair ${pair.id}:`, error);
-              // Fallback to manual division if BigInt conversion fails
-              reserve0 = Number(pair.reserve0) / Math.pow(10, token0Decimals);
-              reserve1 = Number(pair.reserve1) / Math.pow(10, token1Decimals);
+            // Safely handle blockchain values
+            if (pair.reserve0 && pair.reserve0.length > 0) {
+              try {
+                // Properly convert blockchain values to numbers
+                if (pair.reserve0.length > 10) {
+                  // This is likely a raw blockchain value - parse it properly with decimals
+                  reserve0 = Number(formatUnits(BigInt(pair.reserve0), token0Decimals));
+                } else {
+                  // This is already formatted, just parse as float
+                  reserve0 = parseFloat(pair.reserve0);
+                }
+              } catch (error) {
+                console.warn(`Error parsing reserve0 for pair ${pair.id}:`, error);
+                reserve0 = Number(pair.reserve0) / Math.pow(10, token0Decimals);
+              }
             }
+            
+            if (pair.reserve1 && pair.reserve1.length > 0) {
+              try {
+                // Properly convert blockchain values to numbers
+                if (pair.reserve1.length > 10) {
+                  // This is likely a raw blockchain value - parse it properly with decimals
+                  reserve1 = Number(formatUnits(BigInt(pair.reserve1), token1Decimals));
+                } else {
+                  // This is already formatted, just parse as float
+                  reserve1 = parseFloat(pair.reserve1);
+                }
+              } catch (error) {
+                console.warn(`Error parsing reserve1 for pair ${pair.id}:`, error);
+                reserve1 = Number(pair.reserve1) / Math.pow(10, token1Decimals);
+              }
+            }
+            
+            // Log the individual components for debugging
+            console.log(`Pair ${pair.id}: reserve0=${reserve0}, price0=${token0Price}, reserve1=${reserve1}, price1=${token1Price}`);
 
-            // Calculate the TVL by multiplying reserves by price
-            const pairTVL = (reserve0 * token0Price) + (reserve1 * token1Price);
-            totalTVL += pairTVL;
+            // Calculate token TVL based on which side the token is on
+            let tokenTVL = 0;
+            if (pair.token0Id === parent.id) {
+              tokenTVL = reserve0 * token0Price;
+            } else {
+              tokenTVL = reserve1 * token1Price;
+            }
+            
+            // Only add values that are reasonable
+            if (tokenTVL > 0 && tokenTVL < 1e15) { // Reject unreasonably large values
+              totalTVL += tokenTVL;
+            } else if (tokenTVL >= 1e15) {
+              console.warn(`Unreasonably large TVL for token in pair ${pair.id}: ${tokenTVL}. Skipping.`);
+            }
           } catch (error) {
             console.error(`Error calculating TVL for pair ${pair.id}:`, error);
             // Continue with other pairs
           }
+        }
+
+        // Final sanity check
+        if (totalTVL < 0 || totalTVL > 1e15) {
+          console.error(`Invalid total TVL for token ${parent.id}: ${totalTVL}. Returning 0.`);
+          return '0';
         }
 
         return totalTVL.toString();

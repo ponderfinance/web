@@ -161,21 +161,53 @@ export async function calculatePairTVL(
     let reserve0 = 0, reserve1 = 0
 
     // Extra precaution when dealing with blockchain data
-    try {
-      // Use Number() instead of parseFloat for consistency with token price handling
-      reserve0 = Number(formatUnits(BigInt(pair.reserve0), token0Decimals))
-      reserve1 = Number(formatUnits(BigInt(pair.reserve1), token1Decimals))
-    } catch (error) {
-      console.warn(`Error formatting reserves for pair ${pairAddress}:`, error)
-      // If BigInt conversion failed, try as a numeric division
-      reserve0 = Number(pair.reserve0) / Math.pow(10, token0Decimals)
-      reserve1 = Number(pair.reserve1) / Math.pow(10, token1Decimals)
+    if (pair.reserve0 && pair.reserve0.length > 0) {
+      try {
+        // Properly convert blockchain values to numbers
+        if (pair.reserve0.length > 10) {
+          // This is likely a raw blockchain value - parse it properly with decimals
+          reserve0 = Number(formatUnits(BigInt(pair.reserve0), token0Decimals));
+        } else {
+          // This is already formatted, just parse as float
+          reserve0 = parseFloat(pair.reserve0);
+        }
+      } catch (error) {
+        console.warn(`Error parsing reserve0 for pair ${pairAddress}:`, error);
+        reserve0 = Number(pair.reserve0) / Math.pow(10, token0Decimals);
+      }
+    }
+    
+    if (pair.reserve1 && pair.reserve1.length > 0) {
+      try {
+        // Properly convert blockchain values to numbers
+        if (pair.reserve1.length > 10) {
+          // This is likely a raw blockchain value - parse it properly with decimals
+          reserve1 = Number(formatUnits(BigInt(pair.reserve1), token1Decimals));
+        } else {
+          // This is already formatted, just parse as float
+          reserve1 = parseFloat(pair.reserve1);
+        }
+      } catch (error) {
+        console.warn(`Error parsing reserve1 for pair ${pairAddress}:`, error);
+        reserve1 = Number(pair.reserve1) / Math.pow(10, token1Decimals);
+      }
     }
 
     // Calculate the TVL by multiplying reserves by price
-    const tvl = (reserve0 * token0Price) + (reserve1 * token1Price)
+    const tvl0 = reserve0 * token0Price;
+    const tvl1 = reserve1 * token1Price;
+    const totalTVL = tvl0 + tvl1;
     
-    return tvl.toString()
+    // Log the components for debugging
+    console.log(`Pair ${pairAddress} TVL: reserve0=${reserve0} * price=${token0Price} = ${tvl0}, reserve1=${reserve1} * price=${token1Price} = ${tvl1}, total=${totalTVL}`);
+    
+    // Sanity check - if TVL is unreasonably large, something's wrong
+    if (totalTVL < 0 || totalTVL > 1e15) { // Over 1 quadrillion is likely an error
+      console.warn(`Unreasonably large TVL for pair ${pairAddress}: ${totalTVL}. Returning 0.`);
+      return '0';
+    }
+    
+    return totalTVL.toString()
   } catch (error) {
     console.error('Error calculating pair TVL:', error)
     return '0'

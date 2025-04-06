@@ -103,10 +103,10 @@ export default function PriceChart({
     // Create a custom price format based on the data range
     let priceFormat: PriceFormat = {
       type: 'custom' as const,
-      minMove: 0.01,
+      minMove: 0.00000001, // Allow much smaller price movements for tiny values
       formatter: (price: number) => {
         if (price < 0.0001) {
-          return '$' + price.toFixed(10);
+          return '$' + price.toFixed(10); // Use fixed notation for very small values
         } else if (price < 0.001) {
           return '$' + price.toFixed(8);
         } else if (price < 0.01) {
@@ -154,7 +154,7 @@ export default function PriceChart({
         entireTextOnly: false,
         borderVisible: false,
         autoScale: true,
-        mode: 0,
+        mode: 2, // Use mode 2 for better small value display
         alignLabels: true,
       },
       crosshair: {
@@ -248,6 +248,7 @@ export default function PriceChart({
       entireTextOnly: false,
       mode: 0, 
       invertScale: false,
+      ticksVisible: true,
     });
 
     // Setup custom tooltip
