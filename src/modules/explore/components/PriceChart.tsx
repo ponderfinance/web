@@ -100,25 +100,33 @@ export default function PriceChart({
     const minValue = Math.min(...values)
     const maxValue = Math.max(...values)
 
+    // Create a unified formatter for both the y-axis and tooltip
+    const createPriceFormatter = (price: number) => {
+      if (typeof formatTooltip === 'function') {
+        return formatTooltip(price);
+      }
+      
+      // Default formatter with adaptive precision
+      if (price < 0.0001) {
+        return '$' + price.toFixed(10);
+      } else if (price < 0.001) {
+        return '$' + price.toFixed(8);
+      } else if (price < 0.01) {
+        return '$' + price.toFixed(6);
+      } else if (price < 0.1) {
+        return '$' + price.toFixed(4);
+      } else if (price < 1) {
+        return '$' + price.toFixed(3);
+      } else {
+        return '$' + price.toFixed(2);
+      }
+    };
+
     // Create a custom price format based on the data range
     let priceFormat: PriceFormat = {
       type: 'custom' as const,
       minMove: 0.00000001, // Allow much smaller price movements for tiny values
-      formatter: (price: number) => {
-        if (price < 0.0001) {
-          return '$' + price.toFixed(10); // Use fixed notation for very small values
-        } else if (price < 0.001) {
-          return '$' + price.toFixed(8);
-        } else if (price < 0.01) {
-          return '$' + price.toFixed(6);
-        } else if (price < 0.1) {
-          return '$' + price.toFixed(4);
-        } else if (price < 1) {
-          return '$' + price.toFixed(3);
-        } else {
-          return '$' + price.toFixed(2);
-        }
-      },
+      formatter: createPriceFormatter,
     }
 
     // Create chart with dark theme styling to match the screenshot
@@ -294,8 +302,8 @@ export default function PriceChart({
       }
 
       if (price !== undefined) {
-        // Format price and display tooltip
-        tooltipElement.innerHTML = formatTooltip(price)
+        // Format price using the same formatter as the Y axis
+        tooltipElement.innerHTML = createPriceFormatter(price)
         tooltipElement.style.display = 'block'
 
         // Position the tooltip

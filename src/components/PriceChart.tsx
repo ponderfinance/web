@@ -6,6 +6,7 @@ import {
   ISeriesApi,
   LineStyle,
   UTCTimestamp,
+  PriceFormat,
 } from 'lightweight-charts'
 
 // Define a more flexible data type to accommodate both readonly and mutable arrays
@@ -36,6 +37,8 @@ interface PriceChartProps {
   }
   autoSize?: boolean
   loading?: boolean
+  formatTooltip?: (value: number) => string
+  yAxisLabel?: string
 }
 
 const PriceChart: React.FC<PriceChartProps> = ({
@@ -47,12 +50,15 @@ const PriceChart: React.FC<PriceChartProps> = ({
   colors = {},
   autoSize = true,
   loading = false,
+  formatTooltip,
+  yAxisLabel = '',
 }) => {
   const chartContainerRef = useRef<HTMLDivElement>(null)
   const chartRef = useRef<IChartApi | null>(null)
   const seriesRef = useRef<
     ISeriesApi<'Area'> | ISeriesApi<'Line'> | ISeriesApi<'Histogram'> | null
   >(null)
+  const tooltipRef = useRef<HTMLDivElement | null>(null)
 
   // Set default colors
   const defaultColors = {
@@ -84,6 +90,54 @@ const PriceChart: React.FC<PriceChartProps> = ({
         ? chartContainerRef.current.clientWidth
         : 600)
 
+    // Determine the best price format based on data values
+    const values = data.map(item => item.value).filter(v => !isNaN(v) && v !== 0)
+    const minValue = values.length ? Math.min(...values) : 0
+    const maxValue = values.length ? Math.max(...values) : 0
+    const avgMagnitude = values.length 
+      ? values.reduce((sum, val) => sum + Math.log10(Math.abs(val) || 1), 0) / values.length 
+      : 0
+
+    // Create price formatter based on value range
+    let priceFormatter: (price: number) => string
+    
+    if (formatTooltip) {
+      // Use the provided formatter
+      priceFormatter = formatTooltip
+    } else {
+      // Create default formatter based on data range
+      priceFormatter = (price: number) => {
+        if (price === 0) return '$0.00'
+        
+        // Format based on magnitude
+        if (Math.abs(price) < 0.0001) {
+          return '$' + price.toExponential(4)
+        } else if (Math.abs(price) < 0.001) {
+          return '$' + price.toFixed(8)
+        } else if (Math.abs(price) < 0.01) {
+          return '$' + price.toFixed(6)
+        } else if (Math.abs(price) < 0.1) {
+          return '$' + price.toFixed(4)
+        } else if (Math.abs(price) < 1) {
+          return '$' + price.toFixed(3)
+        } else if (Math.abs(price) < 1000) {
+          return '$' + price.toFixed(2)
+        } else {
+          return '$' + price.toLocaleString('en-US', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+          })
+        }
+      }
+    }
+
+    // Create a custom price format for the Y-axis
+    const priceFormat: PriceFormat = {
+      type: 'custom',
+      minMove: minValue < 0.001 ? 0.00000001 : 0.01,
+      formatter: priceFormatter
+    }
+
     // Create chart with options
     const chart = createChart(chartContainerRef.current, {
       width: containerWidth,
@@ -112,6 +166,10 @@ const PriceChart: React.FC<PriceChartProps> = ({
       },
       rightPriceScale: {
         borderColor: 'rgba(197, 203, 206, 0.8)',
+        scaleMargins: {
+          top: 0.1,
+          bottom: 0.1,
+        },
       },
       crosshair: {
         mode: 1,
@@ -129,6 +187,7 @@ const PriceChart: React.FC<PriceChartProps> = ({
           bottomColor: defaultColors.area.bottom,
           lineColor: defaultColors.line,
           lineWidth: 2,
+          priceFormat: priceFormat,
         })
         break
       case 'volume':
@@ -148,6 +207,7 @@ const PriceChart: React.FC<PriceChartProps> = ({
           crosshairMarkerVisible: true,
           lastValueVisible: true,
           priceLineVisible: true,
+          priceFormat: priceFormat,
         })
         break
     }
@@ -181,6 +241,47 @@ const PriceChart: React.FC<PriceChartProps> = ({
       })
     }
 
+    // Create custom tooltip
+    if (!tooltipRef.current && chartContainerRef.current) {
+      const tooltip = document.createElement('div')
+      tooltip.style.position = 'absolute'
+      tooltip.style.display = 'none'
+      tooltip.style.padding = '8px'
+      tooltip.style.backgroundColor = 'rgba(21, 25, 36, 0.7)'
+      tooltip.style.color = 'white'
+      tooltip.style.borderRadius = '4px'
+      tooltip.style.fontSize = '12px'
+      tooltip.style.pointerEvents = 'none'
+      tooltip.style.zIndex = '3'
+      chartContainerRef.current.appendChild(tooltip)
+      tooltipRef.current = tooltip
+      
+      // Subscribe to crosshair move to update tooltip
+      chart.subscribeCrosshairMove((param) => {
+        if (
+          !param.point || 
+          !param.time || 
+          param.point.x < 0 || 
+          param.point.y < 0
+        ) {
+          tooltip.style.display = 'none'
+          return
+        }
+        
+        const data = param.seriesData.get(series)
+        if (!data || !('value' in data)) {
+          tooltip.style.display = 'none'
+          return
+        }
+        
+        const price = data.value
+        tooltip.innerHTML = priceFormatter(price as number)
+        tooltip.style.display = 'block'
+        tooltip.style.left = `${param.point.x + 15}px`
+        tooltip.style.top = `${param.point.y - 30}px`
+      })
+    }
+
     // Handle window resize
     const handleResize = () => {
       if (chartRef.current && chartContainerRef.current && autoSize) {
@@ -200,8 +301,13 @@ const PriceChart: React.FC<PriceChartProps> = ({
         chartRef.current = null
         seriesRef.current = null
       }
+      
+      if (tooltipRef.current && chartContainerRef.current) {
+        chartContainerRef.current.removeChild(tooltipRef.current)
+        tooltipRef.current = null
+      }
     }
-  }, [data, type, title, height, width, colors, autoSize, loading, defaultColors])
+  }, [data, type, title, height, width, colors, autoSize, loading, defaultColors, formatTooltip, yAxisLabel])
 
   // Update data when it changes
   useEffect(() => {

@@ -1163,6 +1163,7 @@ export const resolvers = {
             id: true,
             decimals: true,
             address: true,
+            symbol: true,
             pairsAsToken0: {
               select: {
                 id: true,
@@ -1171,6 +1172,7 @@ export const resolvers = {
                     id: true,
                     address: true,
                     decimals: true,
+                    symbol: true,
                   }
                 }
               }
@@ -1183,6 +1185,7 @@ export const resolvers = {
                     id: true,
                     address: true,
                     decimals: true,
+                    symbol: true,
                   }
                 }
               }
@@ -1194,8 +1197,6 @@ export const resolvers = {
           console.error(`Token not found: ${tokenAddress}`)
           return []
         }
-
-        console.log(`Found token with ID: ${token.id}, decimals: ${token.decimals}`);
 
         // Get all pairs for this token with proper typing
         const pairs: PairWithTokenInfo[] = [
@@ -1210,8 +1211,6 @@ export const resolvers = {
             counterpartToken: p.token0
           }))
         ]
-
-        console.log(`Found ${pairs.length} pairs for token`);
 
         if (pairs.length === 0) {
           console.error(`No pairs found for token: ${tokenAddress}`)
@@ -1230,11 +1229,8 @@ export const resolvers = {
         const timeWindow = timeWindows[timeframe as keyof typeof timeWindows] || timeWindows['1d']
         const startTime = now - (timeWindow * limit)
         
-        console.log(`Time window: ${timeWindow}s, start time: ${startTime}, now: ${now}`);
-
         // Get stablecoin addresses
         const stablecoinAddresses = TokenPriceService.getStablecoinAddresses()
-        console.log(`Stablecoin addresses: ${stablecoinAddresses.join(', ')}`);
 
         // Get price snapshots for all pairs in parallel with optimized query
         const snapshotPromises = pairs.map(pair => 
@@ -1256,91 +1252,50 @@ export const resolvers = {
 
         const allSnapshots = await Promise.all(snapshotPromises)
         
-        // Log raw query results
-        console.log('Raw query results:');
-        allSnapshots.forEach((snapshots, index) => {
-          const pair = pairs[index];
-          console.log(`\nPair ${pair.id}:`);
-          console.log('Total snapshots:', snapshots.length);
-          if (snapshots.length > 0) {
-            console.log('Sample snapshots:');
-            console.log(JSON.stringify(snapshots.slice(0, 3), null, 2));
-          }
-        });
-        
-        // Log the number of snapshots found for each pair
-        allSnapshots.forEach((snapshots, index) => {
-          console.log(`Pair ${pairs[index].id} (${pairs[index].isToken0 ? 'token0' : 'token1'}): ${snapshots.length} snapshots`);
-          if (snapshots.length > 0) {
-            console.log('First snapshot:', JSON.stringify(snapshots[0]));
-            console.log('Last snapshot:', JSON.stringify(snapshots[snapshots.length - 1]));
-          }
-        });
-
         // Process snapshots efficiently
         const priceSeries = new Map<number, number>()
         
-        // First try stablecoin pairs
+        // First try stablecoin pairs - these provide direct USD pricing
         const stablecoinPairs = pairs.filter(pair => 
           stablecoinAddresses.includes(pair.counterpartToken.address.toLowerCase())
         )
-
-        console.log(`Found ${stablecoinPairs.length} stablecoin pairs`);
-        console.log('Stablecoin pairs:', stablecoinPairs.map(p => ({
-          id: p.id,
-          isToken0: p.isToken0,
-          counterpartToken: p.counterpartToken.address
-        })));
 
         if (stablecoinPairs.length > 0) {
           for (let i = 0; i < stablecoinPairs.length; i++) {
             const pair = stablecoinPairs[i]
             const snapshots = allSnapshots[pairs.indexOf(pair)]
             if (!snapshots?.length) {
-              console.log(`No snapshots for stablecoin pair ${pair.id}`);
               continue;
             }
 
+            const tokenDecimals = token.decimals || 18
+            const counterpartDecimals = pair.counterpartToken.decimals || 18
+
             snapshots.forEach(snapshot => {
               try {
-                const rawPrice = pair.isToken0 
-                  ? snapshot.price0
-                  : snapshot.price1
+                let price: number;
                 
-                // Convert price to a number
-                const price = parseFloat(rawPrice)
+                // If our token is token0, use price0 (price of token0 in terms of token1)
+                // If our token is token1, use price1 (price of token1 in terms of token0)
+                if (pair.isToken0) {
+                  // We're token0, so price0 is the price of our token in terms of the stablecoin
+                  const rawPrice = snapshot.price0;
+                  // The value is already in USD since the counterpart is a stablecoin
+                  price = parseFloat(rawPrice);
+                } else {
+                  // We're token1, so price1 is the price of our token in terms of the stablecoin
+                  const rawPrice = snapshot.price1;
+                  // The value is already in USD since the counterpart is a stablecoin
+                  price = parseFloat(rawPrice);
+                }
                 
                 if (price <= 0 || isNaN(price)) {
-                  console.log(`Invalid price for stablecoin pair ${pair.id}: ${price}`);
-                  return;
+                  return; // Early return instead of continue
                 }
 
-                // For stablecoin pairs, use the price directly
-                // But we need to adjust for token decimals
-                const tokenDecimals = token.decimals || 18
-                const counterpartDecimals = pair.counterpartToken.decimals || 18
-                
-                // Use viem's formatUnits to properly handle the blockchain value
-                try {
-                  // Convert the raw price to a properly formatted value
-                  const adjustedPrice = parseFloat(formatUnits(BigInt(Math.round(price * Math.pow(10, counterpartDecimals))), counterpartDecimals))
-                  
-                  // Only update if we don't have a price for this timestamp
-                  // or if the new price is higher (assuming higher liquidity)
-                  if (!priceSeries.has(snapshot.timestamp) || adjustedPrice > priceSeries.get(snapshot.timestamp)!) {
-                    priceSeries.set(snapshot.timestamp, adjustedPrice)
-                    console.log(`Added price ${adjustedPrice} for timestamp ${snapshot.timestamp}`);
-                  }
-                } catch (error) {
-                  console.error('Error using formatUnits:', error);
-                  // Fallback to traditional calculation
-                  const decimalAdjustment = Math.pow(10, counterpartDecimals - tokenDecimals)
-                  const adjustedPrice = price * decimalAdjustment
-                  
-                  if (!priceSeries.has(snapshot.timestamp) || adjustedPrice > priceSeries.get(snapshot.timestamp)!) {
-                    priceSeries.set(snapshot.timestamp, adjustedPrice)
-                    console.log(`Added fallback price ${adjustedPrice} for timestamp ${snapshot.timestamp}`);
-                  }
+                // Store the price in our series
+                if (!priceSeries.has(snapshot.timestamp) || price > priceSeries.get(snapshot.timestamp)!) {
+                  priceSeries.set(snapshot.timestamp, price);
                 }
               } catch (error) {
                 console.error('Error processing stablecoin snapshot:', error);
@@ -1360,101 +1315,55 @@ export const resolvers = {
             const pair = nonStablecoinPairs[i]
             const snapshots = allSnapshots[pairs.indexOf(pair)]
             if (!snapshots?.length) {
-              console.log(`No snapshots for non-stablecoin pair ${pair.id}`);
               continue;
             }
 
             // Get counterpart token price
             const priceData = await TokenPriceService.getTokenPricesUSDBulk([pair.counterpartToken.id])
-            const counterpartPrice = parseFloat(priceData[pair.counterpartToken.id] || '0')
+            const counterpartPriceUSD = parseFloat(priceData[pair.counterpartToken.id] || '0')
 
-            if (counterpartPrice <= 0) {
-              console.log(`Invalid counterpart price for pair ${pair.id}: ${counterpartPrice}`);
+            if (counterpartPriceUSD <= 0) {
               continue;
             }
 
-            console.log(`Using counterpart price for ${pair.counterpartToken.address}: ${counterpartPrice}`);
+            const tokenDecimals = token.decimals || 18
+            const counterpartDecimals = pair.counterpartToken.decimals || 18
 
             snapshots.forEach(snapshot => {
               try {
-                // For non-stablecoin pairs, we need to use the correct price field
-                // If we're token0, we want price1 (the price of token1 in terms of token0)
-                // If we're token1, we want price0 (the price of token0 in terms of token1)
-                const rawPrice = pair.isToken0 
-                  ? snapshot.price1  // Price of token1 in terms of token0
-                  : snapshot.price0  // Price of token0 in terms of token1
+                let exchangeRate: number;
+                let usdPrice: number;
                 
-                // Convert price to a number
-                const price = parseFloat(rawPrice)
-                
-                if (price <= 0 || isNaN(price)) {
-                  console.log(`Invalid price for non-stablecoin pair ${pair.id}: ${price}`);
-                  return;
+                if (pair.isToken0) {
+                  // We are token0, so we need price0 (how much of token1 you get for 1 token0)
+                  exchangeRate = parseFloat(snapshot.price0);
+                  
+                  // Price0 represents how many of token1 you get for 1 token0
+                  // To get the USD value, multiply by token1's USD price
+                  usdPrice = exchangeRate * counterpartPriceUSD;
+                } else {
+                  // We are token1, so we need price1 (how much of token0 you get for 1 token1)
+                  exchangeRate = parseFloat(snapshot.price1);
+                  
+                  // Price1 represents how many of token0 you get for 1 token1
+                  // To get the USD value, multiply by token0's USD price
+                  usdPrice = exchangeRate * counterpartPriceUSD;
                 }
                 
-                // Adjust for token decimals
-                const tokenDecimals = token.decimals || 18
-                const counterpartDecimals = pair.counterpartToken.decimals || 18
-                
-                // Use viem's formatUnits to properly handle the blockchain value
-                try {
-                  // Convert the raw price to a properly formatted value
-                  const basePrice = parseFloat(formatUnits(BigInt(Math.round(price * Math.pow(10, counterpartDecimals))), counterpartDecimals))
-                  
-                  // Calculate USD price - this is where the issue is
-                  // We need to use the counterpart price correctly
-                  // If we're token0, we need to multiply by counterpart price
-                  // If we're token1, we need to divide by counterpart price
-                  let usdPrice: number
-                  
-                  if (pair.isToken0) {
-                    // If we're token0, the price is in terms of token1
-                    // So we multiply by token1's USD price
-                    usdPrice = basePrice * counterpartPrice
-                  } else {
-                    // If we're token1, the price is in terms of token0
-                    // So we divide by token0's USD price
-                    usdPrice = counterpartPrice / basePrice
-                  }
+                if (usdPrice <= 0 || isNaN(usdPrice)) {
+                  return; // Early return instead of continue
+                }
 
-                  if (usdPrice <= 0 || isNaN(usdPrice)) {
-                    console.log(`Invalid calculated price for pair ${pair.id}: ${usdPrice}`);
-                    return;
-                  }
-
-                  // Only update if we don't have a price for this timestamp
-                  // or if the new price is higher (assuming higher liquidity)
-                  if (!priceSeries.has(snapshot.timestamp) || usdPrice > priceSeries.get(snapshot.timestamp)!) {
-                    priceSeries.set(snapshot.timestamp, usdPrice)
-                    console.log(`Added price ${usdPrice} for timestamp ${snapshot.timestamp}`);
-                  }
-                } catch (error) {
-                  console.error('Error using formatUnits:', error);
-                  // Fallback to traditional calculation
-                  const decimalAdjustment = Math.pow(10, counterpartDecimals - tokenDecimals)
-                  const basePrice = price * decimalAdjustment
-                  
-                  // Same logic for fallback calculation
-                  let usdPrice: number
-                  if (pair.isToken0) {
-                    usdPrice = basePrice * counterpartPrice
-                  } else {
-                    usdPrice = counterpartPrice / basePrice
-                  }
-                  
-                  if (!priceSeries.has(snapshot.timestamp) || usdPrice > priceSeries.get(snapshot.timestamp)!) {
-                    priceSeries.set(snapshot.timestamp, usdPrice)
-                    console.log(`Added fallback price ${usdPrice} for timestamp ${snapshot.timestamp}`);
-                  }
+                // Store the USD price
+                if (!priceSeries.has(snapshot.timestamp) || usdPrice > priceSeries.get(snapshot.timestamp)!) {
+                  priceSeries.set(snapshot.timestamp, usdPrice);
                 }
               } catch (error) {
-                console.error('Error processing non-stablecoin snapshot:', error)
+                console.error('Error processing non-stablecoin snapshot:', error);
               }
-            })
+            });
           }
         }
-
-        console.log(`Final price series size: ${priceSeries.size}`);
 
         // Convert to array and sort
         const result = Array.from(priceSeries.entries())
@@ -1463,14 +1372,14 @@ export const resolvers = {
           
         // Check if we need to normalize the values
         const values = result.map(point => point.value)
-        const needsNormalization = TokenPriceService.detectNeedsDecimalNormalization(values)
+        const needsNormalization = TokenPriceService.detectNeedsDecimalNormalization(values, token.decimals ? token.decimals : undefined)
         
         if (needsNormalization) {
           console.log('Values need normalization, applying...')
           // Use the normalizePrice utility for each value
           return result.map(point => ({
             time: point.time,
-            value: TokenPriceService.normalizePrice(point.value, token.decimals || 18)
+            value: TokenPriceService.normalizePrice(point.value, token.decimals ? token.decimals : undefined)
           }))
         }
         

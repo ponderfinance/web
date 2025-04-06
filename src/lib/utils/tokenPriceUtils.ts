@@ -40,6 +40,7 @@ export function processPriceHistoryData(
 /**
  * Detect if a series of price values needs decimal normalization
  * This happens when we have raw blockchain values instead of human-readable values
+ * Improved to better detect when normalization is necessary
  */
 export function detectNeedsDecimalNormalization(
   values: number[],
@@ -47,90 +48,112 @@ export function detectNeedsDecimalNormalization(
 ): boolean {
   if (!values || values.length === 0) return false
 
-  // Filter out zeros to avoid skewing detection
-  const nonZeroValues = values.filter((v) => v !== 0)
+  // Filter out zeros and invalid values to avoid skewing detection
+  const nonZeroValues = values.filter((v) => v !== 0 && !isNaN(v))
   if (nonZeroValues.length === 0) return false
-
-  // Check if all values are extremely large or small
+  
+  // Get the average magnitude of values
   const avgMagnitude =
     nonZeroValues.reduce((sum, val) => {
       return sum + Math.log10(Math.abs(val))
     }, 0) / nonZeroValues.length
-
-  // If we know token decimals, use that as our primary criterion
+  
+  // Check the range of values to see if they're consistent
+  const magnitudes = nonZeroValues.map(v => Math.log10(Math.abs(v)))
+  const maxMagnitude = Math.max(...magnitudes)
+  const minMagnitude = Math.min(...magnitudes)
+  
+  // If we know token decimals, use that for a more accurate check
   if (tokenDecimals && tokenDecimals > 0) {
-    // If average magnitude is close to decimals, it's likely raw blockchain values
-    return avgMagnitude > tokenDecimals - 3
+    // If average magnitude is close to or greater than decimals, it's likely raw blockchain values
+    if (avgMagnitude > tokenDecimals - 3) {
+      return true
+    }
+    
+    // If magnitude is suspiciously large (not reasonable for token prices), normalize
+    if (avgMagnitude > 6) {
+      return true
+    }
+  } else {
+    // Without token decimals, use more aggressive heuristics
+    // Most token prices are well below 100,000, so magnitudes above 5 are suspicious
+    if (avgMagnitude > 5) {
+      return true
+    }
+    
+    // If the magnitude range is extreme, this indicates issues with scaling
+    if (maxMagnitude - minMagnitude > 8) {
+      return true
+    }
   }
-
-  // Otherwise, use heuristics
-  // Extremely high values are likely raw blockchain values (e.g., values in wei)
-  return avgMagnitude > 10
+  
+  // Default case: values are likely correctly scaled already
+  return false
 }
 
 /**
  * Normalize a price value that's incorrectly scaled
- * This is specifically for the issue we saw with extremely large price values
+ * Improved to handle a wider range of scaling scenarios
  */
 export function normalizePrice(value: number, tokenDecimals?: number): number {
-  console.log(`normalizePrice called with value: ${value}, tokenDecimals: ${tokenDecimals}`);
-  
   if (value === 0 || isNaN(value)) return value
 
   // Detect the magnitude of the value
   const magnitude = Math.floor(Math.log10(Math.abs(value)))
-  console.log(`Price magnitude: ${magnitude}`);
-
-  // If we know the token's decimals, use that for normalization
+  
+  // If we know the token's decimals, use that for more accurate normalization
   if (tokenDecimals !== undefined && tokenDecimals > 0) {
-    // If the magnitude is close to the token's decimals, it's likely raw blockchain value
+    // If the magnitude is close to the token's decimals, normalize using tokenDecimals
     if (magnitude >= tokenDecimals - 3) {
       try {
-        // Use viem to format the value
-        const normalized = parseFloat(formatUnits(BigInt(Math.round(value)), tokenDecimals));
-        console.log(`Normalized with tokenDecimals (${tokenDecimals}): ${normalized}`);
-        return normalized;
+        // Use viem's formatUnits for precise normalization
+        return parseFloat(formatUnits(BigInt(Math.round(value)), tokenDecimals))
       } catch (error) {
-        // Fallback to traditional calculation
-        const normalized = value / Math.pow(10, tokenDecimals);
-        console.log(`Fallback normalized with tokenDecimals (${tokenDecimals}): ${normalized}`);
-        return normalized;
+        // Fallback to simple division if BigInt conversion fails
+        return value / Math.pow(10, tokenDecimals)
       }
     }
+    
+    // For large values that don't match token decimals but are still too big
+    if (magnitude > 6) {
+      // Find the closest power of 10 multiple of 3 (to match common decimal places)
+      const normalizeDecimals = Math.floor(magnitude / 3) * 3
+      return value / Math.pow(10, normalizeDecimals)
+    }
+  } else {
+    // Without token decimals, use adaptive normalization based on magnitude
+    
+    // Very large values (billions+) - assume 18 decimals (common for ERC20)
+    if (magnitude >= 12) {
+      try {
+        return parseFloat(formatUnits(BigInt(Math.round(value)), 18))
+      } catch (error) {
+        return value / 1e18
+      }
+    }
+    // Large values (millions) - try 9 decimals
+    else if (magnitude >= 8) {
+      try {
+        return parseFloat(formatUnits(BigInt(Math.round(value)), 9))
+      } catch (error) {
+        return value / 1e9
+      }
+    }
+    // Medium values (thousands) - try 6 decimals 
+    else if (magnitude >= 5) {
+      try {
+        return parseFloat(formatUnits(BigInt(Math.round(value)), 6))
+      } catch (error) {
+        return value / 1e6
+      }
+    }
+    // Smaller values that still need normalization
+    else if (magnitude >= 3) {
+      return value / 1e3
+    }
   }
 
-  // Fallback to heuristics if decimals are unknown
-  // For very large values that are clearly incorrect token prices
-  if (magnitude >= 15) {
-    try {
-      // Assume 18 decimals (common for ERC20 tokens)
-      const normalized = parseFloat(formatUnits(BigInt(Math.round(value)), 18));
-      console.log(`Normalized large value with 18 decimals: ${normalized}`);
-      return normalized;
-    } catch (error) {
-      const normalized = value / 1e18;
-      console.log(`Fallback normalized large value with 18 decimals: ${normalized}`);
-      return normalized;
-    }
-  } else if (magnitude >= 8) {
-    // For somewhat large values, use appropriate scaling
-    let decimals = 6;
-    if (magnitude >= 12) decimals = 12;
-    else if (magnitude >= 10) decimals = 10;
-    else if (magnitude >= 9) decimals = 9;
-
-    try {
-      const normalized = parseFloat(formatUnits(BigInt(Math.round(value)), decimals));
-      console.log(`Normalized medium value with ${decimals} decimals: ${normalized}`);
-      return normalized;
-    } catch (error) {
-      const normalized = value / Math.pow(10, decimals);
-      console.log(`Fallback normalized medium value with ${decimals} decimals: ${normalized}`);
-      return normalized;
-    }
-  }
-
-  console.log(`Value not normalized, using as is: ${value}`);
+  // If we reach here, no normalization was applied
   return value
 }
 
@@ -150,6 +173,7 @@ export function getStablecoinAddresses(): string[] {
 
 /**
  * Helper to format currency for display
+ * Enhanced to better handle very small values
  */
 export function formatCurrency(
   amount: number,
@@ -249,38 +273,26 @@ export function formatCurrency(
 }
 
 /**
- * Format token amount for display (with symbol)
+ * Format token amount with appropriate decimal places based on value
  */
 export function formatTokenAmount(
   amount: number,
   symbol: string,
   decimals: number = 2
 ): string {
-  try {
-    if (isNaN(amount)) {
-      return '0 ' + symbol
-    }
-
-    // Adjust decimal places based on amount
-    let displayDecimals = decimals
-    if (Math.abs(amount) < 0.0001) {
-      displayDecimals = 8
-    } else if (Math.abs(amount) < 0.01) {
-      displayDecimals = 6
-    } else if (Math.abs(amount) < 1) {
-      displayDecimals = 4
-    } else if (Math.abs(amount) >= 10000) {
-      displayDecimals = 0 // No decimals for large numbers
-    }
-
-    const formatted = amount.toLocaleString('en-US', {
-      minimumFractionDigits: displayDecimals,
-      maximumFractionDigits: displayDecimals,
-    })
-
-    return `${formatted} ${symbol}`
-  } catch (error) {
-    console.error('Error formatting token amount:', error)
-    return '0 ' + symbol
+  if (isNaN(amount)) {
+    return `0 ${symbol}`
   }
+
+  // For very small values, use more decimal places
+  if (Math.abs(amount) < 0.001) {
+    return `${amount.toFixed(6)} ${symbol}`
+  } else if (Math.abs(amount) < 0.01) {
+    return `${amount.toFixed(5)} ${symbol}`
+  } else if (Math.abs(amount) < 1) {
+    return `${amount.toFixed(4)} ${symbol}`
+  }
+
+  // Default to requested decimals for larger values
+  return `${amount.toFixed(decimals)} ${symbol}`
 }
