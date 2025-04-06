@@ -252,10 +252,12 @@ type SwapEdge {
 type PriceSnapshot {
   id: ID!
   pairId: String!
-  token0Price: String!
-  token1Price: String!
+  price0: String!
+  price1: String!
   timestamp: Int!
   blockNumber: Int!
+  pair: Pair!
+  createdAt: DateTime!
 }
 
 # Price Snapshot Connection

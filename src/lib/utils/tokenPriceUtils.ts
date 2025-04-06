@@ -2,7 +2,7 @@ import { formatUnits, parseUnits } from 'viem'
 
 // Constants
 const STABLECOIN_ADDRESSES: string[] = [
-  '0x7d984c24d2499d840eb3b7016077164e15e5faa6', // USDT
+  '0x7d984C24d2499D840eB3b7016077164e15E5faA6', // USDT
   '0x77071ad51ca93fc90e77BCdECE5aa6F1B40fcb21', // USDC
 ].map((address) => address.toLowerCase())
 
@@ -167,6 +167,27 @@ export function formatCurrency(
 
     if (currency === 'USD') {
       // Special handling for different value ranges
+      if (Math.abs(amount) < 0.0001) {
+        // Extremely small values (show scientific notation to avoid truncating to zero)
+        return new Intl.NumberFormat('en-US', {
+          style: 'currency',
+          currency: 'USD',
+          minimumFractionDigits: 10,
+          maximumFractionDigits: 10,
+          notation: 'standard',
+        }).format(amount)
+      }
+      
+      if (Math.abs(amount) < 0.001) {
+        // Very small values (show up to 8 decimals)
+        return new Intl.NumberFormat('en-US', {
+          style: 'currency',
+          currency: 'USD',
+          minimumFractionDigits: 8,
+          maximumFractionDigits: 8,
+        }).format(amount)
+      }
+
       if (Math.abs(amount) < 0.01) {
         return new Intl.NumberFormat('en-US', {
           style: 'currency',

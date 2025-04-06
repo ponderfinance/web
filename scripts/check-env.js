@@ -1,0 +1,1 @@
+const fs = require("fs"); const envPath = "../.env"; try { const content = fs.readFileSync(envPath, "utf8"); console.log("Found .env file!"); console.log(content.slice(0, 50) + "..."); } catch (e) { console.error("Error:", e.message); }

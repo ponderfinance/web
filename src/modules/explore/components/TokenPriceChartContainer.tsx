@@ -145,8 +145,25 @@ function TokenPriceChartContent({
 
   const processedData = processPriceHistoryData(chartData, tokenDecimals)
 
-  // Add price formatting for tooltip/hover display
-  const formatTooltip = (value: number) => formatCurrency(value) ?? ''
+  // Add price formatting for tooltip/hover display with enhanced precision for small values
+  const formatTooltip = (value: number) => {
+    // Special case for very small values
+    if (value > 0 && value < 0.01) {
+      // For tiny values below 0.0001, use more decimal places
+      if (value < 0.0001) {
+        return `$${value.toFixed(10)}`;
+      }
+      // For small values below 0.001, use 8 decimal places
+      if (value < 0.001) {
+        return `$${value.toFixed(8)}`;
+      }
+      // For values below 0.01, use 6 decimal places
+      return `$${value.toFixed(6)}`;
+    }
+    
+    // For regular values, use the standard formatter
+    return formatCurrency(value) ?? '';
+  }
 
   return (
     <PriceChart

@@ -110,21 +110,34 @@ export default function PriceChart({
     // For small values (e.g. fractions of a cent)
     if (maxValue < 0.01) {
       priceFormat = {
-        type: 'price',
-        precision: 8, // Higher precision for very small values
+        type: 'custom' as const,
         minMove: 0.00000001,
+        formatter: (price: number) => {
+          // Custom formatter for tiny values
+          if (price < 0.0001) {
+            return '$' + price.toFixed(10);
+          } else if (price < 0.001) {
+            return '$' + price.toFixed(8);
+          } else {
+            return '$' + price.toFixed(6);
+          }
+        },
       }
     } else if (maxValue < 0.1) {
       priceFormat = {
-        type: 'price',
-        precision: 6,
+        type: 'custom' as const,
         minMove: 0.000001,
+        formatter: (price: number) => {
+          return '$' + price.toFixed(6);
+        },
       }
     } else if (maxValue < 1) {
       priceFormat = {
-        type: 'price',
-        precision: 4,
+        type: 'custom' as const,
         minMove: 0.0001,
+        formatter: (price: number) => {
+          return '$' + price.toFixed(4);
+        },
       }
     }
 

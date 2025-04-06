@@ -1,0 +1,1 @@
+const { MongoClient } = require("mongodb"); const { createPublicClient, http } = require("viem"); console.log("Test successful"); async function main() { try { console.log("MongoDB and viem test"); } catch(e) { console.error(e); } } main();
