@@ -2371,17 +2371,51 @@ export const resolvers = {
           }
         })
 
-        let totalTVL = 0
-
-        for (const pair of pairs) {
-          const pairTVL = await calculatePairTVL(pair.address, ctx.prisma)
-          totalTVL += parseFloat(pairTVL)
+        // If no pairs found, return 0
+        if (pairs.length === 0) {
+          return '0';
         }
 
-        return totalTVL.toString()
+        let totalTVL = 0;
+
+        for (const pair of pairs) {
+          // Calculate TVL directly
+          try {
+            // Get token prices with appropriate decimal handling
+            const token0Price = pair.token0.priceUSD ? parseFloat(pair.token0.priceUSD) : 0;
+            const token1Price = pair.token1.priceUSD ? parseFloat(pair.token1.priceUSD) : 0;
+
+            // Get decimals (defaults to 18 if not available)
+            const token0Decimals = pair.token0.decimals ?? 18;
+            const token1Decimals = pair.token1.decimals ?? 18;
+
+            // Parse reserves exactly once with viem
+            let reserve0 = 0, reserve1 = 0;
+            
+            try {
+              // Use Number() instead of parseFloat for consistency
+              reserve0 = Number(formatUnits(BigInt(pair.reserve0), token0Decimals));
+              reserve1 = Number(formatUnits(BigInt(pair.reserve1), token1Decimals));
+            } catch (error) {
+              console.warn(`Error formatting reserves for pair ${pair.id}:`, error);
+              // Fallback to manual division if BigInt conversion fails
+              reserve0 = Number(pair.reserve0) / Math.pow(10, token0Decimals);
+              reserve1 = Number(pair.reserve1) / Math.pow(10, token1Decimals);
+            }
+
+            // Calculate the TVL by multiplying reserves by price
+            const pairTVL = (reserve0 * token0Price) + (reserve1 * token1Price);
+            totalTVL += pairTVL;
+          } catch (error) {
+            console.error(`Error calculating TVL for pair ${pair.id}:`, error);
+            // Continue with other pairs
+          }
+        }
+
+        return totalTVL.toString();
       } catch (error) {
-        console.error('Error calculating token TVL:', error)
-        return '0'
+        console.error('Error calculating token TVL:', error);
+        return '0';
       }
     },
     marketCap: async (parent: PrismaToken, _unused: Empty, ctx: Context): Promise<string> => {

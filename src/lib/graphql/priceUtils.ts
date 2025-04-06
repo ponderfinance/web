@@ -1,5 +1,6 @@
 import { prisma } from '@/src/lib/db/prisma'
 import type { PrismaToken } from './types'
+import { formatUnits } from 'viem'
 
 // Define a type for Token with stablePair
 type TokenWithStablePair = PrismaToken
@@ -148,16 +149,32 @@ export async function calculatePairTVL(
       return '0'
     }
 
-    // Get token prices
+    // Get token prices with appropriate decimal handling
     const token0Price = pair.token0.priceUSD ? parseFloat(pair.token0.priceUSD) : 0
     const token1Price = pair.token1.priceUSD ? parseFloat(pair.token1.priceUSD) : 0
 
-    // Calculate TVL
-    const reserve0 = parseFloat(pair.reserve0) / Math.pow(10, pair.token0.decimals || 18)
-    const reserve1 = parseFloat(pair.reserve1) / Math.pow(10, pair.token1.decimals || 18)
+    // Get decimals (defaults to 18 if not available)
+    const token0Decimals = pair.token0.decimals ?? 18
+    const token1Decimals = pair.token1.decimals ?? 18
 
+    // Parse reserves exactly once with viem, with safe fallbacks
+    let reserve0 = 0, reserve1 = 0
+
+    // Extra precaution when dealing with blockchain data
+    try {
+      // Use Number() instead of parseFloat for consistency with token price handling
+      reserve0 = Number(formatUnits(BigInt(pair.reserve0), token0Decimals))
+      reserve1 = Number(formatUnits(BigInt(pair.reserve1), token1Decimals))
+    } catch (error) {
+      console.warn(`Error formatting reserves for pair ${pairAddress}:`, error)
+      // If BigInt conversion failed, try as a numeric division
+      reserve0 = Number(pair.reserve0) / Math.pow(10, token0Decimals)
+      reserve1 = Number(pair.reserve1) / Math.pow(10, token1Decimals)
+    }
+
+    // Calculate the TVL by multiplying reserves by price
     const tvl = (reserve0 * token0Price) + (reserve1 * token1Price)
-
+    
     return tvl.toString()
   } catch (error) {
     console.error('Error calculating pair TVL:', error)

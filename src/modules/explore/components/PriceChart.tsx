@@ -102,43 +102,23 @@ export default function PriceChart({
 
     // Create a custom price format based on the data range
     let priceFormat: PriceFormat = {
-      type: 'price',
-      precision: 2,
+      type: 'custom' as const,
       minMove: 0.01,
-    }
-
-    // For small values (e.g. fractions of a cent)
-    if (maxValue < 0.01) {
-      priceFormat = {
-        type: 'custom' as const,
-        minMove: 0.00000001,
-        formatter: (price: number) => {
-          // Custom formatter for tiny values
-          if (price < 0.0001) {
-            return '$' + price.toFixed(10);
-          } else if (price < 0.001) {
-            return '$' + price.toFixed(8);
-          } else {
-            return '$' + price.toFixed(6);
-          }
-        },
-      }
-    } else if (maxValue < 0.1) {
-      priceFormat = {
-        type: 'custom' as const,
-        minMove: 0.000001,
-        formatter: (price: number) => {
+      formatter: (price: number) => {
+        if (price < 0.0001) {
+          return '$' + price.toFixed(10);
+        } else if (price < 0.001) {
+          return '$' + price.toFixed(8);
+        } else if (price < 0.01) {
           return '$' + price.toFixed(6);
-        },
-      }
-    } else if (maxValue < 1) {
-      priceFormat = {
-        type: 'custom' as const,
-        minMove: 0.0001,
-        formatter: (price: number) => {
+        } else if (price < 0.1) {
           return '$' + price.toFixed(4);
-        },
-      }
+        } else if (price < 1) {
+          return '$' + price.toFixed(3);
+        } else {
+          return '$' + price.toFixed(2);
+        }
+      },
     }
 
     // Create chart with dark theme styling to match the screenshot
@@ -171,6 +151,11 @@ export default function PriceChart({
         },
         visible: true,
         textColor: '#999999',
+        entireTextOnly: false,
+        borderVisible: false,
+        autoScale: true,
+        mode: 0,
+        alignLabels: true,
       },
       crosshair: {
         horzLine: {
@@ -214,6 +199,12 @@ export default function PriceChart({
         priceLineVisible: false, // Remove price line to match screenshot
         priceFormat: priceFormat,
         lineType: 0, // Solid line
+        autoscaleInfoProvider: () => ({
+          priceRange: {
+            minValue: minValue * 0.95,
+            maxValue: maxValue * 1.05,
+          },
+        }),
       })
       series.setData(formattedData as LineData<UTCTimestamp>[])
     } else if (type === 'volume') {
@@ -236,6 +227,12 @@ export default function PriceChart({
         lastValueVisible: false, // Hide last value to match screenshot
         priceLineVisible: false, // Hide price line to match screenshot
         priceFormat: priceFormat,
+        autoscaleInfoProvider: () => ({
+          priceRange: {
+            minValue: minValue * 0.95,
+            maxValue: maxValue * 1.05,
+          },
+        }),
       })
       series.setData(formattedData as AreaData<UTCTimestamp>[])
     }
@@ -244,6 +241,14 @@ export default function PriceChart({
     if (formattedData.length > 1) {
       chart.timeScale().fitContent()
     }
+
+    // Ensure the price axis is properly scaled 
+    chart.priceScale('right').applyOptions({
+      autoScale: true,
+      entireTextOnly: false,
+      mode: 0, 
+      invertScale: false,
+    });
 
     // Setup custom tooltip
     const tooltipElement = document.createElement('div')
