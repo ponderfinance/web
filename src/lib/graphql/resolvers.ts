@@ -1397,115 +1397,169 @@ export const resolvers = {
       { prisma }: Context
     ) => {
       try {
-        // Set up query params
-        const queryParams: any = {
-          take: first + 1, // Take one extra to check if there's a next page
-          orderBy: { timestamp: 'desc' },
-          include: {
-            pair: {
-              include: {
-                token0: true,
-                token1: true,
-              },
-            },
-          },
-        }
-
-        // Add cursor if provided
+        console.log('Starting recentTransactions resolver');
+        
+        // If a cursor is provided, decode it (it's base64-encoded)
+        let decodedCursor = null;
         if (after) {
-          const cursorId = decodeCursor(after)
-          queryParams.cursor = { id: cursorId }
-          queryParams.skip = 1 // Skip the cursor itself
-        }
-
-        // Fetch recent swaps with pagination
-        const swaps = await prisma.swap.findMany(queryParams)
-
-        // Collect all unique token IDs
-        const tokenIds = new Set<string>()
-        swaps.forEach((swap: any) => {
-          if (swap.pair?.token0?.id) tokenIds.add(swap.pair.token0.id)
-          if (swap.pair?.token1?.id) tokenIds.add(swap.pair.token1.id)
-        });
-
-        // Fetch all token prices in a single batch
-        const pricesMap = await TokenPriceService.getTokenPricesUSDBulk(Array.from(tokenIds))
-
-        // Calculate USD values using the prefetched prices
-        const mappedSwaps = swaps.map((swap: any) => {
-          let valueUSD = '0'
-          
           try {
-            const token0Price = pricesMap[swap.pair?.token0?.id || '']
-            const token1Price = pricesMap[swap.pair?.token1?.id || '']
-            
-            if (token0Price && parseFloat(token0Price) > 0) {
-              // Calculate based on token0
-              const amountToken0 = parseFloat(formatUnits(
-                BigInt(swap.amountIn0 || '0'), 
-                swap.pair?.token0?.decimals || 18
-              ))
-              valueUSD = (amountToken0 * parseFloat(token0Price)).toFixed(2)
-            } else if (token1Price && parseFloat(token1Price) > 0) {
-              // Calculate based on token1
-              const amountToken1 = parseFloat(formatUnits(
-                BigInt(swap.amountIn1 || '0'), 
-                swap.pair?.token1?.decimals || 18
-              ))
-              valueUSD = (amountToken1 * parseFloat(token1Price)).toFixed(2)
+            decodedCursor = Buffer.from(after, 'base64').toString('utf-8');
+            console.log('Decoded cursor:', decodedCursor);
+          } catch (error) {
+            console.error('Failed to decode cursor:', error);
+            // Continue without a cursor if decoding fails
+          }
+        }
+        
+        // Use a raw query to bypass Prisma's schema validation
+        const rawQuery: any = {
+          find: "Swap", 
+          sort: { timestamp: -1 },
+          limit: first + 1
+        };
+        
+        // Add cursor to query if available
+        if (decodedCursor) {
+          rawQuery.filter = { _id: { $lt: { $oid: decodedCursor } } };
+        }
+        
+        console.log('Executing raw query:', JSON.stringify(rawQuery));
+        const result = await prisma.$runCommandRaw(rawQuery);
+        
+        // Extract swaps and handle null values
+        const swaps = ((result as any)?.cursor?.firstBatch || []) as any[];
+        console.log(`Found ${swaps.length} swaps via raw query`);
+        
+        // Determine if there are more results
+        const hasNextPage = swaps.length > first;
+        const limitedSwaps = swaps.slice(0, first);
+        
+        // Collect all unique token IDs for price lookup
+        const tokenPairIds = new Set<string>();
+        limitedSwaps.forEach(swap => {
+          if (swap.pairId && swap.pairId.$oid) {
+            tokenPairIds.add(swap.pairId.$oid);
+          }
+        });
+        
+        // Fetch all pairs data in a batch
+        const pairs = await Promise.all(
+          Array.from(tokenPairIds).map(pairId => 
+            prisma.pair.findUnique({
+              where: { id: pairId },
+              include: { token0: true, token1: true }
+            })
+          )
+        );
+        
+        // Create a map of pair data
+        const pairMap = pairs.reduce((map, pair) => {
+          if (pair) map[pair.id] = pair;
+          return map;
+        }, {} as Record<string, any>);
+        
+        // Collect token IDs for price lookup
+        const tokenIds = new Set<string>();
+        pairs.forEach(pair => {
+          if (pair?.token0?.id) tokenIds.add(pair.token0.id);
+          if (pair?.token1?.id) tokenIds.add(pair.token1.id);
+        });
+        
+        // Fetch all token prices in a single batch
+        const pricesMap = await TokenPriceService.getTokenPricesUSDBulk(Array.from(tokenIds));
+        
+        // Map the raw swaps to the GraphQL schema format
+        const edges = limitedSwaps.map(swap => {
+          const pairId = swap.pairId?.$oid;
+          const pair = pairMap[pairId];
+          
+          // Ensure non-nullable fields are never null
+          const txHash = swap.txHash || '';
+          const userAddress = swap.userAddress || '';
+          const amountIn0 = swap.amountIn0 || '0';
+          const amountIn1 = swap.amountIn1 || '0';
+          const amountOut0 = swap.amountOut0 || '0';
+          const amountOut1 = swap.amountOut1 || '0';
+          const blockNumber = swap.blockNumber || 0;
+          const timestamp = swap.timestamp || 0;
+          
+          // Calculate USD value if possible
+          let valueUSD = '0';
+          try {
+            if (pair) {
+              const token0Price = pricesMap[pair.token0Id] || '0';
+              const token1Price = pricesMap[pair.token1Id] || '0';
+              
+              if (parseFloat(token0Price) > 0) {
+                // Calculate based on token0
+                const token0Decimals = pair.token0?.decimals || 18;
+                const amount0 = parseFloat(formatUnits(BigInt(amountIn0), token0Decimals));
+                valueUSD = (amount0 * parseFloat(token0Price)).toFixed(2);
+              } else if (parseFloat(token1Price) > 0) {
+                // Calculate based on token1
+                const token1Decimals = pair.token1?.decimals || 18;
+                const amount1 = parseFloat(formatUnits(BigInt(amountIn1), token1Decimals));
+                valueUSD = (amount1 * parseFloat(token1Price)).toFixed(2);
+              }
             }
           } catch (error) {
-            console.error('Error calculating USD value for swap:', error)
+            console.error('Error calculating USD value:', error);
           }
-
+          
+          // Create cursor from the MongoDB ID
+          const cursor = Buffer.from(swap._id.$oid).toString('base64');
+          
           return {
-            id: swap.id,
-            txHash: swap.txHash,
-            timestamp: swap.timestamp,
-            userAddress: swap.userAddress,
-            token0: swap.pair?.token0,
-            token1: swap.pair?.token1,
-            amountIn0: swap.amountIn0,
-            amountIn1: swap.amountIn1,
-            amountOut0: swap.amountOut0,
-            amountOut1: swap.amountOut1,
-            valueUSD
-          }
-        })
-
+            cursor,
+            node: {
+              id: swap._id.$oid,
+              pairId: pairId || '',
+              pair: pairId ? { id: pairId } : null,
+              txHash,
+              userAddress,
+              amountIn0,
+              amountIn1,
+              amountOut0,
+              amountOut1,
+              blockNumber,
+              timestamp,
+              token0: pair?.token0 || null,
+              token1: pair?.token1 || null,
+              valueUSD
+            }
+          };
+        });
+        
+        // Get the last cursor for pagination
+        const endCursor = edges.length > 0 ? edges[edges.length - 1].cursor : null;
+        
         // Get total count
-        const totalCount = await prisma.swap.count()
-
-        // Handle pagination
-        const hasNextPage = mappedSwaps.length > first
-        const displaySwaps = hasNextPage ? mappedSwaps.slice(0, first) : mappedSwaps
-
-        // Create pagination response with mapped swaps
+        const totalCount = await prisma.swap.count();
+        
         return {
-          edges: displaySwaps.map((swap: any) => ({
-            node: swap,
-            cursor: swap.id
-          })),
+          edges,
           pageInfo: {
             hasNextPage,
             hasPreviousPage: false,
-            startCursor: displaySwaps[0]?.id,
-            endCursor: displaySwaps[displaySwaps.length - 1]?.id,
+            startCursor: edges.length > 0 ? edges[0].cursor : null,
+            endCursor
           },
-          totalCount,
-        }
+          totalCount
+        };
       } catch (error) {
-        console.error('Error fetching recent transactions:', error)
+        console.error('Error in recentTransactions resolver:', error);
+        
+        // Return empty result in case of error
         return {
           edges: [],
           pageInfo: {
             hasNextPage: false,
             hasPreviousPage: false,
             startCursor: null,
-            endCursor: null,
+            endCursor: null
           },
-          totalCount: 0,
-        }
+          totalCount: 0
+        };
       }
     },
 
