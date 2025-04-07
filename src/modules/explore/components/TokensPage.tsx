@@ -115,8 +115,8 @@ function TokensContent({
       orderDirection: orderDirection as any,
     },
     {
-      fetchPolicy: 'store-and-network',
-      fetchKey: orderBy + orderDirection, // Unique key when sort changes
+      fetchPolicy: 'network-only',
+      fetchKey: orderBy + orderDirection,
     }
   )
 

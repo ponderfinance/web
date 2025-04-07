@@ -5,6 +5,7 @@ import { graphql, useLazyLoadQuery } from 'react-relay'
 import { TransactionsPageQuery } from '@/src/__generated__/TransactionsPageQuery.graphql'
 import { TransactionsDisplay } from '@/src/modules/explore/components/TransactionsDisplay'
 import { View, Text, Skeleton } from 'reshaped'
+import { tokenFragment } from '@/src/components/TokenPair'
 
 export const transactionsPageQuery = graphql`
   query TransactionsPageQuery($first: Int!) {
@@ -145,7 +146,7 @@ function TransactionsContent() {
       first: 20,
     },
     {
-      fetchPolicy: 'store-and-network',
+      fetchPolicy: 'network-only',
     }
   )
 

@@ -19,6 +19,24 @@ import DataLoader from 'dataloader'
 const USDT_ADDRESS = '0x55d398326f99059fF775485246999027B3197955'
 const ORACLE_ADDRESS = '0x1B5C4c1D5b0BbBcEc97fa477b3d5F2FEBA5b481f'
 
+// Create DataLoader for token prices to optimize multiple price lookups
+const createTokenPriceLoader = () => {
+  return new DataLoader<string, string>(async (tokenIds: readonly string[]) => {
+    try {
+      // Get all prices in bulk
+      const pricesMap = await TokenPriceService.getTokenPricesUSDBulk(
+        tokenIds as string[]
+      );
+      
+      // Return prices in the same order as requested
+      return tokenIds.map(id => pricesMap[id] || '0');
+    } catch (error) {
+      console.error('Error in token price loader:', error);
+      return tokenIds.map(() => '0');
+    }
+  });
+};
+
 // Oracle ABI for the functions we need
 const ORACLE_ABI = [
   {
@@ -342,17 +360,21 @@ export const resolvers = {
       const priceData = await TokenPriceService.getTokenPricesUSDBulk([token.id]);
       const currentPrice = priceData[token.id] || token.priceUSD || '0';
 
+      // Ensure all fields are explicitly returned, especially id, imageURI, and symbol
       return {
-        ...token,
-        volumeUSD24h: volume24h,
-        priceUSD: currentPrice,
+        id: token.id,
+        address: token.address,
         symbol: token.symbol ?? null,
         name: token.name ?? null,
         decimals: token.decimals ?? null,
         imageURI: token.imageURI ?? null,
         stablePair: token.stablePair ?? null,
+        priceUSD: currentPrice,
         priceChange24h: token.priceChange24h ?? null,
+        volumeUSD24h: volume24h,
         lastPriceUpdate: token.lastPriceUpdate ?? null,
+        createdAt: token.createdAt,
+        updatedAt: token.updatedAt
       };
     },
     tokens: async (
@@ -368,7 +390,37 @@ export const resolvers = {
     ) => {
       const { first = 10, after, where, orderBy = 'createdAt', orderDirection = 'desc' } = args;
 
-      // Fetch tokens in a single query
+      // Try to get from Redis cache first
+      const cacheKey = `tokens:${first}:${after || ''}:${JSON.stringify(where)}:${orderBy}:${orderDirection}`;
+      const redis = getRedisClient();
+      try {
+        const cachedResult = await redis.get(cacheKey);
+        if (cachedResult) {
+          return JSON.parse(cachedResult);
+        }
+      } catch (error) {
+        console.error('Redis cache error:', error);
+        // Continue without cache if Redis fails
+      }
+
+      // Only select fields we actually need
+      const selectFields = {
+        id: true,
+        address: true,
+        symbol: true,
+        name: true,
+        decimals: true,
+        imageURI: true,
+        priceUSD: true,
+        priceChange24h: true,
+        volumeUSD24h: true,
+        lastPriceUpdate: true,
+        createdAt: true,
+        updatedAt: true,
+        stablePair: true,
+      };
+
+      // Fetch tokens in a single query with minimal fields
       let tokens = await prisma.token.findMany({
         take: first + 1,
         where: {
@@ -377,6 +429,7 @@ export const resolvers = {
           ...(where?.name && { name: where.name }),
         },
         orderBy: { [orderBy]: orderDirection.toLowerCase() },
+        select: selectFields,
       });
 
       // Handle cursor-based pagination
@@ -389,7 +442,7 @@ export const resolvers = {
       const tokenIds = tokens.map((token: PrismaToken) => token.id);
       const pricesMap = await TokenPriceService.getTokenPricesUSDBulk(tokenIds);
       
-      // Attach prices to tokens
+      // Attach prices to tokens - create minimal objects
       tokens = tokens.map((token: PrismaToken) => ({
         ...token,
         symbol: token.symbol ?? null,
@@ -401,23 +454,7 @@ export const resolvers = {
         priceChange24h: token.priceChange24h ?? null,
         volumeUSD24h: token.volumeUSD24h ?? null,
         lastPriceUpdate: token.lastPriceUpdate ?? null,
-        pairsAsToken0: token.pairsAsToken0 ?? [],
-        pairsAsToken1: token.pairsAsToken1 ?? [],
-        supplies: token.supplies ?? []
-      })) as (PrismaToken & { 
-        symbol: string | null; 
-        name: string | null; 
-        decimals: number | null; 
-        imageURI: string | null; 
-        stablePair: string | null; 
-        priceUSD: string | null; 
-        priceChange24h: number | null; 
-        volumeUSD24h: string | null; 
-        lastPriceUpdate: Date | null; 
-        pairsAsToken0: PrismaPair[]; 
-        pairsAsToken1: PrismaPair[]; 
-        supplies: PrismaTokenSupply[]; 
-      })[];
+      }));
 
       // Add type for edges map
       const edges = tokens.map((token: PrismaToken) => ({
@@ -425,7 +462,16 @@ export const resolvers = {
         cursor: token.id,
       }));
 
-      return {
+      // Get count separately - only when needed
+      const totalCount = await prisma.token.count({
+        where: {
+          ...(where?.address && { address: where.address }),
+          ...(where?.symbol && { symbol: where.symbol }),
+          ...(where?.name && { name: where.name }),
+        },
+      });
+
+      const result = {
         edges,
         pageInfo: {
           hasNextPage,
@@ -433,8 +479,17 @@ export const resolvers = {
           startCursor: edges[0]?.cursor,
           endCursor: edges[edges.length - 1]?.cursor,
         },
-        totalCount: await prisma.token.count(),
+        totalCount,
       };
+
+      // Cache the result
+      try {
+        await redis.set(cacheKey, JSON.stringify(result), 'EX', 30); // Cache for 30 seconds
+      } catch (error) {
+        console.error('Redis cache set error:', error);
+      }
+
+      return result;
     },
     tokenByAddress: async (
       _parent: Empty,
@@ -486,6 +541,20 @@ export const resolvers = {
       { prisma, loaders }: Context
     ) => {
       try {
+        // Check Redis cache first
+        const cacheKey = `pairs:${first}:${after || ''}:${orderBy}:${orderDirection}`;
+        const redis = getRedisClient();
+        
+        try {
+          const cachedResult = await redis.get(cacheKey);
+          if (cachedResult) {
+            return JSON.parse(cachedResult);
+          }
+        } catch (error) {
+          console.error('Redis cache error:', error);
+          // Continue without cache
+        }
+        
         // Handle orderBy for reserveUSD specially since it's not a DB field
         const isOrderByReserveUSD = orderBy === 'reserveUSD'
 
@@ -499,20 +568,60 @@ export const resolvers = {
           }
         }
 
-        // Query all pairs at once with minimal token data to reduce roundtrips
-        // We fetch more than needed to ensure we have enough after filtering
+        // Query all pairs at once with token data to reduce roundtrips
         const pairs = await prisma.pair.findMany({
           take: isOrderByReserveUSD ? first * 3 : first + 1,
           ...paginationFilter,
-          include: {
+          select: {
+            id: true,
+            address: true,
+            reserve0: true,
+            reserve1: true,
+            totalSupply: true,
+            feesPending0: true,
+            feesPending1: true,
+            feesCollected0: true,
+            feesCollected1: true,
+            token0Id: true,
+            token1Id: true,
+            createdAt: true,
+            updatedAt: true,
             token0: {
-              select: { id: true, address: true, symbol: true, decimals: true },
+              select: { 
+                id: true, 
+                address: true, 
+                symbol: true, 
+                name: true, 
+                decimals: true,
+                imageURI: true,
+                priceUSD: true,
+                priceChange24h: true,
+                volumeUSD24h: true,
+                lastPriceUpdate: true,
+                createdAt: true,
+                updatedAt: true,
+                stablePair: true
+              },
             },
             token1: {
-              select: { id: true, address: true, symbol: true, decimals: true },
+              select: { 
+                id: true, 
+                address: true, 
+                symbol: true, 
+                name: true, 
+                decimals: true,
+                imageURI: true,
+                priceUSD: true,
+                priceChange24h: true,
+                volumeUSD24h: true,
+                lastPriceUpdate: true,
+                createdAt: true,
+                updatedAt: true,
+                stablePair: true
+              },
             },
           },
-        })
+        });
 
         // Get all pair IDs and token IDs
         const pairIds = pairs.map((pair: Record<string, any>) => pair.id)
@@ -522,14 +631,21 @@ export const resolvers = {
           if (pair.token1?.id) tokenIds.add(pair.token1.id)
         })
 
-        // Fetch all token prices in parallel
-        const tokenPricesPromise = TokenPriceService.getTokenPricesUSDBulk(Array.from(tokenIds))
+        // Get cached token prices using DataLoader or TokenPriceService
+        const tokenPricesPromise = loaders?.tokenPriceLoader 
+          ? Promise.all(Array.from(tokenIds).map(id => loaders.tokenPriceLoader.load(id)))
+            .then(prices => {
+              // Convert array back to map
+              const priceMap: Record<string, string> = {};
+              Array.from(tokenIds).forEach((id, index) => {
+                priceMap[id] = prices[index];
+              });
+              return priceMap;
+            })
+          : TokenPriceService.getTokenPricesUSDBulk(Array.from(tokenIds));
 
-        // Get reserveUSD values from Redis cache first in a single batch operation
-        const cachedValuesPromise = getCachedPairReserveUSDBulk(pairIds).catch((err) => {
-          console.error('Error getting cached values from Redis:', err)
-          return {}
-        })
+        // Get reserveUSD values from Redis cache in a single batch operation
+        const cachedValuesPromise = getCachedPairReserveUSDBulk(pairIds).catch(() => ({}));
 
         // Wait for both promises to resolve
         const [tokenPrices, cachedValues] = await Promise.all([
@@ -537,21 +653,7 @@ export const resolvers = {
           cachedValuesPromise
         ])
 
-        // Identify which pairs need snapshot data
-        const missingPairIds = pairIds.filter((id: string) => 
-          !cachedValues || typeof cachedValues !== 'object' || !(id in cachedValues)
-        );
-
-        // Get snapshots for missing pairs in a single query
-        const snapshotsPromise = missingPairIds.length > 0 
-          ? prisma.pairReserveSnapshot.findMany({
-              where: { pairId: { in: missingPairIds } },
-              orderBy: { timestamp: 'desc' },
-              distinct: ['pairId'],
-            })
-          : Promise.resolve([])
-
-        // Calculate missing reserves in parallel for any pairs without cache or snapshot data
+        // Calculate reserves and prepare pairs
         const pairsWithReserves = await Promise.all(
           pairs.map(async (pair: any) => {
             // Check if we already have the reserve from cache
@@ -564,14 +666,17 @@ export const resolvers = {
               }
             }
 
-            // Try to calculate from token prices
+            // Calculate from token prices
             try {
               // Get the token prices
               const token0Price = parseFloat(tokenPrices[pair.token0?.id || ''] || '0')
               const token1Price = parseFloat(tokenPrices[pair.token1?.id || ''] || '0')
               
-              // Calculate only if we have token prices
-              if ((token0Price > 0 || token1Price > 0) && pair.token0 && pair.token1) {
+              // Only calculate if we have token prices and valid reserves
+              if ((token0Price > 0 || token1Price > 0) && 
+                  pair.token0 && pair.token1 && 
+                  pair.reserve0 && pair.reserve1) {
+                  
                 // Convert reserves to floats with appropriate decimal adjustment
                 const reserve0 = parseFloat(formatUnits(
                   BigInt(pair.reserve0), 
@@ -590,8 +695,8 @@ export const resolvers = {
                   reserveUSD = (reserve1 * token1Price * 2).toFixed(2) // multiply by 2 for both sides
                 }
 
-                // Cache this value for future use (don't await)
-                cachePairReserveUSDBulk([{ id: pair.id, reserveUSD }]).catch(console.error)
+                // Background cache update without waiting
+                cachePairReserveUSDBulk([{ id: pair.id, reserveUSD }]).catch(() => {});
                 
                 return {
                   ...pair,
@@ -600,7 +705,7 @@ export const resolvers = {
                 }
               }
             } catch (error) {
-              console.error(`Error calculating reserveUSD for pair ${pair.id}:`, error)
+              // Silent fail and continue
             }
             
             // Fallback to 0 if calculation fails
@@ -612,7 +717,24 @@ export const resolvers = {
           })
         )
 
-        // If ordering by reserveUSD, sort results and take correct number
+        // Get totalCount using Redis cache if possible
+        let totalCount: number;
+        try {
+          const cachedCount = await redis.get('pairs:count');
+          if (cachedCount) {
+            totalCount = parseInt(cachedCount, 10);
+          } else {
+            totalCount = await prisma.pair.count();
+            // Cache for 5 minutes
+            await redis.set('pairs:count', totalCount.toString(), 'EX', 300);
+          }
+        } catch (error) {
+          totalCount = await prisma.pair.count();
+        }
+
+        let result;
+        
+        // If ordering by reserveUSD, sort results 
         if (isOrderByReserveUSD) {
           // Sort by TVL
           const sortedPairs = pairsWithReserves.sort(
@@ -624,14 +746,11 @@ export const resolvers = {
           // Take the requested number
           const page = sortedPairs.slice(0, first + 1)
           
-          // Get total count
-          const totalCount = await prisma.pair.count()
-          
           // Handle pagination
           const hasNextPage = page.length > first
           const displayPairs = hasNextPage ? page.slice(0, first) : page
           
-          return {
+          result = {
             edges: displayPairs.map((pair: Record<string, any>) => ({
               node: pair,
               cursor: pair.id
@@ -639,17 +758,17 @@ export const resolvers = {
             pageInfo: {
               hasNextPage,
               hasPreviousPage: !!after,
-              startCursor: displayPairs[0]?.id,
-              endCursor: displayPairs[displayPairs.length - 1]?.id,
+              startCursor: displayPairs[0]?.id || null,
+              endCursor: displayPairs[displayPairs.length - 1]?.id || null,
             },
             totalCount,
           }
         } else {
-          // For other orderBy fields, just apply standard pagination
+          // For other orderBy fields, apply standard pagination
           const hasNextPage = pairs.length > first
           const displayPairs = hasNextPage ? pairs.slice(0, first) : pairs
           
-          return {
+          result = {
             edges: displayPairs.map((pair: Record<string, any>) => ({
               node: pair,
               cursor: pair.id
@@ -657,12 +776,21 @@ export const resolvers = {
             pageInfo: {
               hasNextPage,
               hasPreviousPage: !!after,
-              startCursor: displayPairs[0]?.id,
-              endCursor: displayPairs[displayPairs.length - 1]?.id,
+              startCursor: displayPairs[0]?.id || null,
+              endCursor: displayPairs[displayPairs.length - 1]?.id || null,
             },
-            totalCount: await prisma.pair.count(),
+            totalCount,
           }
         }
+        
+        // Cache the result
+        try {
+          await redis.set(cacheKey, JSON.stringify(result), 'EX', 30); // 30 seconds cache
+        } catch (error) {
+          console.error('Redis cache set error:', error);
+        }
+        
+        return result;
       } catch (error) {
         console.error('Error fetching pairs:', error)
         return {
@@ -1397,14 +1525,25 @@ export const resolvers = {
       { prisma }: Context
     ) => {
       try {
-        console.log('Starting recentTransactions resolver');
+        // Check Redis cache first
+        const cacheKey = `recentTransactions:${first}:${after || ''}`;
+        const redis = getRedisClient();
+        
+        try {
+          const cachedResult = await redis.get(cacheKey);
+          if (cachedResult) {
+            return JSON.parse(cachedResult);
+          }
+        } catch (error) {
+          console.error('Redis cache error:', error);
+          // Continue without cache
+        }
         
         // If a cursor is provided, decode it (it's base64-encoded)
         let decodedCursor = null;
         if (after) {
           try {
             decodedCursor = Buffer.from(after, 'base64').toString('utf-8');
-            console.log('Decoded cursor:', decodedCursor);
           } catch (error) {
             console.error('Failed to decode cursor:', error);
             // Continue without a cursor if decoding fails
@@ -1423,18 +1562,16 @@ export const resolvers = {
           rawQuery.filter = { _id: { $lt: { $oid: decodedCursor } } };
         }
         
-        console.log('Executing raw query:', JSON.stringify(rawQuery));
         const result = await prisma.$runCommandRaw(rawQuery);
         
         // Extract swaps and handle null values
         const swaps = ((result as any)?.cursor?.firstBatch || []) as any[];
-        console.log(`Found ${swaps.length} swaps via raw query`);
         
         // Determine if there are more results
         const hasNextPage = swaps.length > first;
         const limitedSwaps = swaps.slice(0, first);
         
-        // Collect all unique token IDs for price lookup
+        // Collect all unique token pairs and token IDs for batched lookups
         const tokenPairIds = new Set<string>();
         limitedSwaps.forEach(swap => {
           if (swap.pairId && swap.pairId.$oid) {
@@ -1442,17 +1579,49 @@ export const resolvers = {
           }
         });
         
-        // Fetch all pairs data in a batch
-        const pairs = await Promise.all(
-          Array.from(tokenPairIds).map(pairId => 
-            prisma.pair.findUnique({
-              where: { id: pairId },
-              include: { token0: true, token1: true }
-            })
-          )
-        );
+        // Fetch all pairs data in a single batch query with detailed token information
+        const pairs = tokenPairIds.size > 0 ? await prisma.pair.findMany({
+          where: { id: { in: Array.from(tokenPairIds) } },
+          select: {
+            id: true,
+            token0: {
+              select: { 
+                id: true, 
+                address: true, 
+                symbol: true, 
+                name: true, 
+                decimals: true,
+                imageURI: true,
+                priceUSD: true,
+                priceChange24h: true,
+                volumeUSD24h: true,
+                lastPriceUpdate: true,
+                createdAt: true,
+                updatedAt: true,
+                stablePair: true
+              }
+            },
+            token1: {
+              select: { 
+                id: true, 
+                address: true, 
+                symbol: true, 
+                name: true, 
+                decimals: true,
+                imageURI: true,
+                priceUSD: true,
+                priceChange24h: true,
+                volumeUSD24h: true,
+                lastPriceUpdate: true,
+                createdAt: true,
+                updatedAt: true,
+                stablePair: true
+              }
+            }
+          }
+        }) : [];
         
-        // Create a map of pair data
+        // Create a map for fast pair lookup
         const pairMap = pairs.reduce((map, pair) => {
           if (pair) map[pair.id] = pair;
           return map;
@@ -1466,7 +1635,9 @@ export const resolvers = {
         });
         
         // Fetch all token prices in a single batch
-        const pricesMap = await TokenPriceService.getTokenPricesUSDBulk(Array.from(tokenIds));
+        const pricesMap = tokenIds.size > 0 ? 
+          await TokenPriceService.getTokenPricesUSDBulk(Array.from(tokenIds)) : 
+          {};
         
         // Map the raw swaps to the GraphQL schema format
         const edges = limitedSwaps.map(swap => {
@@ -1487,8 +1658,8 @@ export const resolvers = {
           let valueUSD = '0';
           try {
             if (pair) {
-              const token0Price = pricesMap[pair.token0Id] || '0';
-              const token1Price = pricesMap[pair.token1Id] || '0';
+              const token0Price = pricesMap[pair.token0.id] || '0';
+              const token1Price = pricesMap[pair.token1.id] || '0';
               
               if (parseFloat(token0Price) > 0) {
                 // Calculate based on token0
@@ -1503,7 +1674,8 @@ export const resolvers = {
               }
             }
           } catch (error) {
-            console.error('Error calculating USD value:', error);
+            // Silently continue with default value
+            valueUSD = '0';
           }
           
           // Create cursor from the MongoDB ID
@@ -1533,10 +1705,24 @@ export const resolvers = {
         // Get the last cursor for pagination
         const endCursor = edges.length > 0 ? edges[edges.length - 1].cursor : null;
         
-        // Get total count
-        const totalCount = await prisma.swap.count();
+        // Get total count - don't await this with every request to save time
+        // Use cached count when possible, only update periodically
+        let totalCount: number;
+        try {
+          const cachedCount = await redis.get('recentTransactions:count');
+          if (cachedCount) {
+            totalCount = parseInt(cachedCount, 10);
+          } else {
+            totalCount = await prisma.swap.count();
+            // Cache the count for 5 minutes
+            await redis.set('recentTransactions:count', totalCount.toString(), 'EX', 300);
+          }
+        } catch (error) {
+          // If Redis fails, get the count directly
+          totalCount = await prisma.swap.count();
+        }
         
-        return {
+        const response = {
           edges,
           pageInfo: {
             hasNextPage,
@@ -1546,6 +1732,15 @@ export const resolvers = {
           },
           totalCount
         };
+        
+        // Cache the result
+        try {
+          await redis.set(cacheKey, JSON.stringify(response), 'EX', 15); // 15 seconds cache
+        } catch (error) {
+          console.error('Redis cache set error:', error);
+        }
+        
+        return response;
       } catch (error) {
         console.error('Error in recentTransactions resolver:', error);
         
@@ -1658,38 +1853,100 @@ export const resolvers = {
       { prisma }: Context
     ) => {
       try {
+        // Check Redis cache first
+        const cacheKey = `farmingPools:${first}:${after || ''}`;
+        const redis = getRedisClient();
+        
+        try {
+          const cachedResult = await redis.get(cacheKey);
+          if (cachedResult) {
+            return JSON.parse(cachedResult);
+          }
+        } catch (error) {
+          console.error('Redis cache error:', error);
+          // Continue without cache
+        }
+        
         // Set up query params
         const queryParams: any = {
           take: first + 1, // Take one extra to check if there's a next page
           orderBy: { pid: 'asc' },
-        }
+          // Only select fields we need
+          select: {
+            id: true,
+            pid: true,
+            name: true,
+            pairAddress: true,
+            token0Address: true,
+            token1Address: true,
+            allocPoint: true,
+            lastRewardBlock: true,
+            accRewardPerShare: true,
+            rewardsPerBlock: true,
+            totalStaked: true,
+            createdAt: true,
+            updatedAt: true
+          }
+        };
 
         // Add cursor if provided
         if (after) {
-          const cursorId = decodeCursor(after)
-          queryParams.cursor = { id: cursorId }
-          queryParams.skip = 1 // Skip the cursor itself
+          const cursorId = decodeCursor(after);
+          queryParams.cursor = { id: cursorId };
+          queryParams.skip = 1; // Skip the cursor itself
         }
 
         // Fetch farming pools with pagination
-        const pools = await prisma.farmingPool.findMany(queryParams)
+        const pools = await prisma.farmingPool.findMany(queryParams);
 
-        // Get total count
-        const totalCount = await prisma.farmingPool.count()
+        // Determine if there are more results
+        const hasNextPage = pools.length > first;
+        const limitedPools = hasNextPage ? pools.slice(0, first) : pools;
+        
+        // Create edges
+        const edges = limitedPools.map(pool => ({
+          node: pool,
+          cursor: pool.id
+        }));
 
-        // Create pagination response
-        const paginationResult = createCursorPagination(
-          pools,
-          first,
-          after ? decodeCursor(after) : undefined
-        )
-
-        return {
-          ...paginationResult,
-          totalCount,
+        // Get cached count when possible
+        let totalCount: number;
+        try {
+          const cachedCount = await redis.get('farmingPools:count');
+          if (cachedCount) {
+            totalCount = parseInt(cachedCount, 10);
+          } else {
+            totalCount = await prisma.farmingPool.count();
+            // Cache the count for 5 minutes
+            await redis.set('farmingPools:count', totalCount.toString(), 'EX', 300);
+          }
+        } catch (error) {
+          // If Redis fails, get the count directly
+          totalCount = await prisma.farmingPool.count();
         }
+        
+        // Create the response
+        const response = {
+          edges,
+          pageInfo: {
+            hasNextPage,
+            hasPreviousPage: !!after,
+            startCursor: edges[0]?.cursor || null,
+            endCursor: edges[edges.length - 1]?.cursor || null
+          },
+          totalCount
+        };
+        
+        // Cache the result
+        try {
+          await redis.set(cacheKey, JSON.stringify(response), 'EX', 60); // 60 seconds cache
+        } catch (error) {
+          console.error('Redis cache set error:', error);
+        }
+        
+        return response;
       } catch (error) {
-        console.error('Error fetching farming pools:', error)
+        console.error('Error fetching farming pools:', error);
         return {
           edges: [],
           pageInfo: {
@@ -1699,7 +1956,7 @@ export const resolvers = {
             endCursor: null,
           },
           totalCount: 0,
-        }
+        };
       }
     },
     farmingPool: async (_parent: Empty, { pid }: { pid: number }, { prisma }: Context) => {

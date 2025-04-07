@@ -53,6 +53,17 @@ interface TransactionsDisplayProps {
 }
 
 export const TransactionsDisplay: React.FC<TransactionsDisplayProps> = ({ data }) => {
+  // Debug: Log the token data to see what's available
+  React.useEffect(() => {
+    if (data?.recentTransactions?.edges?.length > 0) {
+      const firstTransaction = data.recentTransactions.edges[0].node;
+      console.log('DEBUG - Transaction token0 data:', firstTransaction.token0);
+      console.log('DEBUG - Transaction token1 data:', firstTransaction.token1);
+      console.log('DEBUG - Transaction token0 fragmentRefs:', (firstTransaction.token0 as any)['$fragmentSpreads']);
+      console.log('DEBUG - Transaction token1 fragmentRefs:', (firstTransaction.token1 as any)['$fragmentSpreads']);
+    }
+  }, [data]);
+
   return (
     <View borderRadius="medium" borderColor="neutral-faded" overflow="auto" width="100%">
       {/* Table Header */}

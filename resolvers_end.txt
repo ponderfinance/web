@@ -1,0 +1,10 @@
+
+        return (totalSupply * priceUSD).toString()
+      } catch (error) {
+        console.error('Error calculating FDV:', error)
+        return '0'
+      }
+    }
+  }
+}
+}

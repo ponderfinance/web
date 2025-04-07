@@ -5,6 +5,7 @@ import { graphql, useLazyLoadQuery } from 'react-relay'
 import { PoolsPageQuery } from '@/src/__generated__/PoolsPageQuery.graphql'
 import { PoolsDisplay } from '@/src/modules/explore/components/PoolsDisplay'
 import { View, Text, Skeleton } from 'reshaped'
+import { tokenFragment } from '@/src/components/TokenPair'
 
 export const poolsPageQuery = graphql`
   query PoolsPageQuery(
@@ -124,8 +125,8 @@ function PoolsContent({
       orderDirection: orderDirection as any,
     },
     {
-      fetchPolicy: 'store-and-network',
-      fetchKey: orderBy + orderDirection, // Unique key when sort changes
+      fetchPolicy: 'network-only',
+      fetchKey: orderBy + orderDirection,
     }
   )
 

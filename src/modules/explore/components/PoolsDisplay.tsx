@@ -47,6 +47,17 @@ export const PoolsDisplay: React.FC<PoolsDisplayProps> = ({
     }
   }
 
+  // Debug: Log the token data to see what's available
+  React.useEffect(() => {
+    if (data?.pairs?.edges?.length > 0) {
+      const firstPair = data.pairs.edges[0].node;
+      console.log('DEBUG - Pool token0 data:', firstPair.token0);
+      console.log('DEBUG - Pool token1 data:', firstPair.token1);
+      console.log('DEBUG - Pool token0 fragmentRefs:', (firstPair.token0 as any)['$fragmentSpreads']);
+      console.log('DEBUG - Pool token1 fragmentRefs:', (firstPair.token1 as any)['$fragmentSpreads']);
+    }
+  }, [data]);
+
   return (
     <View borderRadius="medium" borderColor="neutral-faded" overflow="auto" width="100%">
       <View

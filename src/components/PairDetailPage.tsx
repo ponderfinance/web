@@ -51,7 +51,7 @@ function PairDetailContent({ pairAddress }: { pairAddress: string }) {
   const data = useLazyLoadQuery<PairDetailPageQuery>(
       PairDetailQuery,
       { pairAddress },
-      { fetchPolicy: 'store-and-network' }
+      { fetchPolicy: 'store-or-network' }
   )
 
   // Use pairByAddress instead of pair
