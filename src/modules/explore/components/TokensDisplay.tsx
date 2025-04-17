@@ -110,7 +110,6 @@ export const TokensDisplay: React.FC<TokensDisplayProps> = ({
         {/*  </Actionable>*/}
         {/*</View.Item>*/}
       </View>
-
       {/* Table Body */}
       <View direction="column" gap={0}>
         {data.tokens.edges.map(({ node }, index) => (
