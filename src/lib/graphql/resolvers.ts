@@ -1214,20 +1214,20 @@ export const resolvers = {
 
           try {
             // Use viem to properly format the volumes
-            const amountIn0 = formatUnits(BigInt(swap.amount0In), token0Decimals)
-            const amountOut0 = formatUnits(BigInt(swap.amount0Out), token0Decimals)
+            const amountIn0 = formatUnits(BigInt(swap.amountIn0 || '0'), token0Decimals)
+            const amountOut0 = formatUnits(BigInt(swap.amountOut0 || '0'), token0Decimals)
             volume0 = parseFloat(amountIn0) + parseFloat(amountOut0)
 
-            const amountIn1 = formatUnits(BigInt(swap.amount1In), token1Decimals)
-            const amountOut1 = formatUnits(BigInt(swap.amount1Out), token1Decimals)
+            const amountIn1 = formatUnits(BigInt(swap.amountIn1 || '0'), token1Decimals)
+            const amountOut1 = formatUnits(BigInt(swap.amountOut1 || '0'), token1Decimals)
             volume1 = parseFloat(amountIn1) + parseFloat(amountOut1)
           } catch (error) {
             // Fallback if viem formatting fails
             volume0 =
-              (parseFloat(swap.amount0In) + parseFloat(swap.amount0Out)) /
+              (parseFloat(swap.amountIn0 || '0') + parseFloat(swap.amountOut0 || '0')) /
               Math.pow(10, token0Decimals)
             volume1 =
-              (parseFloat(swap.amount1In) + parseFloat(swap.amount1Out)) /
+              (parseFloat(swap.amountIn1 || '0') + parseFloat(swap.amountOut1 || '0')) /
               Math.pow(10, token1Decimals)
           }
 
@@ -2311,7 +2311,7 @@ export const resolvers = {
       try {
         // Set up query params
         const queryParams: any = {
-          where: { sender: parent.address },
+          where: { userAddress: parent.address },
           take: first + 1, // Take one extra to check if there's a next page
           orderBy: { timestamp: 'desc' },
         }
@@ -2328,7 +2328,7 @@ export const resolvers = {
 
         // Get total count
         const totalCount = await prisma.swap.count({
-          where: { sender: parent.address },
+          where: { userAddress: parent.address },
         })
 
         // Create pagination response
@@ -2520,10 +2520,10 @@ export const resolvers = {
               timestamp: { gte: oneDayAgo }
             },
             select: {
-              amount0In: true,
-              amount0Out: true,
-              amount1In: true,
-              amount1Out: true
+              amountIn0: true,
+              amountOut0: true,
+              amountIn1: true,
+              amountOut1: true
             }
           })
         )
@@ -2553,13 +2553,13 @@ export const resolvers = {
             try {
               // Calculate volume based on which token we're measuring
               if (isToken0) {
-                const amountIn = formatUnits(BigInt(swap.amount0In), tokenDecimals || 18)
-                const amountOut = formatUnits(BigInt(swap.amount0Out), tokenDecimals || 18)
+                const amountIn = formatUnits(BigInt(swap.amountIn0 || '0'), tokenDecimals || 18)
+                const amountOut = formatUnits(BigInt(swap.amountOut0 || '0'), tokenDecimals || 18)
                 const volume = (parseFloat(amountIn) + parseFloat(amountOut)) * token0Price
                 totalVolumeUSD += volume
               } else {
-                const amountIn = formatUnits(BigInt(swap.amount1In), tokenDecimals || 18)
-                const amountOut = formatUnits(BigInt(swap.amount1Out), tokenDecimals || 18)
+                const amountIn = formatUnits(BigInt(swap.amountIn1 || '0'), tokenDecimals || 18)
+                const amountOut = formatUnits(BigInt(swap.amountOut1 || '0'), tokenDecimals || 18)
                 const volume = (parseFloat(amountIn) + parseFloat(amountOut)) * token1Price
                 totalVolumeUSD += volume
               }
