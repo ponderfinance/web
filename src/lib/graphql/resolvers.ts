@@ -1214,20 +1214,20 @@ export const resolvers = {
 
           try {
             // Use viem to properly format the volumes
-            const amountIn0 = formatUnits(BigInt(swap.amountIn0 || '0'), token0Decimals)
-            const amountOut0 = formatUnits(BigInt(swap.amountOut0 || '0'), token0Decimals)
+            const amountIn0 = formatUnits(BigInt(swap.amount0In || '0'), token0Decimals)
+            const amountOut0 = formatUnits(BigInt(swap.amount0Out || '0'), token0Decimals)
             volume0 = parseFloat(amountIn0) + parseFloat(amountOut0)
 
-            const amountIn1 = formatUnits(BigInt(swap.amountIn1 || '0'), token1Decimals)
-            const amountOut1 = formatUnits(BigInt(swap.amountOut1 || '0'), token1Decimals)
+            const amountIn1 = formatUnits(BigInt(swap.amount1In || '0'), token1Decimals)
+            const amountOut1 = formatUnits(BigInt(swap.amount1Out || '0'), token1Decimals)
             volume1 = parseFloat(amountIn1) + parseFloat(amountOut1)
           } catch (error) {
             // Fallback if viem formatting fails
             volume0 =
-              (parseFloat(swap.amountIn0 || '0') + parseFloat(swap.amountOut0 || '0')) /
+              (parseFloat(swap.amount0In || '0') + parseFloat(swap.amount0Out || '0')) /
               Math.pow(10, token0Decimals)
             volume1 =
-              (parseFloat(swap.amountIn1 || '0') + parseFloat(swap.amountOut1 || '0')) /
+              (parseFloat(swap.amount1In || '0') + parseFloat(swap.amount1Out || '0')) /
               Math.pow(10, token1Decimals)
           }
 
@@ -1328,12 +1328,12 @@ export const resolvers = {
 
         // Get all pairs for this token with proper typing
         const pairs: PairWithTokenInfo[] = [
-          ...token.pairsAsToken0.map(p => ({ 
+          ...token.pairsAsToken0.map((p: any) => ({ 
             id: p.id, 
             isToken0: true,
             counterpartToken: p.token1
           })),
-          ...token.pairsAsToken1.map(p => ({ 
+          ...token.pairsAsToken1.map((p: any) => ({ 
             id: p.id, 
             isToken0: false,
             counterpartToken: p.token0
@@ -1399,7 +1399,7 @@ export const resolvers = {
             const tokenDecimals = token.decimals || 18
             const counterpartDecimals = pair.counterpartToken.decimals || 18
 
-            snapshots.forEach(snapshot => {
+            snapshots.forEach((snapshot: any) => {
               try {
                 let price: number;
                 
@@ -1457,7 +1457,7 @@ export const resolvers = {
             const tokenDecimals = token.decimals || 18
             const counterpartDecimals = pair.counterpartToken.decimals || 18
 
-            snapshots.forEach(snapshot => {
+            snapshots.forEach((snapshot: any) => {
               try {
                 let exchangeRate: number;
                 let usdPrice: number;
@@ -1622,14 +1622,14 @@ export const resolvers = {
         }) : [];
         
         // Create a map for fast pair lookup
-        const pairMap = pairs.reduce((map, pair) => {
+        const pairMap = pairs.reduce((map: Record<string, any>, pair: any) => {
           if (pair) map[pair.id] = pair;
           return map;
         }, {} as Record<string, any>);
         
         // Collect token IDs for price lookup
         const tokenIds = new Set<string>();
-        pairs.forEach(pair => {
+        pairs.forEach((pair: any) => {
           if (pair?.token0?.id) tokenIds.add(pair.token0.id);
           if (pair?.token1?.id) tokenIds.add(pair.token1.id);
         });
@@ -1904,7 +1904,7 @@ export const resolvers = {
         const limitedPools = hasNextPage ? pools.slice(0, first) : pools;
         
         // Create edges
-        const edges = limitedPools.map(pool => ({
+        const edges = limitedPools.map((pool: any) => ({
           node: pool,
           cursor: pool.id
         }));
@@ -2328,7 +2328,7 @@ export const resolvers = {
 
         // Get total count
         const totalCount = await prisma.swap.count({
-          where: { userAddress: parent.address },
+          where: { sender: parent.address },
         })
 
         // Create pagination response
@@ -2513,17 +2513,17 @@ export const resolvers = {
         if (pairs.length === 0) return '0'
 
         // Fetch all swaps in parallel for better performance
-        const swapsPromises = pairs.map(pair => 
+        const swapsPromises = pairs.map((pair: any) => 
           prisma.swap.findMany({
             where: {
               pairId: pair.id,
               timestamp: { gte: oneDayAgo }
             },
             select: {
-              amountIn0: true,
-              amountOut0: true,
-              amountIn1: true,
-              amountOut1: true
+              amount0In: true,
+              amount0Out: true,
+              amount1In: true,
+              amount1Out: true
             }
           })
         )
@@ -2531,13 +2531,13 @@ export const resolvers = {
         const allSwaps = await Promise.all(swapsPromises)
 
         // Get token prices in bulk for better performance
-        const tokenIds = new Set(pairs.flatMap(pair => [pair.token0Id, pair.token1Id]))
-        const pricesMap = await TokenPriceService.getTokenPricesUSDBulk(Array.from(tokenIds))
+        const tokenIds = new Set(pairs.flatMap((pair: any) => [pair.token0Id, pair.token1Id]))
+        const pricesMap = await TokenPriceService.getTokenPricesUSDBulk(Array.from(tokenIds) as string[])
 
         let totalVolumeUSD = 0
 
         // Process each pair's swaps
-        pairs.forEach((pair, index) => {
+        pairs.forEach((pair: any, index: number) => {
           const swaps = allSwaps[index]
           const isToken0 = pair.token0Id === parent.id
           const tokenDecimals = isToken0 ? pair.token0.decimals : pair.token1.decimals
@@ -2553,13 +2553,13 @@ export const resolvers = {
             try {
               // Calculate volume based on which token we're measuring
               if (isToken0) {
-                const amountIn = formatUnits(BigInt(swap.amountIn0 || '0'), tokenDecimals || 18)
-                const amountOut = formatUnits(BigInt(swap.amountOut0 || '0'), tokenDecimals || 18)
+                const amountIn = formatUnits(BigInt(swap.amount0In || '0'), tokenDecimals || 18)
+                const amountOut = formatUnits(BigInt(swap.amount0Out || '0'), tokenDecimals || 18)
                 const volume = (parseFloat(amountIn) + parseFloat(amountOut)) * token0Price
                 totalVolumeUSD += volume
               } else {
-                const amountIn = formatUnits(BigInt(swap.amountIn1 || '0'), tokenDecimals || 18)
-                const amountOut = formatUnits(BigInt(swap.amountOut1 || '0'), tokenDecimals || 18)
+                const amountIn = formatUnits(BigInt(swap.amount1In || '0'), tokenDecimals || 18)
+                const amountOut = formatUnits(BigInt(swap.amount1Out || '0'), tokenDecimals || 18)
                 const volume = (parseFloat(amountIn) + parseFloat(amountOut)) * token1Price
                 totalVolumeUSD += volume
               }
