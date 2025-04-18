@@ -212,8 +212,9 @@ interface PriceSnapshot {
   pairId: string;
   timestamp: number;
   blockNumber: number;
-  price0: string;
-  price1: string;
+  // The actual field names from the database
+  token0Price: string;
+  token1Price: string;
 }
 
 interface ChartPoint {
@@ -1644,21 +1645,6 @@ export const resolvers = {
         const swaps = ((mongoResult as any)?.cursor?.firstBatch || []) as any[];
         console.log(`Found ${swaps.length} swaps via raw query`);
         
-        // Debug: Log a sample swap's raw fields for debugging
-        if (swaps.length > 0) {
-          console.log('DEBUG - Sample swap raw fields:', Object.keys(swaps[0]));
-          console.log('DEBUG - Sample swap amount fields:', {
-            amount0In: swaps[0].amount0In,
-            amount1In: swaps[0].amount1In,
-            amount0Out: swaps[0].amount0Out,
-            amount1Out: swaps[0].amount1Out,
-            amountIn0: swaps[0].amountIn0,
-            amountIn1: swaps[0].amountIn1,
-            amountOut0: swaps[0].amountOut0,
-            amountOut1: swaps[0].amountOut1
-          });
-        }
-        
         // Determine if there are more results
         const hasNextPage = swaps.length > first;
         const limitedSwaps = swaps.slice(0, first);
@@ -1671,7 +1657,7 @@ export const resolvers = {
           }
         });
         
-        // Fetch all pairs data in a single batch query with detailed token information
+        // Fetch all pairs data in a single batch query
         const pairs = tokenPairIds.size > 0 ? await prisma.pair.findMany({
           where: { id: { in: Array.from(tokenPairIds) } },
           select: {
@@ -1735,34 +1721,32 @@ export const resolvers = {
           {};
         
         // Map the raw swaps to the GraphQL schema format
-        const edges = limitedSwaps.map(swap => {
-          const pairId = swap.pairId?.$oid;
-          const pair = pairMap[pairId];
-          
-          // Ensure non-nullable fields are never null
-          const txHash = swap.txHash || swap._id.$oid; // Use ID as transaction hash if not available
-          const userAddress = swap.sender || swap.userAddress || ''; // Try both field names
-
-          // Handle field name differences between MongoDB and GraphQL schema
-          // MongoDB might store these as amount0In or amountIn0
-          const amountIn0 = swap.amountIn0 || swap.amount0In || '0';
-          const amountIn1 = swap.amountIn1 || swap.amount1In || '0';
-          const amountOut0 = swap.amountOut0 || swap.amount0Out || '0';
-          const amountOut1 = swap.amountOut1 || swap.amount1Out || '0';
-          const blockNumber = swap.blockNumber || 0;
-          const timestamp = swap.timestamp || 0;
-          
-          console.log('DEBUG - Swap token amounts:', { 
-            amountIn0, 
-            amountIn1, 
-            amountOut0, 
-            amountOut1 
-          });
-          
-          // Calculate USD value if possible
-          let valueUSD = '0';
+        const edges: any[] = [];
+        
+        // Process swaps sequentially instead of in parallel
+        for (const swap of limitedSwaps) {
           try {
+            const pairId = swap.pairId?.$oid;
+            const pair = pairMap[pairId];
+            
+            // Ensure non-nullable fields are never null
+            const txHash = swap.txHash || swap._id.$oid;
+            const userAddress = swap.sender || swap.userAddress || '';
+
+            // Handle field name differences between MongoDB and GraphQL schema
+            const amountIn0 = swap.amountIn0 || swap.amount0In || '0';
+            const amountIn1 = swap.amountIn1 || swap.amount1In || '0';
+            const amountOut0 = swap.amountOut0 || swap.amount0Out || '0';
+            const amountOut1 = swap.amountOut1 || swap.amount1Out || '0';
+            const blockNumber = swap.blockNumber || 0;
+            const timestamp = swap.timestamp || 0;
+            
+            // Calculate USD value if possible
+            let valueUSD = '0';
+            
             if (pair) {
+              console.log(`Processing swap ${swap._id.$oid} with pair ${pair.id}`);
+              
               const token0Price = pricesMap[pair.token0.id] || pair.token0.priceUSD || '0';
               const token1Price = pricesMap[pair.token1.id] || pair.token1.priceUSD || '0';
               
@@ -1780,78 +1764,171 @@ export const resolvers = {
                 amount1Value = parseFloat(formatUnits(BigInt(amountIn1), token1Decimals));
               } catch (e) {
                 // Fallback to basic division
-                console.log('Fallback formatting:', e);
                 amount0Value = parseFloat(amountIn0) / Math.pow(10, token0Decimals);
                 amount1Value = parseFloat(amountIn1) / Math.pow(10, token1Decimals);
               }
               
-              // Calculate USD value
+              // Calculate USD value based on current prices
               if (parseFloat(token0Price) > 0) {
                 valueUSD = (amount0Value * parseFloat(token0Price)).toFixed(2);
               } else if (parseFloat(token1Price) > 0) {
                 valueUSD = (amount1Value * parseFloat(token1Price)).toFixed(2);
               }
-              // Calculate USD value based on which token is being used
-              if (parseFloat(amountIn0) > 0 && parseFloat(token0Price) > 0) {
-                // Using token0 as input, calculate with token0's price
-                valueUSD = (amount0Value * parseFloat(token0Price)).toFixed(2);
-              } else if (parseFloat(amountIn1) > 0 && parseFloat(token1Price) > 0) {
-                // Using token1 as input, calculate with token1's price
-                valueUSD = (amount1Value * parseFloat(token1Price)).toFixed(2);
-              } else {
-                // Fallback: try both prices if available
-                if (parseFloat(token0Price) > 0 && amount0Value > 0) {
-                  valueUSD = (amount0Value * parseFloat(token0Price)).toFixed(2);
-                } else if (parseFloat(token1Price) > 0 && amount1Value > 0) {
-                  valueUSD = (amount1Value * parseFloat(token1Price)).toFixed(2);
+              
+              // For older transactions or low values, use historical prices
+              const currentTime = Math.floor(Date.now() / 1000);
+              const isOlderThanOneDay = (currentTime - timestamp) > 24 * 60 * 60;
+              
+              if (isOlderThanOneDay || parseFloat(valueUSD) < 0.1) {
+                try {
+                  // Try to get from cache first
+                  const historicalValueKey = `swap:${swap._id.$oid}:historicalValueUSD`;
+                  let cachedHistoricalValue = null;
+                  
+                  try {
+                    cachedHistoricalValue = await redis.get(historicalValueKey);
+                  } catch (cacheError) {
+                    console.error('Redis cache read error:', cacheError);
+                  }
+                  
+                  if (cachedHistoricalValue && parseFloat(cachedHistoricalValue) > 0) {
+                    console.log(`Using cached historical value $${cachedHistoricalValue} for swap ${swap._id.$oid}`);
+                    valueUSD = cachedHistoricalValue;
+                  } else {
+                    // Find a price snapshot close to the transaction time
+                    const priceSnapshot = await prisma.priceSnapshot.findFirst({
+                      where: {
+                        pairId: pairId,
+                        timestamp: {
+                          gte: timestamp - 12 * 60 * 60,
+                          lte: timestamp + 12 * 60 * 60
+                        }
+                      },
+                      orderBy: {
+                        timestamp: 'asc'
+                      }
+                    });
+                    
+                    if (priceSnapshot) {
+                      console.log(`Found price snapshot for swap ${swap._id.$oid}`);
+                      
+                      // Try both naming conventions
+                      const snapshotObj = priceSnapshot as any;
+                      const price0 = snapshotObj.token0Price || snapshotObj.price0;
+                      const price1 = snapshotObj.token1Price || snapshotObj.price1;
+                      
+                      if (price0 && price1) {
+                        let historicalValueUSD = '0';
+                        
+                        if (parseFloat(amountIn0) > 0) {
+                          // Calculate based on token0
+                          // Historical price0 is how many token1 per token0
+                          // We need to multiply the amount of token0 by the price to get token1 equivalent
+                          // Then multiply by token1's USD price
+                          // We need to be very careful about decimal places
+                          const token1Equivalent = amount0Value * parseFloat(price0);
+                          
+                          // Now calculate USD value based on the token1 price
+                          if (parseFloat(token1Price) > 0) {
+                            const usdValue = token1Equivalent * parseFloat(token1Price);
+                            // Sanity check - if the value is astronomically large, it's likely wrong
+                            // Cap at a reasonable maximum value based on transaction size
+                            const maxReasonableValue = amount0Value * 10000; // Assuming no token is worth more than $10,000
+                            historicalValueUSD = (Math.min(usdValue, maxReasonableValue)).toFixed(2);
+                            console.log(`Calculated historical value: ${usdValue}, capped at ${historicalValueUSD}`);
+                          }
+                        } else if (parseFloat(amountIn1) > 0) {
+                          // Calculate based on token1
+                          // Historical price1 is how many token0 per token1
+                          // We need to multiply the amount of token1 by the price to get token0 equivalent
+                          // Then multiply by token0's USD price
+                          const token0Equivalent = amount1Value * parseFloat(price1);
+                          
+                          // Now calculate USD value based on the token0 price
+                          if (parseFloat(token0Price) > 0) {
+                            const usdValue = token0Equivalent * parseFloat(token0Price);
+                            // Sanity check - if the value is astronomically large, it's likely wrong
+                            const maxReasonableValue = amount1Value * 10000; // Assuming no token is worth more than $10,000
+                            historicalValueUSD = (Math.min(usdValue, maxReasonableValue)).toFixed(2);
+                            console.log(`Calculated historical value: ${usdValue}, capped at ${historicalValueUSD}`);
+                          }
+                        }
+                        
+                        // Use the higher value between historical and current, but apply sanity checks
+                        if (parseFloat(historicalValueUSD) > 0) {
+                          console.log(`Got historical value $${historicalValueUSD} for swap ${swap._id.$oid} (current: $${valueUSD})`);
+                          
+                          const currentValueNumeric = parseFloat(valueUSD);
+                          const historicalValueNumeric = parseFloat(historicalValueUSD);
+                          
+                          // If historical value seems reasonable (not more than 2x current value), use it
+                          // If historical value is more than 2x current value but current value is very small,
+                          // historical value might still be correct
+                          if (currentValueNumeric < 0.1 || 
+                              (historicalValueNumeric > currentValueNumeric && 
+                               historicalValueNumeric < currentValueNumeric * 2)) {
+                            
+                            valueUSD = historicalValueUSD;
+                            
+                            // Cache for future use
+                            try {
+                              await redis.set(historicalValueKey, historicalValueUSD, 'EX', 86400);
+                            } catch (cacheSetError) {
+                              console.error('Redis cache set error:', cacheSetError);
+                            }
+                          } else {
+                            console.log(`Historical value ${historicalValueUSD} seems too high compared to current ${valueUSD}, using current value`);
+                          }
+                        }
+                      }
+                    }
+                  }
+                } catch (historyError) {
+                  console.error('Error calculating historical price:', historyError);
                 }
               }
               
-              console.log('DEBUG - Token prices and amounts:', {
-                token0Price,
-                token1Price,
-                amount0Value,
-                amount1Value,
+              // Set a minimum display value
+              if (parseFloat(valueUSD) > 0 && parseFloat(valueUSD) < 0.01) {
+                valueUSD = '0.01';
+              }
+            }
+            
+            // Create cursor from the MongoDB ID
+            const cursor = Buffer.from(swap._id.$oid).toString('base64');
+            
+            // Add this edge to our collection
+            edges.push({
+              cursor,
+              node: {
+                id: swap._id.$oid,
+                pairId: pairId || '',
+                pair: pair ? {
+                  id: pair.id,
+                  address: pair.address,
+                  reserve0: pair.reserve0,
+                  reserve1: pair.reserve1,
+                  token0: pair.token0,
+                  token1: pair.token1
+                } : null,
+                txHash,
+                userAddress,
+                amountIn0,
+                amountIn1,
+                amountOut0,
+                amountOut1,
+                blockNumber,
+                timestamp,
+                token0: pair?.token0 || null,
+                token1: pair?.token1 || null,
                 valueUSD
-              });
-            }
-          } catch (error) {
-            console.error('Error calculating USD value:', error);
-            valueUSD = '0';
+              }
+            });
+          } catch (swapError) {
+            console.error(`Error processing swap ${swap._id?.$oid}:`, swapError);
+            // Continue with the next swap
           }
-          
-          // Create cursor from the MongoDB ID
-          const cursor = Buffer.from(swap._id.$oid).toString('base64');
-          
-          // Important! Pass the complete token objects as required by the GraphQL schema
-          // This is critical for properly rendering the tokens in the UI
-          return {
-            cursor,
-            node: {
-              id: swap._id.$oid,
-              pairId: pairId || '',
-              pair: pair ? {
-                id: pair.id,
-                address: pair.address,
-                reserve0: pair.reserve0,
-                reserve1: pair.reserve1,
-                token0: pair.token0,
-                token1: pair.token1
-              } : null,
-              txHash,
-              userAddress,
-              amountIn0,
-              amountIn1,
-              amountOut0,
-              amountOut1,
-              blockNumber,
-              timestamp,
-              token0: pair?.token0 || null,
-              token1: pair?.token1 || null,
-              valueUSD
-            }
-          };
-        });
+        }
         
         // Get the last cursor for pagination
         const endCursor = edges.length > 0 ? edges[edges.length - 1].cursor : null;
@@ -2434,57 +2511,24 @@ export const resolvers = {
     imageURI: async (parent: PrismaToken) => parent.imageURI,
     priceUSD: async (parent: PrismaToken, _unused: Empty, { prisma }: Context) => {
       try {
-        // Import viem utilities
-        const { formatUnits } = await import('viem');
-
-        // Helper function to detect and scale large blockchain-style numbers
-        const formatBlockchainValue = (value: number | string, decimals: number = 18): string => {
-          if (typeof value === 'string') {
-            value = parseFloat(value);
-          }
-          
-          // Skip empty or zero values
-          if (!value || value === 0) return "0";
-          
-          // Detect if this is likely a raw blockchain value (very large number)
-          const magnitude = Math.floor(Math.log10(Math.abs(value)));
-          
-          // If the number is very large, it's likely in wei or token base units
-          if (magnitude >= 6) {
-            try {
-              // We need to round to an integer to use BigInt
-              const bigValue = BigInt(Math.round(value));
-              return formatUnits(bigValue, decimals);
-            } catch (error) {
-              // Fallback to regular division if BigInt conversion fails
-              return (value / Math.pow(10, decimals)).toString();
-            }
-          }
-          
-          // For normal-sized numbers, return as is
-          return value.toString();
-        };
-        
         // Check if we already have the price from the bulk fetch
         if (parent.priceUSD) {
           const price = parseFloat(parent.priceUSD);
           if (price > 0.000001) {
-            // Format in case it's a blockchain value
-            return formatBlockchainValue(price, parent.decimals || 18);
+            return price.toString();
           }
         }
         
         // If we don't have a price yet, fetch it now
         const price = await TokenPriceService.getTokenPriceUSD(parent.id);
         if (price > 0.000001) {
-          // Format in case it's a blockchain value
-          return formatBlockchainValue(price, parent.decimals || 18);
+          return price.toString();
         }
         
         // If we still don't have a valid price, return 0
         return "0";
       } catch (error) {
-        console.error(`Error getting price for token ${parent.id}:`, error);
+        console.error(, error);
         return "0";
       }
     },
