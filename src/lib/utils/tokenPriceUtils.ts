@@ -1,10 +1,13 @@
 import { formatUnits, parseUnits } from 'viem'
 
-// Constants
-const STABLECOIN_ADDRESSES: string[] = [
+// Constants - don't hardcode prices in this list, just identify which tokens are stablecoins
+export const STABLECOIN_ADDRESSES: string[] = [
   '0x7d984C24d2499D840eB3b7016077164e15E5faA6', // USDT
   '0x77071ad51ca93fc90e77BCdECE5aa6F1B40fcb21', // USDC
 ].map((address) => address.toLowerCase())
+
+// Map symbols to addresses for easier reference
+export const STABLECOIN_SYMBOLS = ['USDT', 'USDC']
 
 /**
  * Process price history data to ensure values are properly formatted
@@ -158,10 +161,19 @@ export function normalizePrice(value: number, tokenDecimals?: number): number {
 }
 
 /**
- * Check if a token is a stablecoin
+ * Check if a token is a stablecoin by address
  */
-export function isStablecoin(address: string): boolean {
+export function isStablecoin(address?: string): boolean {
+  if (!address) return false
   return STABLECOIN_ADDRESSES.includes(address.toLowerCase())
+}
+
+/**
+ * Check if a token is a stablecoin by symbol
+ */
+export function isStablecoinBySymbol(symbol?: string): boolean {
+  if (!symbol) return false
+  return STABLECOIN_SYMBOLS.includes(symbol.toUpperCase())
 }
 
 /**
@@ -169,6 +181,13 @@ export function isStablecoin(address: string): boolean {
  */
 export function getStablecoinAddresses(): string[] {
   return STABLECOIN_ADDRESSES
+}
+
+/**
+ * Get common stablecoin symbols
+ */
+export function getStablecoinSymbols(): string[] {
+  return STABLECOIN_SYMBOLS
 }
 
 /**

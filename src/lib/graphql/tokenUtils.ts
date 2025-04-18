@@ -6,6 +6,7 @@ import {
   KKUB_ADDRESS,
 } from './oracleUtils'
 import { cacheTokenPrice } from '@/src/lib/redis/tokenCache'
+import { isStablecoin } from '@/src/lib/utils/tokenPriceUtils'
 
 /**
  * Calculate token price in USD using oracle and pairs
@@ -16,9 +17,30 @@ export async function calculateTokenPriceUSD(
   prisma: typeof PrismaClient
 ): Promise<string> {
   try {
-    // Method 1: Check if token is USDT
-    if (tokenAddress.toLowerCase() === USDT_ADDRESS.toLowerCase()) {
-      return '1.0' // USDT is $1
+    // Method 1: For stablecoins, get the price from oracle when possible
+    // but don't automatically assign $1 - let's get the actual market price
+    if (isStablecoin(tokenAddress)) {
+      // We SHOULD find a stablecoin pair to get the actual market price
+      // instead of hardcoding a value
+      const stablecoinPair = await findPair(tokenAddress, KKUB_ADDRESS, prisma)
+      if (stablecoinPair) {
+        const marketPrice = await getTokenPriceFromOracle({
+          pairAddress: stablecoinPair,
+          tokenAddress: tokenAddress,
+        })
+        
+        // If we got a valid price, use it
+        if (marketPrice > 0) {
+          await cacheTokenPrice(tokenId, marketPrice.toString())
+          return marketPrice.toString()
+        }
+      }
+      
+      // Only as a fallback for stablecoins if we can't get market data
+      // This fallback should be rare in production with active markets
+      console.warn(`Using fallback price for stablecoin ${tokenAddress} - no market data available`)
+      await cacheTokenPrice(tokenId, '1.0')
+      return '1.0'
     }
 
     // Method 2: Check for direct USDT pair
