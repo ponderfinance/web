@@ -120,12 +120,12 @@ function PoolsContent({
   const data = useLazyLoadQuery<PoolsPageQuery>(
     poolsPageQuery,
     {
-      first: 50,
+      first: 20,
       orderBy: orderBy as any,
       orderDirection: orderDirection as any,
     },
     {
-      fetchPolicy: 'network-only',
+      fetchPolicy: 'store-or-network',
       fetchKey: orderBy + orderDirection,
     }
   )
@@ -150,10 +150,15 @@ export const PoolsPage = () => {
   // Only render the query component after mounting on the client
   useEffect(() => {
     setMounted(true)
+    
+    // Prefetch the data
+    return () => {
+      // Cleanup any resources if needed
+    }
   }, [])
 
   if (!mounted) {
-    return null
+    return <PoolsLoading />
   }
 
   return (

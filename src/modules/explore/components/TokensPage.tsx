@@ -110,12 +110,12 @@ function TokensContent({
   const data = useLazyLoadQuery<TokensPageQuery>(
     tokensPageQuery,
     {
-      first: 50,
+      first: 20,
       orderBy: orderBy as any,
       orderDirection: orderDirection as any,
     },
     {
-      fetchPolicy: 'network-only',
+      fetchPolicy: 'store-or-network',
       fetchKey: orderBy + orderDirection,
     }
   )

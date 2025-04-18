@@ -143,10 +143,10 @@ function TransactionsContent() {
   const data = useLazyLoadQuery<TransactionsPageQuery>(
     transactionsPageQuery,
     {
-      first: 20,
+      first: 15,
     },
     {
-      fetchPolicy: 'network-only',
+      fetchPolicy: 'store-or-network',
     }
   )
 
@@ -160,10 +160,15 @@ export const TransactionsPage = () => {
   // Only render the query component after mounting on the client
   useEffect(() => {
     setMounted(true)
+    
+    // Prefetch the data
+    return () => {
+      // Cleanup any resources if needed
+    }
   }, [])
 
   if (!mounted) {
-    return null
+    return <TransactionsLoading />
   }
   
   return (

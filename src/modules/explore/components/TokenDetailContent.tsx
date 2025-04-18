@@ -42,7 +42,12 @@ export default function TokenDetailContent({ tokenAddress }: { tokenAddress: str
   const data = useLazyLoadQuery<TokenDetailContentQuery>(
     TokenDetailQuery,
     { tokenAddress },
-    { fetchPolicy: 'store-and-network' }
+    { 
+      fetchPolicy: 'store-or-network',
+      networkCacheConfig: { 
+        force: false
+      } 
+    }
   )
 
   // Get token data
@@ -59,8 +64,8 @@ export default function TokenDetailContent({ tokenAddress }: { tokenAddress: str
   const priceChangePrefix = (token.priceChange24h || 0) >= 0 ? '+' : ''
   const priceChangeDisplay = `${priceChangePrefix}${(token.priceChange24h || 0).toFixed(2)}%`
 
-  // Format token metrics for display
-  const formatLargeNumber = (value: string | null | undefined): string => {
+  // Format token metrics for display - memoized for performance
+  const formatLargeNumber = React.useCallback((value: string | null | undefined): string => {
     if (!value) return '$0'
     const num = parseFloat(value)
 
@@ -73,21 +78,23 @@ export default function TokenDetailContent({ tokenAddress }: { tokenAddress: str
     } else {
       return `$${num.toFixed(2)}`
     }
-  }
+  }, [])
 
-  // Get formatted metrics
-  const tvl = formatLargeNumber(token.tvl)
-  const marketCap = formatLargeNumber(token.marketCap)
-  const fdv = formatLargeNumber(token.fdv)
-  const dayVolume = formatLargeNumber(token.volumeUSD24h)
+  // Get formatted metrics - memoized values
+  const metrics = React.useMemo(() => ({
+    tvl: formatLargeNumber(token.tvl),
+    marketCap: formatLargeNumber(token.marketCap),
+    fdv: formatLargeNumber(token.fdv),
+    dayVolume: formatLargeNumber(token.volumeUSD24h)
+  }), [token.tvl, token.marketCap, token.fdv, token.volumeUSD24h, formatLargeNumber])
 
   // Handle timeframe change
   const handleTimeframeChange = (newTimeframe: string) => {
     setActiveTimeframe(newTimeframe);
   };
 
-  // Get price format based on value
-  const formatTokenPrice = (price: number) => {
+  // Get price format based on value - memoized for performance
+  const formatTokenPrice = React.useCallback((price: number) => {
     if (price < 0.001) {
       return price.toFixed(8)
     }
@@ -98,10 +105,10 @@ export default function TokenDetailContent({ tokenAddress }: { tokenAddress: str
       return price.toFixed(4)
     }
     return price.toFixed(2)
-  }
+  }, [])
 
   // Map UI timeframe format to API timeframe format
-  const getChartTimeframe = () => {
+  const getChartTimeframe = React.useCallback(() => {
     switch (activeTimeframe) {
       case '1H': return '1h';  // 1 hour
       case '1D': return '1d';  // 1 day (24 hours)
@@ -110,7 +117,7 @@ export default function TokenDetailContent({ tokenAddress }: { tokenAddress: str
       case '1Y': return '1y';  // 1 year (365 days)
       default: return '1m';    // Default to 1 month
     }
-  };
+  }, [activeTimeframe]);
 
   // Memoize the chart component to prevent unnecessary re-renders
   const timeframeForChart = getChartTimeframe();
@@ -231,7 +238,7 @@ export default function TokenDetailContent({ tokenAddress }: { tokenAddress: str
               TVL
             </Text>
             <Text variant="featured-3" weight="medium" color="neutral">
-              {tvl}
+              {metrics.tvl}
             </Text>
           </View>
           <View direction="column" gap={1}>
@@ -239,7 +246,7 @@ export default function TokenDetailContent({ tokenAddress }: { tokenAddress: str
               Market cap
             </Text>
             <Text variant="featured-3" weight="medium" color="neutral">
-              {marketCap}
+              {metrics.marketCap}
             </Text>
           </View>
           <View direction="column" gap={1}>
@@ -247,7 +254,7 @@ export default function TokenDetailContent({ tokenAddress }: { tokenAddress: str
               FDV
             </Text>
             <Text variant="featured-3" weight="medium" color="neutral">
-              {fdv}
+              {metrics.fdv}
             </Text>
           </View>
           <View direction="column" gap={1}>
@@ -255,7 +262,7 @@ export default function TokenDetailContent({ tokenAddress }: { tokenAddress: str
               1 day volume
             </Text>
             <Text variant="featured-3" weight="medium" color="neutral">
-              {dayVolume}
+              {metrics.dayVolume}
             </Text>
           </View>
         </View>
