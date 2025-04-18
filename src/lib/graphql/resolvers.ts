@@ -332,31 +332,35 @@ export const resolvers = {
   // Add this resolver before any existing resolvers
   Pair: {
     tvl: (parent: any) => {
-      // If there's a tvl property, use it
-      if (parent.tvl !== undefined) {
-        return typeof parent.tvl === 'string' ? parseFloat(parent.tvl) || 0 : (parent.tvl || 0);
-      }
-      
-      // If there's a reserveUSD property, use that
-      if (parent.reserveUSD !== undefined) {
-        return typeof parent.reserveUSD === 'string' ? parseFloat(parent.reserveUSD) || 0 : (parent.reserveUSD || 0);
-      }
-      
-      // Last resort - calculate from reserves and token prices if available
-      if (parent.reserve0 && parent.reserve1 && parent.token0?.priceUSD && parent.token1?.priceUSD) {
-        try {
-          const token0Decimals = parent.token0.decimals || 18;
-          const token1Decimals = parent.token1.decimals || 18;
-          const token0Price = parseFloat(parent.token0.priceUSD || '0');
-          const token1Price = parseFloat(parent.token1.priceUSD || '0');
-          
-          const reserve0Value = Number(formatUnits(BigInt(parent.reserve0), token0Decimals)) * token0Price;
-          const reserve1Value = Number(formatUnits(BigInt(parent.reserve1), token1Decimals)) * token1Price;
-          
-          return reserve0Value + reserve1Value;
-        } catch (error) {
-          console.error('Error calculating TVL:', error);
+      try {
+        // If there's a tvl property, use it
+        if (parent.tvl !== undefined) {
+          return typeof parent.tvl === 'string' ? parseFloat(parent.tvl) || 0 : (parent.tvl || 0);
         }
+        
+        // If there's a reserveUSD property, use that
+        if (parent.reserveUSD !== undefined) {
+          return typeof parent.reserveUSD === 'string' ? parseFloat(parent.reserveUSD) || 0 : (parent.reserveUSD || 0);
+        }
+        
+        // Last resort - calculate from reserves and token prices if available
+        if (parent.reserve0 && parent.reserve1 && parent.token0?.priceUSD && parent.token1?.priceUSD) {
+          try {
+            const token0Decimals = parent.token0.decimals || 18;
+            const token1Decimals = parent.token1.decimals || 18;
+            const token0Price = parseFloat(parent.token0.priceUSD || '0');
+            const token1Price = parseFloat(parent.token1.priceUSD || '0');
+            
+            const reserve0Value = Number(formatUnits(BigInt(parent.reserve0), token0Decimals)) * token0Price;
+            const reserve1Value = Number(formatUnits(BigInt(parent.reserve1), token1Decimals)) * token1Price;
+            
+            return reserve0Value + reserve1Value;
+          } catch (error) {
+            console.error('Error calculating TVL:', error);
+          }
+        }
+      } catch (error) {
+        console.error('Error calculating TVL:', error);
       }
       
       // Absolute fallback - never return null
@@ -1588,139 +1592,281 @@ export const resolvers = {
       }
     },
 
-    // Simplified recentTransactions resolver
+    // Completely reworked recentTransactions resolver 
     recentTransactions: async (
       _parent: Empty,
       { first = 20, after }: { first?: number; after?: string },
       { prisma }: Context
     ) => {
       try {
-        console.log(`Fetching recent transactions: first=${first}, after=${after || 'none'}`);
+        // Check Redis cache first
+        const cacheKey = `recentTransactions:${first}:${after || ''}`;
+        const redis = getRedisClient();
         
-        // For pagination with cursor
-        let paginationOptions = {};
+        try {
+          const cachedResult = await redis.get(cacheKey);
+          if (cachedResult) {
+            return JSON.parse(cachedResult);
+          }
+        } catch (error) {
+          console.error('Redis cache error:', error);
+          // Continue without cache
+        }
+        
+        // If a cursor is provided, decode it (it's base64-encoded)
+        let decodedCursor = null;
         if (after) {
           try {
-            const decodedCursor = Buffer.from(after, 'base64').toString('utf-8');
-            paginationOptions = {
-              cursor: { id: decodedCursor },
-              skip: 1
-            };
+            decodedCursor = Buffer.from(after, 'base64').toString('utf-8');
+            console.log('Decoded cursor:', decodedCursor);
           } catch (error) {
             console.error('Failed to decode cursor:', error);
+            // Continue without a cursor if decoding fails
           }
         }
         
-        // Simple, direct query using Prisma's API
-        const swaps = await prisma.swap.findMany({
-          take: first + 1,
-          orderBy: { timestamp: 'desc' },
-          ...paginationOptions,
-          include: {
-            pair: {
-              include: {
-                token0: true,
-                token1: true
-              }
-            }
+        // Use a raw query to bypass Prisma's schema validation
+        const rawQuery: any = {
+          find: "Swap", 
+          sort: { timestamp: -1 },
+          limit: first + 1
+        };
+        
+        // Add cursor to query if available
+        if (decodedCursor) {
+          rawQuery.filter = { _id: { $lt: { $oid: decodedCursor } } };
+        }
+        
+        console.log('Executing raw query:', JSON.stringify(rawQuery));
+        const mongoResult = await prisma.$runCommandRaw(rawQuery);
+        
+        // Extract swaps and handle null values
+        const swaps = ((mongoResult as any)?.cursor?.firstBatch || []) as any[];
+        console.log(`Found ${swaps.length} swaps via raw query`);
+        
+        // Debug: Log a sample swap's raw fields for debugging
+        if (swaps.length > 0) {
+          console.log('DEBUG - Sample swap raw fields:', Object.keys(swaps[0]));
+          console.log('DEBUG - Sample swap amount fields:', {
+            amount0In: swaps[0].amount0In,
+            amount1In: swaps[0].amount1In,
+            amount0Out: swaps[0].amount0Out,
+            amount1Out: swaps[0].amount1Out,
+            amountIn0: swaps[0].amountIn0,
+            amountIn1: swaps[0].amountIn1,
+            amountOut0: swaps[0].amountOut0,
+            amountOut1: swaps[0].amountOut1
+          });
+        }
+        
+        // Determine if there are more results
+        const hasNextPage = swaps.length > first;
+        const limitedSwaps = swaps.slice(0, first);
+        
+        // Collect all unique token pairs for batched lookups
+        const tokenPairIds = new Set<string>();
+        limitedSwaps.forEach(swap => {
+          if (swap.pairId && swap.pairId.$oid) {
+            tokenPairIds.add(swap.pairId.$oid);
           }
         });
         
-        console.log(`Found ${swaps.length} swaps`);
-        
-        if (swaps.length === 0) {
-          return {
-            edges: [],
-            pageInfo: {
-              hasNextPage: false,
-              hasPreviousPage: false,
-              startCursor: null,
-              endCursor: null
+        // Fetch all pairs data in a single batch query with detailed token information
+        const pairs = tokenPairIds.size > 0 ? await prisma.pair.findMany({
+          where: { id: { in: Array.from(tokenPairIds) } },
+          select: {
+            id: true,
+            address: true,
+            reserve0: true,
+            reserve1: true,
+            token0: {
+              select: { 
+                id: true, 
+                address: true, 
+                symbol: true, 
+                name: true, 
+                decimals: true,
+                imageURI: true,
+                priceUSD: true,
+                priceChange24h: true,
+                volumeUSD24h: true,
+                lastPriceUpdate: true,
+                createdAt: true,
+                updatedAt: true,
+                stablePair: true
+              }
             },
-            totalCount: 0
-          };
-        }
+            token1: {
+              select: { 
+                id: true, 
+                address: true, 
+                symbol: true, 
+                name: true, 
+                decimals: true,
+                imageURI: true,
+                priceUSD: true,
+                priceChange24h: true,
+                volumeUSD24h: true,
+                lastPriceUpdate: true,
+                createdAt: true,
+                updatedAt: true,
+                stablePair: true
+              }
+            }
+          }
+        }) : [];
         
-        const hasNextPage = swaps.length > first;
-        const edges = swaps.slice(0, first).map(swap => {
-          // Get token information from the pair relationship
-          const token0 = swap.pair?.token0 || null;
-          const token1 = swap.pair?.token1 || null;
+        // Create a map for fast pair lookup
+        const pairMap = pairs.reduce((map: Record<string, any>, pair: any) => {
+          if (pair) map[pair.id] = pair;
+          return map;
+        }, {} as Record<string, any>);
+        
+        // Collect token IDs for price lookup
+        const tokenIds = new Set<string>();
+        pairs.forEach((pair: any) => {
+          if (pair?.token0?.id) tokenIds.add(pair.token0.id);
+          if (pair?.token1?.id) tokenIds.add(pair.token1.id);
+        });
+        
+        // Fetch all token prices in a single batch
+        const pricesMap = tokenIds.size > 0 ? 
+          await TokenPriceService.getTokenPricesUSDBulk(Array.from(tokenIds)) : 
+          {};
+        
+        // Map the raw swaps to the GraphQL schema format
+        const edges = limitedSwaps.map(swap => {
+          const pairId = swap.pairId?.$oid;
+          const pair = pairMap[pairId];
           
-          // Debugging - check the actual fields on the swap object
-          console.log('SWAP FIELDS:', Object.keys(swap));
+          // Ensure non-nullable fields are never null
+          const txHash = swap.txHash || swap._id.$oid; // Use ID as transaction hash if not available
+          const userAddress = swap.sender || swap.userAddress || ''; // Try both field names
+
+          // Handle field name differences between MongoDB and GraphQL schema
+          // MongoDB might store these as amount0In or amountIn0
+          const amountIn0 = swap.amountIn0 || swap.amount0In || '0';
+          const amountIn1 = swap.amountIn1 || swap.amount1In || '0';
+          const amountOut0 = swap.amountOut0 || swap.amount0Out || '0';
+          const amountOut1 = swap.amountOut1 || swap.amount1Out || '0';
+          const blockNumber = swap.blockNumber || 0;
+          const timestamp = swap.timestamp || 0;
           
-          // Cast as any to avoid TypeScript field issues
-          const swapData = swap as any;
+          console.log('DEBUG - Swap token amounts:', { 
+            amountIn0, 
+            amountIn1, 
+            amountOut0, 
+            amountOut1 
+          });
           
           // Calculate USD value if possible
           let valueUSD = '0';
           try {
-            if (token0 && token1) {
-              const token0Price = parseFloat(token0.priceUSD || '0');
-              const token1Price = parseFloat(token1.priceUSD || '0');
+            if (pair) {
+              const token0Price = pricesMap[pair.token0.id] || pair.token0.priceUSD || '0';
+              const token1Price = pricesMap[pair.token1.id] || pair.token1.priceUSD || '0';
               
-              // Use the correct field names based on your database schema
-              const amount0In = swapData.amount0In || swapData.amountIn0 || '0';
-              const amount1In = swapData.amount1In || swapData.amountIn1 || '0';
+              // Get token decimals
+              const token0Decimals = pair.token0?.decimals || 18;
+              const token1Decimals = pair.token1?.decimals || 18;
               
-              if (token0Price > 0) {
-                const token0Decimals = token0.decimals || 18;
-                const amount0 = parseFloat(formatUnits(BigInt(amount0In), token0Decimals));
-                valueUSD = (amount0 * token0Price).toFixed(2);
-              } else if (token1Price > 0) {
-                const token1Decimals = token1.decimals || 18;
-                const amount1 = parseFloat(formatUnits(BigInt(amount1In), token1Decimals));
-                valueUSD = (amount1 * token1Price).toFixed(2);
+              // Format and parse the amounts
+              let amount0Value = 0;
+              let amount1Value = 0;
+              
+              try {
+                // Try to format with viem for best accuracy
+                amount0Value = parseFloat(formatUnits(BigInt(amountIn0), token0Decimals));
+                amount1Value = parseFloat(formatUnits(BigInt(amountIn1), token1Decimals));
+              } catch (e) {
+                // Fallback to basic division
+                console.log('Fallback formatting:', e);
+                amount0Value = parseFloat(amountIn0) / Math.pow(10, token0Decimals);
+                amount1Value = parseFloat(amountIn1) / Math.pow(10, token1Decimals);
               }
+              
+              // Calculate USD value
+              if (parseFloat(token0Price) > 0) {
+                valueUSD = (amount0Value * parseFloat(token0Price)).toFixed(2);
+              } else if (parseFloat(token1Price) > 0) {
+                valueUSD = (amount1Value * parseFloat(token1Price)).toFixed(2);
+              }
+              
+              console.log('DEBUG - Token prices and amounts:', {
+                token0Price,
+                token1Price,
+                amount0Value,
+                amount1Value,
+                valueUSD
+              });
             }
           } catch (error) {
-            console.error('Error calculating valueUSD:', error);
+            console.error('Error calculating USD value:', error);
+            valueUSD = '0';
           }
           
-          // Create the edge with mappings that match both the GraphQL schema and database fields
+          // Create cursor from the MongoDB ID
+          const cursor = Buffer.from(swap._id.$oid).toString('base64');
+          
+          // Important! Pass the complete token objects as required by the GraphQL schema
+          // This is critical for properly rendering the tokens in the UI
           return {
-            cursor: Buffer.from(swapData.id).toString('base64'),
+            cursor,
             node: {
-              id: swapData.id,
-              pairId: swapData.pairId,
-              pair: swapData.pairId ? { id: swapData.pairId } : null,
-              // Map fields from database to GraphQL schema
-              txHash: swapData.txHash || swapData.hash || '',
-              userAddress: swapData.userAddress || swapData.sender || '',
-              amountIn0: swapData.amountIn0 || swapData.amount0In || '0',
-              amountIn1: swapData.amountIn1 || swapData.amount1In || '0',
-              amountOut0: swapData.amountOut0 || swapData.amount0Out || '0',
-              amountOut1: swapData.amountOut1 || swapData.amount1Out || '0',
-              blockNumber: swapData.blockNumber || 0,
-              timestamp: swapData.timestamp || 0,
-              token0,
-              token1,
+              id: swap._id.$oid,
+              pairId: pairId || '',
+              pair: pair ? {
+                id: pair.id,
+                address: pair.address,
+                reserve0: pair.reserve0,
+                reserve1: pair.reserve1,
+                token0: pair.token0,
+                token1: pair.token1
+              } : null,
+              txHash,
+              userAddress,
+              amountIn0,
+              amountIn1,
+              amountOut0,
+              amountOut1,
+              blockNumber,
+              timestamp,
+              token0: pair?.token0 || null,
+              token1: pair?.token1 || null,
               valueUSD
             }
           };
         });
         
-        // Get total count - this can be cached for better performance
-        let swapCount = 0;
-        try {
-          swapCount = await prisma.swap.count();
-        } catch (error) {
-          console.error('Error getting swap count:', error);
-        }
+        // Get the last cursor for pagination
+        const endCursor = edges.length > 0 ? edges[edges.length - 1].cursor : null;
         
-        return {
+        // Get total count
+        const totalCount = await prisma.swap.count();
+        
+        const result = {
           edges,
           pageInfo: {
             hasNextPage,
             hasPreviousPage: false,
-            startCursor: edges[0]?.cursor || null,
-            endCursor: edges[edges.length - 1]?.cursor || null
+            startCursor: edges.length > 0 ? edges[0].cursor : null,
+            endCursor
           },
-          totalCount: swapCount
+          totalCount
         };
+        
+        // Cache the result
+        try {
+          await redis.set(cacheKey, JSON.stringify(result), 'EX', 60); // Cache for 60 seconds
+        } catch (error) {
+          console.error('Redis cache set error:', error);
+        }
+        
+        return result;
       } catch (error) {
-        console.error('Error fetching transactions:', error);
+        console.error('Error in recentTransactions resolver:', error);
+        
+        // Return empty result in case of error
         return {
           edges: [],
           pageInfo: {
@@ -1750,191 +1896,7 @@ export const resolvers = {
           }
         : null
     },
-    userPositions: async (
-      _parent: Empty,
-      { userAddress }: { userAddress: string },
-      { prisma }: Context
-    ) => {
-      // Get liquidity positions - only include positions with non-zero tokens
-      const liquidityPositions = await prisma.liquidityPosition.findMany({
-        where: {
-          userAddress,
-          // liquidityTokens: { not: '0' },
-        },
-        include: {
-          pair: {
-            include: {
-              token0: true,
-              token1: true,
-            },
-          },
-        },
-      })
 
-      // Get farming positions
-      const farmingPositions = await prisma.farmingPosition.findMany({
-        where: { userAddress: userAddress },
-        include: {
-          pool: true,
-        },
-      })
-
-      // Get staking position
-      const stakingPosition = await prisma.stakingPosition.findUnique({
-        where: { userAddress: userAddress },
-      })
-
-      return {
-        liquidityPositions,
-        farmingPositions,
-        stakingPosition,
-      }
-    },
-
-    // Protocol metrics
-    protocolMetrics: async (_parent: Empty, {}: {}, { prisma }: Context) => {
-      // Get the latest protocol metrics
-      const metrics = await prisma.protocolMetric.findFirst({
-        orderBy: { timestamp: 'desc' },
-      })
-
-      return (
-        metrics || {
-          id: '0',
-          timestamp: Math.floor(Date.now() / 1000),
-          totalValueLockedUSD: '0',
-          liquidityPoolsTVL: '0',
-          stakingTVL: '0',
-          farmingTVL: '0',
-          dailyVolumeUSD: '0',
-          weeklyVolumeUSD: '0',
-          monthlyVolumeUSD: '0',
-          totalVolumeUSD: '0',
-          dailyFeesUSD: '0',
-          weeklyFeesUSD: '0',
-          monthlyFeesUSD: '0',
-          totalFeesUSD: '0',
-          totalUsers: 0,
-          dailyActiveUsers: 0,
-          weeklyActiveUsers: 0,
-          monthlyActiveUsers: 0,
-        }
-      )
-    },
-
-    // Farm pool resolvers
-    farmingPools: async (
-      _parent: Empty,
-      { first = 10, after }: { first?: number; after?: string },
-      { prisma }: Context
-    ) => {
-      try {
-        // Check Redis cache first
-        const cacheKey = `farmingPools:${first}:${after || ''}`;
-        const redis = getRedisClient();
-        
-        try {
-          const cachedResult = await redis.get(cacheKey);
-          if (cachedResult) {
-            return JSON.parse(cachedResult);
-          }
-        } catch (error) {
-          console.error('Redis cache error:', error);
-          // Continue without cache
-        }
-        
-        // Set up query params
-        const queryParams: any = {
-          take: first + 1, // Take one extra to check if there's a next page
-          orderBy: { pid: 'asc' },
-          // Only select fields we need
-          select: {
-            id: true,
-            pid: true,
-            name: true,
-            pairAddress: true,
-            token0Address: true,
-            token1Address: true,
-            allocPoint: true,
-            lastRewardBlock: true,
-            accRewardPerShare: true,
-            rewardsPerBlock: true,
-            totalStaked: true,
-            createdAt: true,
-            updatedAt: true
-          }
-        };
-
-        // Add cursor if provided
-        if (after) {
-          const cursorId = decodeCursor(after);
-          queryParams.cursor = { id: cursorId };
-          queryParams.skip = 1; // Skip the cursor itself
-        }
-
-        // Fetch farming pools with pagination
-        const pools = await prisma.farmingPool.findMany(queryParams);
-
-        // Determine if there are more results
-        const hasNextPage = pools.length > first;
-        const limitedPools = hasNextPage ? pools.slice(0, first) : pools;
-        
-        // Create edges
-        const edges = limitedPools.map((pool: any) => ({
-          node: pool,
-          cursor: pool.id
-        }));
-
-        // Get cached count when possible
-        let totalCount: number;
-        try {
-          const cachedCount = await redis.get('farmingPools:count');
-          if (cachedCount) {
-            totalCount = parseInt(cachedCount, 10);
-          } else {
-            totalCount = await prisma.farmingPool.count();
-            // Cache the count for 5 minutes
-            await redis.set('farmingPools:count', totalCount.toString(), 'EX', 300);
-          }
-        } catch (error) {
-          // If Redis fails, get the count directly
-          totalCount = await prisma.farmingPool.count();
-        }
-        
-        // Create the response
-        const response = {
-          edges,
-          pageInfo: {
-            hasNextPage,
-            hasPreviousPage: !!after,
-            startCursor: edges[0]?.cursor || null,
-            endCursor: edges[edges.length - 1]?.cursor || null
-          },
-          totalCount
-        };
-        
-        // Cache the result
-        try {
-          await redis.set(cacheKey, JSON.stringify(response), 'EX', 60); // 60 seconds cache
-        } catch (error) {
-          console.error('Redis cache set error:', error);
-        }
-        
-        return response;
-      } catch (error) {
-        console.error('Error fetching farming pools:', error);
-        return {
-          edges: [],
-          pageInfo: {
-            hasNextPage: false,
-            hasPreviousPage: false,
-            startCursor: null,
-            endCursor: null,
-          },
-          totalCount: 0,
-        };
-      }
-    },
     farmingPool: async (_parent: Empty, { pid }: { pid: number }, { prisma }: Context) => {
       return prisma.farmingPool.findUnique({
         where: { pid },
