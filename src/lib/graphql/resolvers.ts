@@ -2095,6 +2095,62 @@ export const resolvers = {
       
       return Math.max(0, deadline - now);
     },
+
+    // Add this resolver after the user resolver
+    userPositions: async (
+      _parent: Empty,
+      { userAddress }: { userAddress: string },
+      { prisma }: Context
+    ) => {
+      try {
+        // Get liquidity positions - don't filter out zero balances,
+        // let the UI component handle that logic
+        const liquidityPositions = await prisma.liquidityPosition.findMany({
+          where: { 
+            userAddress: userAddress.toLowerCase() 
+          },
+          include: {
+            pair: {
+              include: {
+                token0: true,
+                token1: true
+              }
+            }
+          }
+        });
+
+        // Get farming positions
+        const farmingPositions = await prisma.farmingPosition.findMany({
+          where: { 
+            userAddress: userAddress.toLowerCase() 
+          },
+          include: {
+            pool: true
+          }
+        });
+
+        // Get staking position
+        const stakingPosition = await prisma.stakingPosition.findUnique({
+          where: { 
+            userAddress: userAddress.toLowerCase() 
+          }
+        });
+
+        return {
+          liquidityPositions,
+          farmingPositions,
+          stakingPosition
+        };
+      } catch (error) {
+        console.error('Error in userPositions resolver:', error);
+        // Even on error, we need to return non-null arrays for non-nullable fields
+        return {
+          liquidityPositions: [],
+          farmingPositions: [],
+          stakingPosition: null
+        };
+      }
+    },
   },
 
   Contribution: {

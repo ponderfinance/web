@@ -1,13 +1,14 @@
 'use client'
 
 import { useAccount } from 'wagmi'
-import { graphql, useLazyLoadQuery } from 'react-relay'
+import { graphql, useLazyLoadQuery, RelayEnvironmentProvider } from 'react-relay'
 import { PoolPageQuery } from '@/src/__generated__/PoolPageQuery.graphql'
 import { Button, Skeleton, Text, View } from 'reshaped'
 import Link from 'next/link'
 import { Plus } from '@phosphor-icons/react'
 import { LiquidityPositionsList } from '@/src/components/LiquidityPositionsList'
-import React, { Suspense, useState } from 'react'
+import React, { Suspense, useState, useEffect } from 'react'
+import { getClientEnvironment } from '@/src/lib/relay/environment'
 
 const userPositionsQuery = graphql`
   query PoolPageQuery($userAddress: String!) {
@@ -46,6 +47,30 @@ function PoolContent({ userAddress }: { userAddress: string }) {
   return <LiquidityPositionsList positionsData={data.userPositions} />
 }
 
+// Wrapper to ensure Relay environment is available
+function PoolContentWithRelay({ userAddress }: { userAddress: string }) {
+  const [environment, setEnvironment] = useState<any>(null);
+  
+  useEffect(() => {
+    // Get the Relay environment on the client side
+    const relayEnvironment = getClientEnvironment();
+    setEnvironment(relayEnvironment);
+  }, []);
+  
+  // Don't render anything until we have the environment
+  if (!environment) {
+    return <PoolLoading />;
+  }
+  
+  return (
+    <RelayEnvironmentProvider environment={environment}>
+      <Suspense fallback={<PoolLoading />}>
+        <PoolContent userAddress={userAddress} />
+      </Suspense>
+    </RelayEnvironmentProvider>
+  );
+}
+
 // Exported page component
 export const PoolPage = () => {
   const account = useAccount()
@@ -71,9 +96,7 @@ export const PoolPage = () => {
           </Link>
         </View>
 
-        <Suspense fallback={<PoolLoading />}>
-          <PoolContent userAddress={userAddress} />
-        </Suspense>
+        <PoolContentWithRelay userAddress={userAddress} />
       </View>
     </View>
   )
