@@ -9,6 +9,9 @@ export const STABLECOIN_ADDRESSES: string[] = [
 // Map symbols to addresses for easier reference
 export const STABLECOIN_SYMBOLS = ['USDT', 'USDC']
 
+// Identify the main token for pricing
+export const MAIN_TOKEN_SYMBOL = 'KKUB'
+
 /**
  * Process price history data to ensure values are properly formatted
  * This is critical for charting to display correct values

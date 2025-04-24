@@ -15,6 +15,7 @@ import {
   isStablecoin,
   isStablecoinBySymbol,
   getStablecoinSymbols,
+  MAIN_TOKEN_SYMBOL
 } from '@/src/lib/utils/tokenPriceUtils'
 
 // Constants
@@ -767,6 +768,7 @@ export const TokenPriceService = {
     prismaClient: any
   ): Promise<number> {
     // For all tokens, try to get the actual market price first
+    // We no longer have a special case for stablecoins - always use market data
     const price = await this.getReliableTokenUsdPrice(counterpartToken, prismaClient);
     
     // If we found a price, use it
@@ -774,11 +776,83 @@ export const TokenPriceService = {
       return price;
     }
     
-    // Only for stablecoins as a last resort, assume ~$1
+    // Only as a fallback for stablecoins as a last resort, if we have no market data
     if (isCounterpartStablecoin || 
         isStablecoin(counterpartToken.address) || 
         isStablecoinBySymbol(counterpartToken.symbol)) {
       console.warn(`Using fallback price for stablecoin ${counterpartToken.address} - no reliable price data available`);
+      
+      // Try to find the stablecoin's price relative to KKUB directly from reserves
+      try {
+        // Find KKUB token
+        const kkubToken = await prismaClient.token.findFirst({
+          where: { symbol: MAIN_TOKEN_SYMBOL },
+          select: { id: true, priceUSD: true }
+        });
+        
+        if (kkubToken && kkubToken.priceUSD) {
+          // Find pair with KKUB
+          const kkubPair = await prismaClient.pair.findFirst({
+            where: {
+              OR: [
+                {
+                  token0Id: counterpartToken.id,
+                  token1Id: kkubToken.id
+                },
+                {
+                  token0Id: kkubToken.id,
+                  token1Id: counterpartToken.id
+                }
+              ]
+            },
+            include: {
+              token0: true,
+              token1: true
+            }
+          });
+          
+          if (kkubPair) {
+            // Calculate from reserves
+            const isToken0 = kkubPair.token0Id === counterpartToken.id;
+            const reserve0 = BigInt(kkubPair.reserve0);
+            const reserve1 = BigInt(kkubPair.reserve1);
+            
+            if (reserve0 > 0n && reserve1 > 0n) {
+              const { formatUnits } = await import('viem');
+              const token0Decimals = kkubPair.token0.decimals || 18;
+              const token1Decimals = kkubPair.token1.decimals || 18;
+              
+              let marketPrice: number;
+              
+              if (isToken0) {
+                // Stablecoin is token0, KKUB is token1
+                const kkubPerStablecoin = Number(formatUnits(
+                  reserve1 * BigInt(10**token0Decimals) / reserve0, 
+                  token1Decimals
+                ));
+                marketPrice = kkubPerStablecoin * parseFloat(kkubToken.priceUSD);
+              } else {
+                // Stablecoin is token1, KKUB is token0
+                const kkubPerStablecoin = Number(formatUnits(
+                  reserve0 * BigInt(10**token1Decimals) / reserve1, 
+                  token0Decimals
+                ));
+                marketPrice = kkubPerStablecoin * parseFloat(kkubToken.priceUSD);
+              }
+              
+              // If we got a reasonable market price, use it
+              if (marketPrice > 0.5 && marketPrice < 1.5) {
+                console.log(`Using market-derived price ${marketPrice} for stablecoin ${counterpartToken.symbol}`);
+                return marketPrice;
+              }
+            }
+          }
+        }
+      } catch (error) {
+        console.error(`Error calculating stablecoin fallback price for ${counterpartToken.symbol}:`, error);
+      }
+      
+      // Final fallback - only use if we have no other data
       return 1.0;
     }
     
