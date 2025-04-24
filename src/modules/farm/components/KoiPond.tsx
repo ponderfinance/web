@@ -26,7 +26,7 @@ export default function KoiPond() {
         <Text align="center">
           Provide liquidity and stake LP tokens to receive KOI.
         </Text>
-        <FarmList />
+        {/* <FarmList /> */}
         {/*<View position="absolute" insetTop={4} insetEnd={4}>*/}
         {/*  <Button onClick={activate}>Create Farm</Button>*/}
         {/*</View>*/}
