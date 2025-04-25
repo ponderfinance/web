@@ -595,11 +595,11 @@ export const TokenPriceService = {
               
               // Get the raw price
               let rawPrice: string
-              if (isToken0 && !refIsToken0) {
-                // Our token is token0, reference token is token1
+            if (isToken0 && !refIsToken0) {
+              // Our token is token0, reference token is token1
                 rawPrice = snapshot.price0 || snapshot.token0Price
-              } else if (!isToken0 && refIsToken0) {
-                // Our token is token1, reference token is token0
+            } else if (!isToken0 && refIsToken0) {
+              // Our token is token1, reference token is token0
                 rawPrice = snapshot.price1 || snapshot.token1Price
               } else {
                 // This shouldn't happen in a properly formed pair
@@ -624,7 +624,7 @@ export const TokenPriceService = {
               const calculatedPrice = normalizedPrice * refTokenPrice
               
               console.log(`Calculated price ${calculatedPrice} from ${normalizedPrice} * ${refTokenPrice}`)
-              
+
               // Validate the price is reasonable
               if (calculatedPrice > 0 && calculatedPrice < 1000000) {
                 try {
@@ -693,13 +693,13 @@ export const TokenPriceService = {
             try {
               // Import viem for proper formatting
               const { formatUnits } = await import('viem')
-              
+
               // Get the raw price from the snapshot
               let rawPrice: string
-              if (isToken0) {
+            if (isToken0) {
                 // Our token is token0
                 rawPrice = snapshot.price0 || snapshot.token0Price
-              } else {
+            } else {
                 // Our token is token1
                 rawPrice = snapshot.price1 || snapshot.token1Price
               }
@@ -724,15 +724,15 @@ export const TokenPriceService = {
               
               // Validate the price is reasonable
               if (calculatedPrice > 0 && calculatedPrice < 1000000) {
-                try {
-                  await db.token.update({
-                    where: { id: tokenId },
+              try {
+                await db.token.update({
+                  where: { id: tokenId },
                     data: { priceUSD: calculatedPrice.toString() }
-                  })
+                })
                   console.log(`Updated database with price ${calculatedPrice} for ${tokenSymbol}`)
-                } catch (error) {
-                  console.error(`Failed to update database with price for ${tokenSymbol}:`, error)
-                }
+              } catch (error) {
+                console.error(`Failed to update database with price for ${tokenSymbol}:`, error)
+              }
                 await this.cacheTokenPrice(tokenId, calculatedPrice)
                 return calculatedPrice
               } else {
@@ -771,8 +771,8 @@ export const TokenPriceService = {
     // We no longer have a special case for stablecoins - always use market data
     const price = await this.getReliableTokenUsdPrice(counterpartToken, prismaClient);
     
-    // If we found a price, use it
-    if (price > 0) {
+      // If we found a price, use it
+      if (price > 0) {
       return price;
     }
     

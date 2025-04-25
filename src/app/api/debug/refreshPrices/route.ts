@@ -46,7 +46,7 @@ export async function GET(request: NextRequest) {
     }
 
     console.log('Starting token price refresh...')
-    
+        
     // Clear the token price cache first
     await TokenPriceService.clearTokenPriceCache()
     console.log('Token price cache cleared')
@@ -55,7 +55,7 @@ export async function GET(request: NextRequest) {
     const tokens = await prisma.token.findMany({
       select: {
         id: true,
-        address: true,
+        address: true, 
         symbol: true,
         decimals: true,
         priceUSD: true
@@ -87,7 +87,7 @@ export async function GET(request: NextRequest) {
             oldPrice: token.priceUSD || '0',
             newPrice: price.toString(),
             success: true
-          }
+            }
         } else {
           return {
             token: token.symbol || token.address,

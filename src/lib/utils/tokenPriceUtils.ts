@@ -1,9 +1,12 @@
 import { formatUnits, parseUnits } from 'viem'
 
 // Constants - don't hardcode prices in this list, just identify which tokens are stablecoins
+// Adding both cases to ensure case-insensitive matching
 export const STABLECOIN_ADDRESSES: string[] = [
   '0x7d984C24d2499D840eB3b7016077164e15E5faA6', // USDT
+  '0x7d984c24d2499d840eb3b7016077164e15e5faa6', // USDT lowercase
   '0x77071ad51ca93fc90e77BCdECE5aa6F1B40fcb21', // USDC
+  '0x77071ad51ca93fc90e77bcdece5aa6f1b40fcb21', // USDC lowercase
 ].map((address) => address.toLowerCase())
 
 // Map symbols to addresses for easier reference

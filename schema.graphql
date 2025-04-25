@@ -252,8 +252,8 @@ type SwapEdge {
 type PriceSnapshot {
   id: ID!
   pairId: String!
-  price0: String!
-  price1: String!
+  price0: Float!
+  price1: Float!
   timestamp: Int!
   blockNumber: Int!
   pair: Pair!

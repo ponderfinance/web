@@ -11,19 +11,22 @@ datasource db {
 model Token {
   id              String   @id @default(auto()) @map("_id") @db.ObjectId
   address         String   @unique
-  symbol          String?
   name            String?
+  symbol          String?
   decimals        Int?
-  imageURI        String?
-  priceUSD        String?
-  priceChange24h  Float?
-  volumeUSD24h    String?
-  lastPriceUpdate DateTime?
+  imageURI        String?  // URI for the token image
+  // Price related fields
+  priceUSD        String?  // Latest price in USD
+  priceChange24h  Float?   // 24h price change percentage
+  volumeUSD24h    String?  // 24h trading volume in USD
+  lastPriceUpdate DateTime? // When the price was last updated
+  // Relationships
+  pairsAsToken0   Pair[]   @relation("Token0")
+  pairsAsToken1   Pair[]   @relation("Token1")
+  // Timestamps
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
   stablePair      String?  // Reference to a stable pair address for price discovery
-  pairsAsToken0   Pair[]   @relation("Token0")
-  pairsAsToken1   Pair[]   @relation("Token1")
   supply          TokenSupply?
 }
 
@@ -40,92 +43,118 @@ model TokenSupply {
 
 // Trading pair model
 model Pair {
-  id                 String              @id @default(auto()) @map("_id") @db.ObjectId
-  address            String              @unique
-  token0Id          String              @db.ObjectId
-  token1Id          String              @db.ObjectId
-  token0            Token               @relation("Token0", fields: [token0Id], references: [id])
-  token1            Token               @relation("Token1", fields: [token1Id], references: [id])
-  reserve0          String
-  reserve1          String
-  totalSupply       String
-  createdAt         DateTime            @default(now())
-  updatedAt         DateTime            @updatedAt
+  id                 String           @id @default(auto()) @map("_id") @db.ObjectId
+  address            String           @unique
+  token0Id           String           @db.ObjectId
+  token1Id           String           @db.ObjectId
+  reserve0           String           // String for precise BigInt representation
+  reserve1           String
+  totalSupply        String
+  // Fees and Protocol data
+  feesPending0       String           @default("0")
+  feesPending1       String           @default("0")
+  feesCollected0     String           @default("0")
+  feesCollected1     String           @default("0")
+  // Relationships
+  token0             Token            @relation("Token0", fields: [token0Id], references: [id])
+  token1             Token            @relation("Token1", fields: [token1Id], references: [id])
   liquidityPositions LiquidityPosition[]
-  feesPending0      String              @default("0")
-  feesPending1      String              @default("0")
-  feesCollected0    String              @default("0")
-  feesCollected1    String              @default("0")
-  swaps             Swap[]
-  priceSnapshots    PriceSnapshot[]
-  reserveSnapshots  PairReserveSnapshot[]
-  lastBlockUpdate   Int
+  swaps              Swap[]
+  priceSnapshots     PriceSnapshot[]
+  reserveSnapshots   PairReserveSnapshot[]
+  // Timestamps
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+  lastBlockUpdate    BigInt          // Using BigInt as per indexer
 
   @@index([token0Id, token1Id])
 }
 
 // Liquidity positions for individual LPs
 model LiquidityPosition {
-  id              String   @id @default(auto()) @map("_id") @db.ObjectId
-  pairId          String   @db.ObjectId
-  userAddress     String
-  liquidityTokens String   // LP tokens held
-  pair            Pair     @relation(fields: [pairId], references: [id])
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id               String   @id @default(auto()) @map("_id") @db.ObjectId
+  pairId           String   @db.ObjectId
+  userAddress      String
+  liquidityTokens  String   // LP tokens held
+  // Relationships
+  pair             Pair     @relation(fields: [pairId], references: [id])
+  // Timestamps
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  lastBlockNumber  BigInt   // Using BigInt as per indexer
 
-  @@index([pairId, userAddress])
+  @@unique([pairId, userAddress])
+  @@index([userAddress])
 }
 
 // Swap events
 model Swap {
-  id           String   @id @default(auto()) @map("_id") @db.ObjectId
-  pairId       String   @db.ObjectId
-  sender       String
-  amount0In    String
-  amount1In    String
-  amount0Out   String
-  amount1Out   String
-  to           String
-  blockNumber  Int
-  timestamp    Int
-  pair         Pair     @relation(fields: [pairId], references: [id])
-  createdAt    DateTime @default(now())
+  id             String   @id @default(auto()) @map("_id") @db.ObjectId
+  pairId         String   @db.ObjectId
+  txHash         String
+  userAddress    String
+  contractSender String?  // Added field for the contract that sent the event
+  recipient      String   // Added field for the recipient address
+  amountIn0      String   // Amount of token0 in (can be 0)
+  amountIn1      String   // Amount of token1 in (can be 0)
+  amountOut0     String   // Amount of token0 out (can be 0)
+  amountOut1     String   // Amount of token1 out (can be 0)
+  blockNumber    BigInt
+  timestamp      BigInt
+  pair           Pair     @relation(fields: [pairId], references: [id])
+  createdAt      DateTime @default(now())
 
-  @@index([pairId, timestamp])
+  @@index([userAddress])
+  @@index([timestamp])
+  @@unique([txHash, pairId])
 }
 
 // Price snapshots for historical data
 model PriceSnapshot {
-  id          String   @id @default(auto()) @map("_id") @db.ObjectId
-  pairId      String   @db.ObjectId
-  price0      String   // Price of token0 in terms of token1
-  price1      String   // Price of token1 in terms of token0
-  timestamp   Int
-  blockNumber Int
-  pair        Pair     @relation(fields: [pairId], references: [id])
-  createdAt   DateTime @default(now())
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  pairId       String   @db.ObjectId
+  price0       Float    // Price of token0 in terms of token1
+  price1       Float    // Price of token1 in terms of token0
+  timestamp    BigInt
+  blockNumber  BigInt
+  pair         Pair     @relation(fields: [pairId], references: [id])
+  createdAt    DateTime @default(now())
 
+  @@index([timestamp])
   @@index([pairId, timestamp])
+}
+
+// Pair reserve snapshots
+model PairReserveSnapshot {
+  id          String @id @default(auto()) @map("_id") @db.ObjectId
+  pairId      String @db.ObjectId
+  reserve0    String
+  reserve1    String
+  reserveUSD  String
+  timestamp   BigInt
+  pair        Pair   @relation(fields: [pairId], references: [id])
+
+  @@index([timestamp])
+  @@index([pairId])
 }
 
 // User aggregate stats
 model UserStat {
-  id               String   @id @default(auto()) @map("_id") @db.ObjectId
-  userAddress      String   @unique
-  totalSwapCount   Int      @default(0)
-  totalLpCount     Int      @default(0)
-  swapVolumeUSD    String   @default("0")
-  liquidityProvidedUSD String @default("0")
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  id                   String   @id @default(auto()) @map("_id") @db.ObjectId
+  userAddress          String   @unique
+  totalSwapCount       BigInt   @default(0)
+  totalLpCount         BigInt   @default(0)
+  swapVolumeUSD        String   @default("0")
+  liquidityProvidedUSD String   @default("0")
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
 }
 
 // Factory state
 model Factory {
   id               String   @id @default(auto()) @map("_id") @db.ObjectId
   address          String   @unique
-  pairCount        Int      @default(0)
+  pairCount        BigInt   @default(0)
   totalVolumeUSD   String   @default("0")
   totalFeesUSD     String   @default("0")
   feeTo            String?  // Address that collects fees
@@ -137,36 +166,30 @@ model Factory {
 
 // Indexer state for tracking progress
 model IndexerState {
-  id                   String   @id @default(auto()) @map("_id") @db.ObjectId
-  key                  String   @unique
-  lastProcessedBlock   Int
-  updatedAt            DateTime @updatedAt
+  id                 String   @id @default(auto()) @map("_id") @db.ObjectId
+  key                String   @unique
+  lastProcessedBlock BigInt
+  updatedAt          DateTime @updatedAt
 }
 
+// Router events
 model RouterEvent {
-  id             String   @id @default(auto()) @map("_id") @db.ObjectId
-  eventType      String   // LiquidityETHAdded, SwapETHForExactTokens, etc.
-  txHash         String
-  userAddress    String?  // Sender/user address
-  contractSender String?  // Added field for contract sender
-  recipient      String?  // To address (if different from sender)
-  tokenAddress   String?  // Token address for liquidity events
-  outputTokenAddress String? // Output token address
-  amountToken    String?  // Token amount
-  amountETH      String?  // ETH amount
-  liquidity      String?  // Liquidity tokens minted
-  tokenPath      String?  // JSON string of token path array
-  inputAmount    String?  // Input amount for price impact warnings
-  outputAmount   String?  // Output amount
-  expectedOutput String?  // Expected output amount
-  priceImpact    String?  // Price impact in basis points
-  deadline       Int?     // Transaction deadline timestamp
-  errorReason    String?  // Error reason for failed events
-  method         String?  // The actual method called
-  success        Boolean  @default(true) // Whether the transaction succeeded
-  blockNumber    Int
-  timestamp      Int
-  createdAt      DateTime @default(now())
+  id                 String   @id @default(auto()) @map("_id") @db.ObjectId
+  eventType          String   // LiquidityETHAdded, SwapETHForExactTokens, etc.
+  txHash             String
+  userAddress        String   // Sender/user address
+  contractSender     String?  // Contract that sent the event
+  recipient          String?  // To address (if different from sender)
+  tokenAddress       String   // Token address for liquidity events
+  outputTokenAddress String?  // Output token address
+  amountToken        String   // Token amount
+  amountETH          String?  // ETH amount
+  liquidity          String?  // Liquidity tokens minted
+  method             String?  // The actual method called
+  success            Boolean  @default(true)
+  blockNumber        BigInt
+  timestamp          BigInt
+  createdAt          DateTime @default(now())
 
   @@index([userAddress])
   @@index([eventType])
@@ -183,7 +206,7 @@ model StakingPosition {
   xPonderBalance      String   // Amount of xPONDER tokens held
   totalRewardsClaimed String   // Total rewards claimed by user
   lastTxHash          String?  // Last transaction hash
-  lastBlockNumber     Int?     // Last block number processed
+  lastBlockNumber     BigInt?  // Last block number processed
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 }
@@ -196,8 +219,8 @@ model StakingEvent {
   ponderAmount    String   // Amount of PONDER involved
   xPonderAmount   String?  // Amount of xPONDER involved (for Staked/Withdrawn)
   txHash          String
-  blockNumber     Int
-  timestamp       Int
+  blockNumber     BigInt
+  timestamp       BigInt
   createdAt       DateTime @default(now())
 
   @@index([userAddress])
@@ -212,8 +235,8 @@ model StakingRebase {
   totalSupply          String   // Total supply of xPONDER
   totalPonderBalance   String   // Total PONDER tokens in staking contract
   txHash               String
-  blockNumber          Int
-  timestamp            Int
+  blockNumber          BigInt
+  timestamp            BigInt
   createdAt            DateTime @default(now())
 
   @@index([timestamp])
@@ -223,7 +246,7 @@ model StakingRebase {
 // Aggregate staking metrics
 model StakingMetric {
   id                  String   @id @default(auto()) @map("_id") @db.ObjectId
-  timestamp           Int      @unique
+  timestamp           BigInt   @unique
   totalPonderStaked   String   // Total PONDER staked
   totalXPonderBalance String   // Total xPONDER supply
   totalRewardsClaimed String   // Total rewards claimed
@@ -234,15 +257,13 @@ model StakingMetric {
   updatedAt           DateTime @updatedAt
 }
 
-// MongoDB-compatible Farming and Fee models
-
 // FarmingPool represents a staking pool in the MasterChef contract
 model FarmingPool {
   id                  String             @id @default(auto()) @map("_id") @db.ObjectId
   pid                 Int                @unique // Pool ID in the MasterChef contract
   lpTokenAddress      String             // LP token address that can be staked
   allocPoint          String             // Allocation points for reward distribution
-  lastRewardTime      Int                // Last time rewards were distributed
+  lastRewardTime      BigInt            // Last time rewards were distributed
   depositFeeBP        Int                // Deposit fee in basis points (1% = 100)
   boostMultiplier     Int                // Maximum boost multiplier (10000 = 1.0x)
   totalStaked         String             // Total LP tokens staked in this pool
@@ -268,7 +289,7 @@ model FarmingPosition {
   createdAt        DateTime  // When position was created
   updatedAt        DateTime  // When position was last updated
   lastTxHash       String    // Last transaction hash affecting this position
-  lastBlockNumber  Int       // Block number of last transaction
+  lastBlockNumber  BigInt   // Block number of last transaction
 
   // Reference to the pool
   poolId           String    @db.ObjectId
@@ -287,8 +308,8 @@ model FarmingEvent {
   pid                Int       // Pool ID
   amount             String    // Amount of tokens involved
   txHash             String    // Transaction hash
-  blockNumber        Int       // Block number
-  timestamp          Int       // Timestamp
+  blockNumber        BigInt   // Block number
+  timestamp          BigInt   // Timestamp
   newWeightedShares  String?   // For WeightedSharesUpdated event
   totalWeightedShares String?  // For WeightedSharesUpdated event
   emissionRate       String?   // For PonderPerSecondUpdated event
@@ -307,7 +328,7 @@ model FarmingEvent {
 // FarmingMetric stores aggregate farming statistics
 model FarmingMetric {
   id                 String    @id @default(auto()) @map("_id") @db.ObjectId
-  timestamp          Int       @unique // Timestamp as unique identifier
+  timestamp          BigInt    @unique // Timestamp as unique identifier
   totalFarmers       Int       // Total unique farmers
   totalPools         Int       // Total number of pools
   totalStaked        String    // Total LP tokens staked across all pools
@@ -329,8 +350,8 @@ model FarmingReward {
   pid               Int       // Pool ID from which rewards were claimed
   amount            String    // Amount of PONDER claimed as reward
   txHash            String    // Transaction hash
-  blockNumber       Int       // Block number
-  timestamp         Int       // Timestamp
+  blockNumber       BigInt   // Block number
+  timestamp         BigInt   // Timestamp
   createdAt         DateTime  @default(now())
 
   // Reference to the pool
@@ -351,8 +372,8 @@ model FeeEvent {
   outputAmount      String?   // Output amount for conversions
   recipient         String?   // Recipient address for certain events
   txHash            String    // Transaction hash
-  blockNumber       Int       // Block number
-  timestamp         Int       // Timestamp
+  blockNumber       BigInt   // Block number
+  timestamp         BigInt   // Timestamp
   createdAt         DateTime  @default(now())
 
   @@index([eventType])
@@ -364,7 +385,7 @@ model FeeEvent {
 // FeeMetric stores fee statistics
 model FeeMetric {
   id                       String    @id @default(auto()) @map("_id") @db.ObjectId
-  timestamp                Int       @unique // Timestamp as unique identifier
+  timestamp                BigInt    @unique // Timestamp as unique identifier
   dailyFeesCollected       String    // Fees collected in the current day
   dailyFeesDistributed     String    // Fees distributed in the current day
   totalFeesCollected       String    // Total fees collected all-time
@@ -378,7 +399,7 @@ model FeeMetric {
 // ProtocolMetric combines all metrics for protocol dashboards
 model ProtocolMetric {
   id                       String    @id @default(auto()) @map("_id") @db.ObjectId
-  timestamp                Int       @unique // Timestamp as unique identifier
+  timestamp                BigInt    @unique // Timestamp as unique identifier
   // TVL metrics
   totalValueLockedUSD      String    // Total value locked across protocol
   liquidityPoolsTVL        String    // TVL in liquidity pools
@@ -418,98 +439,6 @@ model ProtocolMetric {
   updatedAt                DateTime  // When record was last updated
 }
 
-// MongoDB-compatible schema for Launcher functionality
-
-// Launch model to track token launches
-model Launch {
-  id             String         @id @default(auto()) @map("_id") @db.ObjectId
-  launchId       Int            @unique // Unique identifier from the contract
-  tokenAddress   String         // Address of the launched token
-  creatorAddress String         // Address of the creator
-  imageURI       String         // URI of the token image
-  kubRaised      String         // Amount of KUB raised
-  ponderRaised   String         // Amount of PONDER raised
-  status         String         // ACTIVE, COMPLETED, CANCELLED
-  kubPairAddress String?        // Address of the KUB liquidity pair
-  ponderPairAddress String?     // Address of the PONDER liquidity pair
-  hasDualPools   Boolean?       @default(false) // Whether both pools were created
-  ponderPoolSkipped Boolean?    @default(false) // Whether PONDER pool was skipped
-  skippedPonderAmount String?   // Amount of PONDER that would have been used
-  skippedPonderValue String?    // KUB value of skipped PONDER
-  kubLiquidity   String?        // Amount of KUB added as liquidity
-  ponderLiquidity String?       // Amount of PONDER added as liquidity
-  ponderBurned   String?        // Amount of PONDER burned
-  lpWithdrawn    Boolean?       @default(false) // Whether LP tokens were withdrawn
-  lpWithdrawnAt  DateTime?      // When LP tokens were withdrawn
-  completedAt    DateTime?      // When launch was completed
-  cancelledAt    DateTime?      // When launch was cancelled
-  createdAt      DateTime       @default(now())
-  updatedAt      DateTime       @updatedAt
-
-  // Relations
-  contributions  Contribution[] // Contributions to this launch
-  events         LaunchEvent[]  // Events related to this launch
-}
-
-// Contribution model to track user contributions to launches
-model Contribution {
-  id                   String   @id @default(auto()) @map("_id") @db.ObjectId
-  launchId             Int      // Launch identifier
-  contributorAddress   String   // Address of the contributor
-  kubAmount            String   // Amount of KUB contributed
-  ponderAmount         String   // Amount of PONDER contributed
-  ponderValue          String   // KUB value of PONDER contribution
-  tokensReceived       String   // Amount of launch tokens received
-  refunded             Boolean? @default(false) // Whether contribution was refunded
-  refundedKubAmount    String?  // Amount of KUB refunded
-  refundedPonderAmount String?  // Amount of PONDER refunded
-  refundedTokenAmount  String?  // Amount of tokens refunded
-  createdAt            DateTime @default(now())
-  updatedAt            DateTime @updatedAt
-
-  // Relations
-  launch Launch @relation(fields: [launchId], references: [launchId])
-
-  @@index([launchId])
-  @@index([contributorAddress])
-  @@unique([launchId, contributorAddress])
-}
-
-// LaunchEvent model to track events related to launches
-model LaunchEvent {
-  id              String   @id @default(auto()) @map("_id") @db.ObjectId
-  eventType       String   // Type of event (LaunchCreated, KUBContributed, etc.)
-  launchId        Int      // Launch identifier
-  userAddress     String?  // User address involved in the event
-  tokenAddress    String?  // Token address involved in the event
-  amount          String?  // Generic amount field
-  kubAmount       String?  // Amount of KUB
-  ponderAmount    String?  // Amount of PONDER
-  tokenAmount     String?  // Amount of tokens
-  kubValue        String?  // KUB value of PONDER
-  kubRaised       String?  // Total KUB raised
-  ponderRaised    String?  // Total PONDER raised
-  imageURI        String?  // URI of token image
-  kubPairAddress  String?  // Address of KUB pair
-  ponderPairAddress String? // Address of PONDER pair
-  kubLiquidity    String?  // Amount of KUB liquidity
-  ponderLiquidity String?  // Amount of PONDER liquidity
-  timestamp       Int      // Block timestamp
-  txHash          String   // Transaction hash
-  blockNumber     Int      // Block number
-  createdAt       DateTime @default(now())
-
-  // Relations
-  launch Launch @relation(fields: [launchId], references: [launchId])
-
-  @@index([launchId])
-  @@index([eventType])
-  @@index([userAddress])
-  @@index([txHash])
-  @@index([blockNumber])
-  @@unique([txHash, eventType, launchId, blockNumber])
-}
-
 // FactoryEvent model to track admin events on the factory
 model FactoryEvent {
   id              String   @id @default(auto()) @map("_id") @db.ObjectId
@@ -517,8 +446,8 @@ model FactoryEvent {
   oldValue        String?  // Old address value
   newValue        String?  // New address value
   txHash          String   // Transaction hash
-  blockNumber     Int      // Block number
-  timestamp       Int      // Block timestamp
+  blockNumber     BigInt   // Block number
+  timestamp       BigInt   // Block timestamp
   createdAt       DateTime @default(now())
 
   @@index([eventType])
@@ -534,8 +463,8 @@ model OracleEvent {
   price0Cumulative String?  // Cumulative price of token0
   price1Cumulative String?  // Cumulative price of token1
   txHash           String   // Transaction hash
-  blockNumber      Int      // Block number
-  timestamp        Int      // Block timestamp
+  blockNumber      BigInt   // Block number
+  timestamp        BigInt   // Block timestamp
   createdAt        DateTime @default(now())
 
   @@index([eventType])
@@ -548,10 +477,10 @@ model OracleEvent {
 model OracleObservation {
   id               String   @id @default(auto()) @map("_id") @db.ObjectId
   pairAddress      String   // Address of the pair
-  timestamp        Int      // Block timestamp
+  timestamp        BigInt   // Block timestamp
   price0Cumulative String   // Cumulative price of token0
   price1Cumulative String   // Cumulative price of token1
-  blockNumber      Int      // Block number
+  blockNumber      BigInt   // Block number
   observationIndex Int      // Index in the observations array
   createdAt        DateTime @default(now())
 
@@ -565,7 +494,7 @@ model OracleState {
   id               String   @id @default(auto()) @map("_id") @db.ObjectId
   pairAddress      String   @unique // Address of the pair
   currentIndex     Int      // Current index in the observation array
-  lastUpdateTime   Int      // Last time the oracle was updated
+  lastUpdateTime   BigInt   // Last time the oracle was updated
   initialized      Boolean  @default(false) // Whether the pair has been initialized
   token0Address    String   // Address of token0
   token1Address    String   // Address of token1
@@ -576,7 +505,7 @@ model OracleState {
 // Oracle metrics
 model OracleMetric {
   id                      String   @id @default(auto()) @map("_id") @db.ObjectId
-  timestamp               Int      @unique // Timestamp as unique identifier
+  timestamp               BigInt   @unique // Timestamp as unique identifier
   totalInitializedPairs   Int      // Total number of initialized pairs
   totalObservations       Int      // Total number of observations recorded
   averageUpdateInterval   Int      // Average interval between updates in seconds
@@ -584,17 +513,4 @@ model OracleMetric {
   observationCardinality  Int      // Observation array size
   createdAt               DateTime @default(now())
   updatedAt               DateTime @updatedAt
-}
-
-// Reserve snapshots for tracking historical reserves
-model PairReserveSnapshot {
-  id          String   @id @default(auto()) @map("_id") @db.ObjectId
-  pairId      String   @db.ObjectId
-  reserve0    String
-  reserve1    String
-  reserveUSD  String
-  timestamp   Int
-  pair        Pair     @relation(fields: [pairId], references: [id])
-
-  @@index([pairId, timestamp])
 }
