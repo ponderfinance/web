@@ -1732,8 +1732,8 @@ export const resolvers = {
           where: {
             pairId: pair.id,
             timestamp: { gte: startTime },
-            price0: { gt: "0" },  // Fix: Use string for comparison instead of number
-            price1: { gt: "0" }   // Fix: Use string for comparison instead of number
+            price0: { gt: 0 },  // Fix: Use number for comparison instead of string
+            price1: { gt: 0 }   // Fix: Use number for comparison instead of string
           },
           orderBy: { timestamp: 'asc' },
           distinct: ['timestamp'],
