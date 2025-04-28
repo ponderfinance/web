@@ -141,6 +141,7 @@ function TokenChartContent({
 
   // Empty state
   if (tokenPriceChart.length === 0) {
+    console.log(`[TOKEN-CHART] No price data available for ${tokenSymbol}`);
     return (
       <View height={400} align="center" justify="center">
         <Text>No price data available</Text>
@@ -150,6 +151,36 @@ function TokenChartContent({
 
   // Convert readonly array to mutable array for PriceChart
   const chartData = [...tokenPriceChart]
+  
+  // Add debug logging for diagnostics
+  console.log(`[TOKEN-CHART] Rendering chart for ${tokenSymbol} with ${chartData.length} data points`);
+  if (chartData.length > 0) {
+    const values = chartData.map(p => p.value);
+    const min = Math.min(...values);
+    const max = Math.max(...values);
+    console.log(`[TOKEN-CHART] ${tokenSymbol} price range: ${min} to ${max}`);
+    
+    // Log first few data points
+    chartData.slice(0, 3).forEach((point, i) => {
+      console.log(`[TOKEN-CHART] Point ${i}: time=${new Date(point.time * 1000).toISOString()}, value=${point.value}`);
+    });
+  }
+  
+  // Check if this is a stablecoin chart based on symbol
+  const isStablecoin = tokenSymbol && ['USDT', 'USDC', 'DAI', 'BUSD', 'TUSD'].includes(tokenSymbol.toUpperCase());
+  if (isStablecoin) {
+    console.log(`[TOKEN-CHART] ${tokenSymbol} is a stablecoin, applying special formatting`);
+  }
+
+  // Create a custom tooltip formatter for stablecoins to show more decimal places
+  const formatTooltip = isStablecoin 
+    ? (price: number) => {
+        if (price === 0) return '$0.00';
+        return price < 1 
+          ? `$${price.toFixed(4)}` 
+          : `$${price.toFixed(2)}`;
+      }
+    : undefined;
 
   // Render the chart
   return (
@@ -159,6 +190,7 @@ function TokenChartContent({
       title={chartTitle}
       height={400}
       autoSize={true}
+      formatTooltip={formatTooltip}
     />
   )
 }

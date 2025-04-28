@@ -113,8 +113,8 @@ model Swap {
 model PriceSnapshot {
   id           String   @id @default(auto()) @map("_id") @db.ObjectId
   pairId       String   @db.ObjectId
-  price0       String   // Price of token0 in terms of token1 (string for precision)
-  price1       String   // Price of token1 in terms of token0 (string for precision)
+  price0       String?  // Price of token0 in terms of token1 (string for precision), nullable
+  price1       String?  // Price of token1 in terms of token0 (string for precision), nullable
   timestamp    BigInt
   blockNumber  BigInt
   pair         Pair     @relation(fields: [pairId], references: [id])

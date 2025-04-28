@@ -154,15 +154,25 @@ export class PriceChartService {
             timestamp: { gte: fromTimestamp }
           },
           orderBy: { timestamp: 'asc' },
+          select: {
+            id: true,
+            timestamp: true,
+            price0: true,
+            price1: true,
+            blockNumber: true
+          },
           take: limit * 2 // Get more to account for filtering
         });
         
         console.log(`[DEBUG] Found ${snapshots.length} total price snapshots for pair ${pairId}`);
         
-        // Then filter out NULL values in memory
-        const filteredSnapshots = snapshots.filter(snapshot => 
-          isToken0 ? snapshot.price0 != null : snapshot.price1 != null
-        );
+        // Then filter out NULL values in memory - handle null more explicitly
+        const filteredSnapshots = snapshots.filter(snapshot => {
+          const relevantPrice = isToken0 ? snapshot.price0 : snapshot.price1;
+          return relevantPrice !== null && 
+                 relevantPrice !== undefined && 
+                 relevantPrice !== '';
+        });
         
         console.log(`[DEBUG] After filtering NULL prices: ${filteredSnapshots.length} valid snapshots`);
         
@@ -185,7 +195,7 @@ export class PriceChartService {
           console.log(`[DEBUG] Found ${filteredRecent.length} recent price snapshots with non-NULL prices`);
           
           // Sort by timestamp ascending like the original query
-          processedSnapshots = filteredRecent.sort((a, b) => a.timestamp - b.timestamp).slice(0, limit);
+          processedSnapshots = filteredRecent.sort((a, b) => Number(a.timestamp) - Number(b.timestamp)).slice(0, limit);
         } else {
           processedSnapshots = filteredSnapshots.slice(0, limit);
         }
@@ -206,16 +216,17 @@ export class PriceChartService {
         const chartData: ChartDataPoint[] = processedSnapshots
           .map(snapshot => {
             try {
-              // Get raw price from the snapshot
+              // Get raw price from the snapshot, with more explicit null handling
               const rawPrice = isToken0 
-                ? snapshot.price0?.toString() || '0' 
-                : snapshot.price1?.toString() || '0';
+                ? (snapshot.price0 === null || snapshot.price0 === undefined ? '0' : snapshot.price0.toString()) 
+                : (snapshot.price1 === null || snapshot.price1 === undefined ? '0' : snapshot.price1.toString());
               
               // Parse the price to a float
               const parsedPrice = parseFloat(rawPrice);
               
-              // Skip invalid values
+              // Skip invalid values - log more detailed info for debugging
               if (isNaN(parsedPrice) || parsedPrice <= 0) {
+                console.log(`[DEBUG] Skipping invalid price value: ${rawPrice} (parsed as ${parsedPrice})`);
                 return null;
               }
               
@@ -316,7 +327,7 @@ export class PriceChartService {
           console.log(`[DEBUG] Found ${filteredRecent.length} recent snapshots with valid prices`);
           
           // Sort by timestamp ascending like the original query
-          processedSnapshots = filteredRecent.sort((a, b) => a.timestamp - b.timestamp).slice(0, limit);
+          processedSnapshots = filteredRecent.sort((a, b) => Number(a.timestamp) - Number(b.timestamp)).slice(0, limit);
         } else {
           processedSnapshots = filteredSnapshots.slice(0, limit);
         }
@@ -329,16 +340,17 @@ export class PriceChartService {
         const chartData: ChartDataPoint[] = processedSnapshots
           .map(snapshot => {
             try {
-              // Get raw price from the snapshot
+              // Get raw price from the snapshot, with more explicit null handling
               const rawPrice = isToken0 
-                ? snapshot.price0?.toString() || '0' 
-                : snapshot.price1?.toString() || '0';
+                ? (snapshot.price0 === null || snapshot.price0 === undefined ? '0' : snapshot.price0.toString()) 
+                : (snapshot.price1 === null || snapshot.price1 === undefined ? '0' : snapshot.price1.toString());
               
               // Parse the price to a float
               const parsedPrice = parseFloat(rawPrice);
               
-              // Skip invalid values
+              // Skip invalid values - log more detailed info for debugging
               if (isNaN(parsedPrice) || parsedPrice <= 0) {
+                console.log(`[DEBUG] Skipping invalid price value: ${rawPrice} (parsed as ${parsedPrice})`);
                 return null;
               }
               

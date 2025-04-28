@@ -128,20 +128,76 @@ function TokenPriceChartContent({
 
   const tokenPriceChart = data.tokenPriceChart
 
-  // Empty state
+  // Add debugging to see the raw data
+  console.log(`[DEBUG] Raw token data for ${tokenSymbol}:`, { tokenAddress, tokenSymbol, tokenDecimals });
+
+  // More robust empty state checking
   if (!tokenPriceChart || tokenPriceChart.length === 0) {
+    console.log(`[DEBUG] No price data available for ${tokenSymbol}`);
     return (
       <View height={400} align="center" justify="center">
-        <Text>No price data available</Text>
+        <Text>No price data available for {tokenSymbol}</Text>
       </View>
     )
   }
 
-  // Process the chart data to ensure proper formatting
-  const chartData = [...tokenPriceChart].map((point) => ({
-    time: point.time,
-    value: typeof point.value === 'string' ? parseFloat(point.value) : point.value,
-  }))
+  // Very minimal data detection
+  if (tokenPriceChart.length < 3) {
+    console.log(`[DEBUG] Insufficient price data for ${tokenSymbol} (only ${tokenPriceChart.length} points)`);
+    return (
+      <View height={400} align="center" justify="center">
+        <Text>Insufficient price data for {tokenSymbol}</Text>
+        <Text variant="caption-1" color="neutral-faded">The chart requires at least 3 data points</Text>
+      </View>
+    )
+  }
+
+  // Log the raw data we received from the GraphQL query
+  console.log(`[DEBUG] tokenPriceChart raw data for ${tokenSymbol}:`, tokenPriceChart.slice(0, 5));
+
+  // Process the chart data to ensure proper formatting with more robust error handling
+  const chartData = [...tokenPriceChart]
+    .map((point) => {
+      try {
+        return {
+          time: typeof point.time === 'string' ? parseInt(point.time, 10) : Number(point.time),
+          value: typeof point.value === 'string' ? parseFloat(point.value) : Number(point.value)
+        };
+      } catch (error) {
+        console.error(`[DEBUG] Error processing chart point:`, error, point);
+        return null;
+      }
+    })
+    .filter((point): point is {time: number, value: number} => 
+      point !== null && 
+      !isNaN(point.time) && 
+      !isNaN(point.value) && 
+      point.value > 0
+    );
+
+  // Check if values are too small to display (e.g. all 0.000001)
+  const allMinimalValues = chartData.length > 0 && 
+    chartData.every(point => point.value <= 0.000001);
+
+  if (allMinimalValues) {
+    console.log(`[DEBUG] All chart values are minimal (0.000001) for ${tokenSymbol}`);
+    return (
+      <View height={400} align="center" justify="center">
+        <Text>Chart data unavailable for {tokenSymbol}</Text>
+        <Text variant="caption-1" color="neutral-faded">The price data appears to be invalid</Text>
+      </View>
+    )
+  }
+  
+  // Check if we still have enough valid points after filtering
+  if (chartData.length < 3) {
+    console.log(`[DEBUG] Insufficient valid price data after filtering for ${tokenSymbol}`);
+    return (
+      <View height={400} align="center" justify="center">
+        <Text>Insufficient valid price data for {tokenSymbol}</Text>
+      </View>
+    )
+  }
 
   console.log(`[DEBUG] Raw chart data for ${tokenSymbol}:`, chartData.slice(0, 5));
   
@@ -154,17 +210,12 @@ function TokenPriceChartContent({
     console.log(`[DEBUG] Before processing - Min: ${min}, Max: ${max}, Avg: ${avg}`);
   }
 
-  // Check if this token is likely a stablecoin by symbol or reasonable price range
-  const isStablecoin = 
-    ['USDT', 'USDC', 'DAI', 'BUSD', 'TUSD', 'USDC.e', 'FRAX', 'USDP'].includes(tokenSymbol) || 
-    (chartData.length > 0 && 
-      chartData.every(point => 
-        typeof point.value === 'number' && 
-        point.value > 0.5 && 
-        point.value < 1.5
-      )
-    );
+  // Simplified stablecoin detection based purely on token symbol
+  // This is more reliable than trying to detect based on price
+  const isStablecoin = ['USDT', 'USDC', 'DAI', 'BUSD', 'TUSD', 'USDC.e', 'FRAX', 'USDP'].includes(tokenSymbol);
+  console.log(`[DEBUG] Token ${tokenSymbol} is stablecoin: ${isStablecoin}`);
 
+  // Use our simplified processing function
   const processedData = processPriceHistoryData(chartData, tokenDecimals, isStablecoin)
   
   console.log(`[DEBUG] Processed chart data for ${tokenSymbol}:`, processedData.slice(0, 5));
@@ -177,9 +228,6 @@ function TokenPriceChartContent({
     const avg = values.reduce((sum, val) => sum + val, 0) / values.length;
     console.log(`[DEBUG] After processing - Min: ${min}, Max: ${max}, Avg: ${avg}`);
   }
-  
-  console.log(`[DEBUG] Token is stablecoin:`, isStablecoin);
-  console.log(`[DEBUG] Token decimals:`, tokenDecimals);
 
   // Add price formatting for tooltip/hover display with enhanced precision for small values
   const formatTooltip = (value: number) => {

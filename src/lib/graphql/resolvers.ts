@@ -1462,20 +1462,24 @@ export const resolvers = {
         // Process stablecoins to ensure they show correct prices
         for (const edge of edges) {
           const token = edge.node;
-          // Fix stablecoin prices - always set USDC and USDT to $1
+          // No longer force stablecoin prices to $1 - use actual on-chain values
+          // Instead, ensure they have a price if missing
           const stablecoinSymbols = ['USDC', 'USDT'];
           if (token.symbol && stablecoinSymbols.includes(token.symbol.toUpperCase())) {
-            if (!token.priceUSD || token.priceUSD !== '1') {
-              console.log(`[TOKENS] Setting fixed $1 price for stablecoin ${token.symbol} in list view`);
-              token.priceUSD = '1';
+            if (!token.priceUSD) {
+              console.log(`[TOKENS] Getting actual price for stablecoin ${token.symbol} in list view`);
               
-              // Update the database asynchronously
-              prisma.token.update({
-                where: { id: token.id },
-                data: { priceUSD: '1' }
-              }).catch(err => {
-                console.error(`[TOKENS] Error updating stablecoin price in database:`, err);
-              });
+              // Fetch the price from TokenPriceService if needed
+              TokenPriceService.getTokenPriceUSD(token.id)
+                .then(price => {
+                  // Only update if needed and the price exists
+                  if (price > 0) {
+                    console.log(`[TOKENS] Updated ${token.symbol} with actual price $${price}`);
+                  }
+                })
+                .catch(err => {
+                  console.error(`[TOKENS] Error updating stablecoin price:`, err);
+                });
             }
           }
         }
@@ -2251,7 +2255,7 @@ export const resolvers = {
       { prisma }: Context
     ): Promise<ChartDataPoint[]> => {
       try {
-        console.log(`Fetching price chart for token: ${tokenAddress}, timeframe: ${timeframe}, limit: ${limit}`);
+        console.log(`[CHART] Fetching price chart for token: ${tokenAddress}, timeframe: ${timeframe}, limit: ${limit}`);
         
         // Normalize address to lowercase for consistent lookups
         const normalizedAddress = tokenAddress.toLowerCase();
@@ -2262,13 +2266,22 @@ export const resolvers = {
           select: {
             id: true,
             symbol: true,
-            decimals: true
+            decimals: true,
+            priceUSD: true  // Add priceUSD to get current price
           }
         });
 
         if (!token) {
-          console.error(`Token not found: ${tokenAddress}`);
+          console.error(`[CHART] Token not found: ${tokenAddress}`);
           return [];
+        }
+        
+        console.log(`[CHART] Processing chart for ${token.symbol} (id: ${token.id}), current price: $${token.priceUSD || 'unknown'}`);
+        
+        // Check if token is a stablecoin - use symbol for more reliable detection
+        const isStablecoin = ['USDT', 'USDC', 'DAI', 'BUSD', 'TUSD'].includes(token.symbol?.toUpperCase() || '');
+        if (isStablecoin) {
+          console.log(`[CHART] ${token.symbol} is a stablecoin, checking if we should use special handling`);
         }
         
         // Use PriceChartService to get the chart data
@@ -2280,11 +2293,42 @@ export const resolvers = {
           prisma
         );
         
-        console.log(`Retrieved ${chartData.length} price chart data points for ${token.symbol}`);
+        console.log(`[CHART] Retrieved ${chartData.length} price chart data points for ${token.symbol}`);
+        
+        // Add diagnostic info for first few points to help debug
+        if (chartData.length > 0) {
+          console.log(`[CHART] First few data points for ${token.symbol}:`);
+          chartData.slice(0, 3).forEach((point, i) => {
+            console.log(`[CHART] Point ${i}: time=${new Date(point.time * 1000).toISOString()}, value=${point.value}`);
+          });
+        }
+        
+        // For stablecoins, make sure the price range isn't too extreme
+        if (isStablecoin && chartData.length > 0) {
+          // Find min and max values
+          const values = chartData.map(p => p.value);
+          const minValue = Math.min(...values);
+          const maxValue = Math.max(...values);
+          
+          console.log(`[CHART] ${token.symbol} price range: ${minValue} to ${maxValue}`);
+          
+          // If we have very low values (near zero) mixed with reasonable values,
+          // filter out the extremely low values which are likely errors
+          if (minValue < 0.1 && maxValue > 0.3) {
+            console.log(`[CHART] Filtering out extremely low values for ${token.symbol}`);
+            const filteredData = chartData.filter(p => p.value >= 0.1);
+            
+            // Only use filtered data if we have enough points left
+            if (filteredData.length > 5) {
+              console.log(`[CHART] After filtering: ${filteredData.length} points remain`);
+              return filteredData;
+            }
+          }
+        }
         
         return chartData;
       } catch (error) {
-        console.error('Error in tokenPriceChart:', error);
+        console.error('[CHART] Error in tokenPriceChart:', error);
         return [];
       }
     },

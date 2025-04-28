@@ -194,12 +194,14 @@ export default function PriceChart({
     const range = maxValue - minValue;
     const buffer = Math.max(range * 0.1, maxValue * 0.05); // At least 5% buffer or 10% of range
     
-    // Calculate reasonable chart bounds
-    const yAxisMin = Math.max(0, minValue - buffer); // Prevent negative values unless data is negative
-    const yAxisMax = maxValue + buffer;
-    
-    // Detect if this is likely a stablecoin
-    const isStablecoinLike = avgValue > 0.5 && avgValue < 1.5 && range < 0.5;
+    // Check if this is a stablecoin chart based only on title
+    const isStablecoinChart = title && (
+      title.includes('USDT') || 
+      title.includes('USDC') || 
+      title.includes('DAI')
+    );
+
+    console.log(`Chart ${title || 'Unknown'} - isStablecoin: ${isStablecoinChart}, minValue: ${minValue}, maxValue: ${maxValue}`);
 
     // Calculate color variants for area gradient
     const getAlphaColor = (baseColor: string, alpha: number) => {
@@ -247,17 +249,47 @@ export default function PriceChart({
       series.setData(formattedData as AreaData<UTCTimestamp>[])
     }
     
-    // For non-volume charts, set appropriate price range
-    if (type !== 'volume') {
-      // Log the bounds we're using
-      console.log(`[DEBUG] Setting price range: ${yAxisMin} to ${yAxisMax}, isStablecoinLike: ${isStablecoinLike}`);
+    // For stablecoins, use special Y-axis formatting with tighter bounds
+    if (isStablecoinChart) {
+      console.log(`Using stablecoin chart settings for ${title || 'Unknown'}`);
       
-      // Configure price range through the series
+      // Set reasonable bounds for stablecoins
+      const lowerBound = Math.max(0.1, Math.floor(minValue * 20) / 20); // Floor to nearest 0.05
+      const upperBound = Math.min(2.0, Math.ceil(maxValue * 20) / 20);  // Ceil to nearest 0.05
+      
+      console.log(`Setting tight Y-axis bounds for stablecoin: ${lowerBound} to ${upperBound}`);
+      
+      // Override the default Y-axis settings for better precision
+      chart.priceScale('right').applyOptions({
+        autoScale: false,
+        scaleMargins: {
+          top: 0.1,
+          bottom: 0.1,
+        }
+      });
+
+      // Apply specific price range for stablecoins
       series.applyOptions({
         autoscaleInfoProvider: () => ({
           priceRange: {
-            minValue: yAxisMin,
-            maxValue: yAxisMax,
+            minValue: lowerBound,
+            maxValue: upperBound,
+          },
+        }),
+      });
+    }
+
+    // Add price range configuration for non-volume charts
+    if (type !== 'volume' && !isStablecoinChart) {
+      // Log the bounds we're using
+      console.log(`[DEBUG] Setting regular price range: ${minValue} to ${maxValue}`);
+      
+      // Configure price range through the series for non-stablecoin charts
+      series.applyOptions({
+        autoscaleInfoProvider: () => ({
+          priceRange: {
+            minValue: minValue,
+            maxValue: maxValue,
           },
         }),
       });

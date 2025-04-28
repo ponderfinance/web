@@ -92,34 +92,20 @@ export async function GET(request: NextRequest) {
       }
     })
     
-    // 4. Set known stablecoin prices first
-    await prisma.token.update({
-      where: { address: STABLECOINS.USDT.toLowerCase() },
-      data: {
-        priceUSD: '1',
-        lastPriceUpdate: new Date()
-      }
-    })
+    // 4. Calculate stablecoin prices based on actual reserves instead of fixing to $1
+    const usdt = await prisma.token.findUnique({
+      where: { address: STABLECOINS.USDT.toLowerCase() }
+    });
     
-    // Also set USDC to $1 if it exists
+    // Also get USDC if it exists
     const usdcToken = await prisma.token.findUnique({
       where: { address: STABLECOINS.USDC.toLowerCase() }
-    })
-    
-    if (usdcToken) {
-      await prisma.token.update({
-        where: { id: usdcToken.id },
-        data: {
-          priceUSD: '1',
-          lastPriceUpdate: new Date()
-        }
-      })
-    }
+    });
     
     // 5. Calculate KKUB price next (if present), as it's often used as a reference
     const kkubToken = await prisma.token.findUnique({
       where: { address: KKUB_ADDRESS.toLowerCase() }
-    })
+    });
     
     if (kkubToken) {
       try {
@@ -129,7 +115,7 @@ export async function GET(request: NextRequest) {
           address: kkubToken.address,
           decimals: kkubToken.decimals || 18,
           symbol: kkubToken.symbol || 'KKUB'
-        }, prisma)
+        }, prisma);
         
         if (kkubPrice > 0) {
           await prisma.token.update({
@@ -138,22 +124,57 @@ export async function GET(request: NextRequest) {
               priceUSD: kkubPrice.toString(),
               lastPriceUpdate: new Date()
             }
-          })
+          });
           
-          console.log(`Set KKUB price to $${kkubPrice}`)
+          console.log(`Set KKUB price to $${kkubPrice}`);
           
           // Also cache KKUB price
-          await redis.set(`token:${kkubToken.id}:priceUSD`, kkubPrice.toString(), 'EX', 300)
+          await redis.set(`token:${kkubToken.id}:priceUSD`, kkubPrice.toString(), 'EX', 300);
         }
       } catch (error) {
-        console.error(`Error calculating KKUB price:`, error)
+        console.error(`Error calculating KKUB price:`, error);
       }
     }
     
-    // Cache stablecoin prices
-    await redis.set(`token:${STABLECOINS.USDT.toLowerCase()}:priceUSD`, '1', 'EX', 300)
+    // Now calculate the stablecoin prices based on reserves with KKUB
+    if (usdt) {
+      try {
+        const usdtPrice = await TokenPriceService.getTokenPriceUSD(usdt.id);
+        if (usdtPrice > 0) {
+          await prisma.token.update({
+            where: { id: usdt.id },
+            data: {
+              priceUSD: usdtPrice.toString(),
+              lastPriceUpdate: new Date()
+            }
+          });
+          
+          console.log(`Set USDT price to $${usdtPrice} (actual value)`);
+          await redis.set(`token:${usdt.id}:priceUSD`, usdtPrice.toString(), 'EX', 300);
+        }
+      } catch (error) {
+        console.error(`Error calculating USDT price:`, error);
+      }
+    }
+    
     if (usdcToken) {
-      await redis.set(`token:${STABLECOINS.USDC.toLowerCase()}:priceUSD`, '1', 'EX', 300)
+      try {
+        const usdcPrice = await TokenPriceService.getTokenPriceUSD(usdcToken.id);
+        if (usdcPrice > 0) {
+          await prisma.token.update({
+            where: { id: usdcToken.id },
+            data: {
+              priceUSD: usdcPrice.toString(),
+              lastPriceUpdate: new Date()
+            }
+          });
+          
+          console.log(`Set USDC price to $${usdcPrice} (actual value)`);
+          await redis.set(`token:${usdcToken.id}:priceUSD`, usdcPrice.toString(), 'EX', 300);
+        }
+      } catch (error) {
+        console.error(`Error calculating USDC price:`, error);
+      }
     }
     
     // 6. Get all remaining tokens and recalculate their prices
@@ -228,8 +249,8 @@ export async function GET(request: NextRequest) {
         updatedPairs: updatedPairs.length,
         updatedTokenPrices: updatedTokenPrices.length,
         baseTokens: {
-          USDT: '1.0',
-          USDC: usdcToken ? '1.0' : 'not found',
+          USDT: usdt ? await redis.get(`token:${usdt.id}:priceUSD`) : 'not found',
+          USDC: usdcToken ? await redis.get(`token:${usdcToken.id}:priceUSD`) : 'not found',
           KKUB: kkubToken ? await redis.get(`token:${kkubToken.id}:priceUSD`) : 'not found'
         },
         tokens: updatedTokenPrices.map(t => `${t.symbol || t.id}: ${t.price}`)

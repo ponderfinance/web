@@ -10,14 +10,14 @@ export const STABLECOIN_ADDRESSES: string[] = [
 ].map((address) => address.toLowerCase())
 
 // Map symbols to addresses for easier reference
-export const STABLECOIN_SYMBOLS = ['USDT', 'USDC']
+export const STABLECOIN_SYMBOLS = ['USDT', 'USDC', 'DAI', 'BUSD', 'TUSD', 'USDC.e', 'FRAX', 'USDP']
 
 // Identify the main token for pricing
 export const MAIN_TOKEN_SYMBOL = 'KKUB'
 
 /**
  * Process price history data to ensure values are properly formatted
- * This is critical for charting to display correct values
+ * This is a simplified implementation that handles both regular tokens and stablecoins
  */
 export function processPriceHistoryData(
   data: Array<{ time: number; value: number | string }>,
@@ -28,204 +28,55 @@ export function processPriceHistoryData(
     return [];
   }
 
-  // First, convert all values to numbers and ensure time is an integer
+  // Convert all values to numbers and ensure time is an integer
   const convertedData = data.map((point) => ({
     time: Math.floor(Number(point.time)),
     value: typeof point.value === 'string' ? parseFloat(point.value) : point.value,
   }))
 
-  // Special case for stablecoins - check if the average is reasonable 
-  // and skip normalization if values look reasonable (around $1.00)
-  if (isStablecoin || detectIsStablecoinData(convertedData.map(d => d.value))) {
-    // Filter out extreme outliers for stablecoins (> $2 or < $0.1)
-    const filteredData = convertedData.filter(
-      d => d.value > 0.1 && d.value < 2.0
-    );
-    
-    // If we still have data after filtering, return it
-    if (filteredData.length > 0) {
-      return filteredData;
-    }
-    // Otherwise fall through to regular processing
-  }
-
-  // Check if values need decimal normalization
-  const needsNormalization = detectNeedsDecimalNormalization(
-    convertedData.map((d) => d.value),
-    tokenDecimals
-  )
-
-  if (needsNormalization) {
-    // Apply normalization based on detected decimal offset
-    return convertedData.map((point) => ({
-      time: Math.floor(Number(point.time)),
-      value: normalizePrice(point.value, tokenDecimals),
-    }))
-  }
-
-  return convertedData
-}
-
-/**
- * Detect if the data looks like it's for a stablecoin
- * This helps avoid unnecessary normalization for stablecoins
- */
-export function detectIsStablecoinData(values: number[]): boolean {
-  if (!values || values.length === 0) return false;
+  // Filter out invalid data points (NaN, negative or zero values)
+  const validData = convertedData.filter(point => 
+    !isNaN(point.value) && point.value > 0
+  );
   
-  // Filter out zeros and invalid values
-  const validValues = values.filter(v => v !== 0 && !isNaN(v));
-  if (validValues.length === 0) return false;
-  
-  // Calculate average value
-  const avg = validValues.reduce((sum, val) => sum + val, 0) / validValues.length;
-  
-  // Check if average is reasonably close to $1.00 (common for stablecoins)
-  // This handles legitimate price deviations for low-liquidity stablecoins
-  if (avg >= 0.5 && avg <= 1.5) {
-    // Also check the range - stablecoins shouldn't vary too much 
-    const max = Math.max(...validValues);
-    const min = Math.min(...validValues);
-    
-    // If the range is small enough, it's likely stablecoin data
-    return (max - min) < 0.75; 
+  if (validData.length === 0) {
+    return [];
   }
   
-  return false;
-}
-
-/**
- * Detect if a series of price values needs decimal normalization
- * This happens when we have raw blockchain values instead of human-readable values
- * Improved to better detect when normalization is necessary
- */
-export function detectNeedsDecimalNormalization(
-  values: number[],
-  tokenDecimals?: number
-): boolean {
-  if (!values || values.length === 0) return false
-
-  // Filter out zeros and invalid values to avoid skewing detection
-  const nonZeroValues = values.filter((v) => v !== 0 && !isNaN(v))
-  if (nonZeroValues.length === 0) return false
-  
-  // Get the average magnitude of values
-  const avgMagnitude =
-    nonZeroValues.reduce((sum, val) => {
-      return sum + Math.log10(Math.abs(val))
-    }, 0) / nonZeroValues.length
-  
-  // Check the range of values to see if they're consistent
-  const magnitudes = nonZeroValues.map(v => Math.log10(Math.abs(v)))
-  const maxMagnitude = Math.max(...magnitudes)
-  const minMagnitude = Math.min(...magnitudes)
-  
-  // Special case: Check if the data looks like stablecoin prices
-  // If values are mostly between 0.7 and 1.3, it's likely a stablecoin
-  // and we should NOT normalize
-  const avg = nonZeroValues.reduce((sum, val) => sum + val, 0) / nonZeroValues.length;
-  if (avg > 0.7 && avg < 1.3) {
-    const max = Math.max(...nonZeroValues);
-    const min = Math.min(...nonZeroValues);
-    
-    // If range is small, these are likely already correct stablecoin prices
-    if ((max - min) < 0.5) {
-      return false;
-    }
+  // For stablecoins: simply filter out extreme outliers 
+  // without complex normalization logic
+  if (isStablecoin) {
+    // Use more generous bounds for stablecoins - allow values from $0.1 to $10
+    // This handles a wider range of stablecoin values including USDC at ~$0.49
+    return validData.filter(point => point.value > 0.1 && point.value < 10);
   }
   
-  // If we know token decimals, use that for a more accurate check
+  // For regular tokens: check if they need normalization
+  // First, check if values are already in a reasonable range
+  const values = validData.map(point => point.value);
+  const maxValue = Math.max(...values);
+  
+  // If maximum value is already in a reasonable range (< 1 million), no normalization needed
+  if (maxValue < 1_000_000) {
+    return validData;
+  }
+  
+  // Otherwise, apply normalization based on token decimals
   if (tokenDecimals && tokenDecimals > 0) {
-    // If average magnitude is close to or greater than decimals, it's likely raw blockchain values
-    if (avgMagnitude > tokenDecimals - 3) {
-      return true
-    }
-    
-    // If magnitude is suspiciously large (not reasonable for token prices), normalize
-    if (avgMagnitude > 6) {
-      return true
-    }
+    return validData.map(point => ({
+      time: point.time,
+      value: point.value / Math.pow(10, tokenDecimals)
+    }));
   } else {
-    // Without token decimals, use more aggressive heuristics
-    // Most token prices are well below 100,000, so magnitudes above 5 are suspicious
-    if (avgMagnitude > 5) {
-      return true
-    }
+    // Without token decimals, guess based on magnitude
+    const magnitude = Math.floor(Math.log10(maxValue));
+    const decimalsToUse = Math.floor(magnitude / 3) * 3; // Round to nearest power of 1000
     
-    // If the magnitude range is extreme, this indicates issues with scaling
-    if (maxMagnitude - minMagnitude > 8) {
-      return true
-    }
+    return validData.map(point => ({
+      time: point.time,
+      value: point.value / Math.pow(10, decimalsToUse)
+    }));
   }
-  
-  // Default case: values are likely correctly scaled already
-  return false
-}
-
-/**
- * Normalize a price value that's incorrectly scaled
- * Improved to handle a wider range of scaling scenarios
- */
-export function normalizePrice(value: number, tokenDecimals?: number): number {
-  if (value === 0 || isNaN(value)) return value
-
-  // Detect the magnitude of the value
-  const magnitude = Math.floor(Math.log10(Math.abs(value)))
-  
-  // If we know the token's decimals, use that for more accurate normalization
-  if (tokenDecimals !== undefined && tokenDecimals > 0) {
-    // If the magnitude is close to the token's decimals, normalize using tokenDecimals
-    if (magnitude >= tokenDecimals - 3) {
-      try {
-        // Use viem's formatUnits for precise normalization
-        return parseFloat(formatUnits(BigInt(Math.round(value)), tokenDecimals))
-      } catch (error) {
-        // Fallback to simple division if BigInt conversion fails
-        return value / Math.pow(10, tokenDecimals)
-      }
-    }
-    
-    // For large values that don't match token decimals but are still too big
-    if (magnitude > 6) {
-      // Find the closest power of 10 multiple of 3 (to match common decimal places)
-      const normalizeDecimals = Math.floor(magnitude / 3) * 3
-      return value / Math.pow(10, normalizeDecimals)
-    }
-  } else {
-    // Without token decimals, use adaptive normalization based on magnitude
-    
-    // Very large values (billions+) - assume 18 decimals (common for ERC20)
-    if (magnitude >= 12) {
-      try {
-        return parseFloat(formatUnits(BigInt(Math.round(value)), 18))
-      } catch (error) {
-        return value / 1e18
-      }
-    }
-    // Large values (millions) - try 9 decimals
-    else if (magnitude >= 8) {
-      try {
-        return parseFloat(formatUnits(BigInt(Math.round(value)), 9))
-      } catch (error) {
-        return value / 1e9
-      }
-    }
-    // Medium values (thousands) - try 6 decimals 
-    else if (magnitude >= 5) {
-      try {
-        return parseFloat(formatUnits(BigInt(Math.round(value)), 6))
-      } catch (error) {
-        return value / 1e6
-      }
-    }
-    // Smaller values that still need normalization
-    else if (magnitude >= 3) {
-      return value / 1e3
-    }
-  }
-
-  // If we reach here, no normalization was applied
-  return value
 }
 
 /**

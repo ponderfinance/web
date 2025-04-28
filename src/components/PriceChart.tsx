@@ -74,14 +74,79 @@ const PriceChart: React.FC<PriceChartProps> = ({
 
   useEffect(() => {
     // If loading or no container, don't do anything
-    if (loading || !chartContainerRef.current) return
+    if (loading || !chartContainerRef.current) {
+      return
+    }
 
-    // Clean up any existing chart
+    // Cleanup previous chart
     if (chartRef.current) {
       chartRef.current.remove()
       chartRef.current = null
-      seriesRef.current = null
     }
+
+    // Setup empty or placeholder chart if no data
+    if (!data || data.length === 0) {
+      const placeholderChart = createChart(chartContainerRef.current, {
+        width: 600,
+        height: 400,
+        layout: {
+          background: {
+            type: ColorType.Solid,
+            color: defaultColors.background,
+          },
+          textColor: defaultColors.text,
+        },
+        grid: {
+          vertLines: {
+            color: 'rgba(42, 46, 57, 0.5)',
+            style: LineStyle.Dotted,
+          },
+          horzLines: {
+            color: 'rgba(42, 46, 57, 0.5)',
+            style: LineStyle.Dotted,
+          },
+        },
+        timeScale: {
+          timeVisible: true,
+          secondsVisible: false,
+          borderColor: 'rgba(197, 203, 206, 0.8)',
+        },
+        rightPriceScale: {
+          borderColor: 'rgba(197, 203, 206, 0.8)',
+          scaleMargins: { top: 0.1, bottom: 0.2 },
+          autoScale: true,
+        },
+        crosshair: {
+          mode: 1,
+        },
+      })
+      
+      chartRef.current = placeholderChart
+      return
+    }
+
+    // Determine if this is a stablecoin chart based on the token symbol or price characteristics
+    const isStablecoinChart = 
+      (title?.includes('USDT') || 
+       title?.includes('USDC') || 
+       title?.includes('DAI') || 
+       title?.includes('Stablecoin')) ||
+      (title?.includes('USD') && data.some(point => point.value > 0.1 && point.value < 5.0));
+    
+    console.log(`Chart for ${title} - isStablecoin: ${isStablecoinChart}`);
+    
+    // Calculate appropriate scale margins based on chart type
+    const scaleMargins = isStablecoinChart
+      ? { top: 0.15, bottom: 0.15 } // Tighter margins for stablecoins to highlight price changes
+      : { top: 0.1, bottom: 0.2 }; // Default margins for regular tokens
+    
+    // Find min/max values for scaling
+    const values = data.map(point => point.value);
+    const minValue = Math.min(...values);
+    const maxValue = Math.max(...values);
+    const avgValue = values.reduce((sum, val) => sum + val, 0) / values.length;
+    
+    console.log(`Chart data range - Min: ${minValue}, Max: ${maxValue}, Avg: ${avgValue}`);
 
     // Calculate container width if autoSize is true
     const containerWidth =
@@ -89,14 +154,6 @@ const PriceChart: React.FC<PriceChartProps> = ({
       (autoSize && chartContainerRef.current
         ? chartContainerRef.current.clientWidth
         : 600)
-
-    // Determine the best price format based on data values
-    const values = data.map(item => item.value).filter(v => !isNaN(v) && v !== 0)
-    const minValue = values.length ? Math.min(...values) : 0
-    const maxValue = values.length ? Math.max(...values) : 0
-    const avgMagnitude = values.length 
-      ? values.reduce((sum, val) => sum + Math.log10(Math.abs(val) || 1), 0) / values.length 
-      : 0
 
     // Create price formatter based on value range
     let priceFormatter: (price: number) => string
@@ -108,6 +165,21 @@ const PriceChart: React.FC<PriceChartProps> = ({
       // Create default formatter based on data range
       priceFormatter = (price: number) => {
         if (price === 0) return '$0.00'
+        
+        // Special formatting for stablecoins - show more decimal places
+        if (isStablecoinChart) {
+          if (Math.abs(price) < 0.001) {
+            return '$' + price.toFixed(6)
+          } else if (Math.abs(price) < 0.01) {
+            return '$' + price.toFixed(5)
+          } else if (Math.abs(price) < 0.1) {
+            return '$' + price.toFixed(4)
+          } else if (Math.abs(price) < 1) {
+            return '$' + price.toFixed(3)
+          } else {
+            return '$' + price.toFixed(2)
+          }
+        }
         
         // Format based on magnitude
         if (Math.abs(price) < 0.0001) {
@@ -134,7 +206,8 @@ const PriceChart: React.FC<PriceChartProps> = ({
     // Create a custom price format for the Y-axis
     const priceFormat: PriceFormat = {
       type: 'custom',
-      minMove: minValue < 0.001 ? 0.00000001 : 0.01,
+      // Use smaller minMove for stablecoins to show finer price movements
+      minMove: isStablecoinChart ? 0.00001 : (minValue < 0.001 ? 0.00000001 : 0.01),
       formatter: priceFormatter
     }
 
@@ -166,10 +239,8 @@ const PriceChart: React.FC<PriceChartProps> = ({
       },
       rightPriceScale: {
         borderColor: 'rgba(197, 203, 206, 0.8)',
-        scaleMargins: {
-          top: 0.1,
-          bottom: 0.1,
-        },
+        scaleMargins,
+        autoScale: !isStablecoinChart, // Use fixed scale for stablecoins
       },
       crosshair: {
         mode: 1,
@@ -213,6 +284,35 @@ const PriceChart: React.FC<PriceChartProps> = ({
     }
 
     seriesRef.current = series
+    
+    // For stablecoins, set custom price range to better show small movements
+    if (isStablecoinChart && type !== 'volume') {
+      // Calculate a reasonable range for stablecoin display
+      const centralValue = avgValue;
+      // Use a percentage of central value to create bounds, but also consider actual range
+      const range = Math.max(maxValue - minValue, centralValue * 0.2);
+      
+      // Create bounds, giving more space below than above
+      const minBound = Math.max(0, centralValue - range * 0.6);
+      const maxBound = centralValue + range * 0.4;
+      
+      console.log(`Setting stablecoin Y-axis bounds: ${minBound} to ${maxBound}`);
+      
+      // Apply custom bounds to better highlight stablecoin price movements
+      series.applyOptions({
+        autoscaleInfoProvider: () => ({
+          priceRange: {
+            minValue: minBound,
+            maxValue: maxBound,
+          },
+        }),
+      });
+      
+      // Disable autoscaling for more stable display
+      chart.priceScale('right').applyOptions({
+        autoScale: false,
+      });
+    }
 
     // Format the data for the chart
     const formattedData = [...data].map((item) => ({

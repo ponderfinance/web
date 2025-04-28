@@ -105,17 +105,35 @@ async function updateRealPrices() {
         stablecoinPrice = parseFloat(kkubToken.priceUSD) / exchangeRate;
       }
       
+      try {
+        // Check if we need a price snapshot for historical data
+        await ensurePriceSnapshot(prisma, pair.id, reserve0, reserve1, token0Decimals, token1Decimals);
+      } catch (e) {
+        console.log(`Warning: Could not create price snapshot: ${e.message}`);
+      }
+      
       console.log(`Calculated ${stablecoin.symbol} price: $${stablecoinPrice}`);
       
-      // Update stablecoin price in database
+      // Update stablecoin price in database directly
       console.log(`Updating ${stablecoin.symbol} price from $${stablecoin.priceUSD} to $${stablecoinPrice}`);
       
+      // MongoDB-compatible update
       await prisma.token.update({
         where: { id: stablecoin.id },
-        data: { priceUSD: stablecoinPrice.toString() }
+        data: { 
+          priceUSD: stablecoinPrice.toString(),
+          lastPriceUpdate: new Date(),
+          stablePair: 'MANUAL'  // Flag to prevent auto-updates
+        }
       });
       
-      console.log(`Updated ${stablecoin.symbol} price to $${stablecoinPrice}`);
+      // Double-check the update worked
+      const updatedToken = await prisma.token.findUnique({
+        where: { id: stablecoin.id },
+        select: { priceUSD: true }
+      });
+      
+      console.log(`Verified ${stablecoin.symbol} price is now: $${updatedToken.priceUSD}`);
     }
     
     // Get the updated stablecoin prices
@@ -137,11 +155,68 @@ async function updateRealPrices() {
     
     console.log('\nAll prices updated based on actual on-chain reserves.');
     
+    // Check for processes that might override prices
+    console.log('\nChecking for automatic price update processes...');
+    
+    // Look for files related to price updates
+    console.log('Hint: Check the following areas that might override these prices:');
+    console.log('1. Check if the API or GraphQL resolvers might be setting default prices');
+    console.log('2. Look for cron jobs or scheduled tasks that update token prices');
+    console.log('3. Review the tokenPriceService for any logic that might force $1 for stablecoins');
+    console.log('4. Check if any background worker or server process is running that resets prices');
+    
+    // Clear Redis cache to ensure new prices are used
+    console.log('\nYou should also run scripts/clear-all-redis.js to ensure cache is cleared');
+    
   } catch (error) {
     console.error('Error updating token prices:', error);
     console.error(error.stack);
   } finally {
     await prisma.$disconnect();
+  }
+}
+
+// Helper function to ensure we have price snapshots for historical data
+async function ensurePriceSnapshot(prisma, pairId, reserve0, reserve1, decimals0, decimals1) {
+  try {
+    // Calculate price values
+    const price0 = reserve1 > 0n ? (reserve0 * BigInt(10 ** 18)) / reserve1 : 0n;
+    const price1 = reserve0 > 0n ? (reserve1 * BigInt(10 ** 18)) / reserve0 : 0n;
+    
+    // Check if we have a recent snapshot (within the last hour)
+    const recentSnapshot = await prisma.priceSnapshot.findFirst({
+      where: {
+        pairId,
+        timestamp: {
+          gte: Math.floor(Date.now() / 1000) - 3600 // Within the last hour
+        }
+      }
+    });
+    
+    if (!recentSnapshot) {
+      console.log(`Creating new price snapshot for pair ${pairId}`);
+      
+      // Get the latest block number for the snapshot (we'll use 1 as placeholder)
+      const blockNumber = 1;
+      
+      // Create a new snapshot with required fields for MongoDB
+      await prisma.priceSnapshot.create({
+        data: {
+          pairId,
+          timestamp: Math.floor(Date.now() / 1000),
+          price0: price0.toString(),
+          price1: price1.toString(),
+          blockNumber: blockNumber.toString()
+        }
+      });
+      
+      console.log(`Created new price snapshot for ${pairId}`);
+    } else {
+      console.log(`Recent price snapshot exists for pair ${pairId}`);
+    }
+  } catch (error) {
+    console.error(`Error ensuring price snapshot: ${error.message}`);
+    throw error; // Re-throw to be caught by caller
   }
 }
 
