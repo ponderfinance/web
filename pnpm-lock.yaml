@@ -50,6 +50,9 @@ importers:
       dataloader:
         specifier: ^2.2.3
         version: 2.2.3
+      dotenv:
+        specifier: ^16.5.0
+        version: 16.5.0
       framer-motion:
         specifier: ^12.6.2
         version: 12.6.2(@emotion/is-prop-valid@1.2.2)(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
@@ -2334,8 +2337,8 @@ packages:
   domutils@3.1.0:
     resolution: {integrity: sha512-H78uMmQtI2AhgDJjWeQmHwJJ2bLPD3GMmO7Zja/ZZh84wkm+4ut+IUnUdRa8uCGX88DiVx1j6FRe1XfxEgjEZA==}
 
-  dotenv@16.4.7:
-    resolution: {integrity: sha512-47qPchRCykZC03FhkYAhrvwU4xDBFIj1QPqaarj6mdM/hgUzfPHcpkHJOn3mJAufFeeAxAzeGsr5X0M4k6fLZQ==}
+  dotenv@16.5.0:
+    resolution: {integrity: sha512-m/C+AwOAr9/W1UOIZUo232ejMNnJAJtYQjUbHoNTBNTJSvqzzDh7vnrei3o3r3m9blf6ZoDkvcw0VmozNRFJxg==}
     engines: {node: '>=12'}
 
   dset@3.1.4:
@@ -6188,7 +6191,7 @@ snapshots:
       '@walletconnect/ethereum-provider': 2.19.0(@types/react@18.3.16)(bufferutil@4.0.8)(encoding@0.1.13)(ioredis@5.6.0)(react@18.2.0)(typescript@5.7.2)(utf-8-validate@5.0.10)(zod@3.24.1)
       '@walletconnect/modal': 2.7.0(@types/react@18.3.16)(react@18.2.0)
       base64-js: 1.5.1
-      dotenv: 16.4.7
+      dotenv: 16.5.0
       encoding: 0.1.13
       eventemitter3: 5.0.1
       fast-password-entropy: 1.1.1
@@ -8048,7 +8051,7 @@ snapshots:
       domelementtype: 2.3.0
       domhandler: 5.0.3
 
-  dotenv@16.4.7: {}
+  dotenv@16.5.0: {}
 
   dset@3.1.4: {}
 

@@ -21,13 +21,33 @@ export const MAIN_TOKEN_SYMBOL = 'KKUB'
  */
 export function processPriceHistoryData(
   data: Array<{ time: number; value: number | string }>,
-  tokenDecimals?: number
+  tokenDecimals?: number,
+  isStablecoin: boolean = false
 ): Array<{ time: number; value: number }> {
-  // First, convert all values to numbers
+  if (!data || data.length === 0) {
+    return [];
+  }
+
+  // First, convert all values to numbers and ensure time is an integer
   const convertedData = data.map((point) => ({
-    time: point.time,
+    time: Math.floor(Number(point.time)),
     value: typeof point.value === 'string' ? parseFloat(point.value) : point.value,
   }))
+
+  // Special case for stablecoins - check if the average is reasonable 
+  // and skip normalization if values look reasonable (around $1.00)
+  if (isStablecoin || detectIsStablecoinData(convertedData.map(d => d.value))) {
+    // Filter out extreme outliers for stablecoins (> $2 or < $0.1)
+    const filteredData = convertedData.filter(
+      d => d.value > 0.1 && d.value < 2.0
+    );
+    
+    // If we still have data after filtering, return it
+    if (filteredData.length > 0) {
+      return filteredData;
+    }
+    // Otherwise fall through to regular processing
+  }
 
   // Check if values need decimal normalization
   const needsNormalization = detectNeedsDecimalNormalization(
@@ -38,12 +58,40 @@ export function processPriceHistoryData(
   if (needsNormalization) {
     // Apply normalization based on detected decimal offset
     return convertedData.map((point) => ({
-      time: point.time,
+      time: Math.floor(Number(point.time)),
       value: normalizePrice(point.value, tokenDecimals),
     }))
   }
 
   return convertedData
+}
+
+/**
+ * Detect if the data looks like it's for a stablecoin
+ * This helps avoid unnecessary normalization for stablecoins
+ */
+export function detectIsStablecoinData(values: number[]): boolean {
+  if (!values || values.length === 0) return false;
+  
+  // Filter out zeros and invalid values
+  const validValues = values.filter(v => v !== 0 && !isNaN(v));
+  if (validValues.length === 0) return false;
+  
+  // Calculate average value
+  const avg = validValues.reduce((sum, val) => sum + val, 0) / validValues.length;
+  
+  // Check if average is reasonably close to $1.00 (common for stablecoins)
+  // This handles legitimate price deviations for low-liquidity stablecoins
+  if (avg >= 0.5 && avg <= 1.5) {
+    // Also check the range - stablecoins shouldn't vary too much 
+    const max = Math.max(...validValues);
+    const min = Math.min(...validValues);
+    
+    // If the range is small enough, it's likely stablecoin data
+    return (max - min) < 0.75; 
+  }
+  
+  return false;
 }
 
 /**
@@ -71,6 +119,20 @@ export function detectNeedsDecimalNormalization(
   const magnitudes = nonZeroValues.map(v => Math.log10(Math.abs(v)))
   const maxMagnitude = Math.max(...magnitudes)
   const minMagnitude = Math.min(...magnitudes)
+  
+  // Special case: Check if the data looks like stablecoin prices
+  // If values are mostly between 0.7 and 1.3, it's likely a stablecoin
+  // and we should NOT normalize
+  const avg = nonZeroValues.reduce((sum, val) => sum + val, 0) / nonZeroValues.length;
+  if (avg > 0.7 && avg < 1.3) {
+    const max = Math.max(...nonZeroValues);
+    const min = Math.min(...nonZeroValues);
+    
+    // If range is small, these are likely already correct stablecoin prices
+    if ((max - min) < 0.5) {
+      return false;
+    }
+  }
   
   // If we know token decimals, use that for a more accurate check
   if (tokenDecimals && tokenDecimals > 0) {

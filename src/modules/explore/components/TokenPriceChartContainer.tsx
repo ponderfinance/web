@@ -143,7 +143,43 @@ function TokenPriceChartContent({
     value: typeof point.value === 'string' ? parseFloat(point.value) : point.value,
   }))
 
-  const processedData = processPriceHistoryData(chartData, tokenDecimals)
+  console.log(`[DEBUG] Raw chart data for ${tokenSymbol}:`, chartData.slice(0, 5));
+  
+  // Report min, max, and average values before processing
+  if (chartData.length > 0) {
+    const values = chartData.map(p => p.value);
+    const min = Math.min(...values);
+    const max = Math.max(...values);
+    const avg = values.reduce((sum, val) => sum + val, 0) / values.length;
+    console.log(`[DEBUG] Before processing - Min: ${min}, Max: ${max}, Avg: ${avg}`);
+  }
+
+  // Check if this token is likely a stablecoin by symbol or reasonable price range
+  const isStablecoin = 
+    ['USDT', 'USDC', 'DAI', 'BUSD', 'TUSD', 'USDC.e', 'FRAX', 'USDP'].includes(tokenSymbol) || 
+    (chartData.length > 0 && 
+      chartData.every(point => 
+        typeof point.value === 'number' && 
+        point.value > 0.5 && 
+        point.value < 1.5
+      )
+    );
+
+  const processedData = processPriceHistoryData(chartData, tokenDecimals, isStablecoin)
+  
+  console.log(`[DEBUG] Processed chart data for ${tokenSymbol}:`, processedData.slice(0, 5));
+  
+  // Report min, max, and average values after processing
+  if (processedData.length > 0) {
+    const values = processedData.map(p => p.value);
+    const min = Math.min(...values);
+    const max = Math.max(...values);
+    const avg = values.reduce((sum, val) => sum + val, 0) / values.length;
+    console.log(`[DEBUG] After processing - Min: ${min}, Max: ${max}, Avg: ${avg}`);
+  }
+  
+  console.log(`[DEBUG] Token is stablecoin:`, isStablecoin);
+  console.log(`[DEBUG] Token decimals:`, tokenDecimals);
 
   // Add price formatting for tooltip/hover display with enhanced precision for small values
   const formatTooltip = (value: number) => {

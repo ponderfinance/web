@@ -1341,8 +1341,6 @@ export const resolvers = {
       let currentPrice = priceData[token.id] || token.priceUSD || '0';
       console.log(`[TOKEN] Current price: ${currentPrice} for ${token.symbol}`);
       
-      // Removed hardcoded stablecoin price handling - prices derived from pairs
-      
       // Always calculate TVL fresh using our utility function
       const tvl = await calculateTokenTVL(token, ctx.prisma);
       console.log(`[TOKEN] Final calculated TVL: ${tvl} for ${token.symbol}`);
@@ -1479,8 +1477,6 @@ export const resolvers = {
             }
           }
         }
-        
-        // Removed hardcoded stablecoin price handling - prices derived from pairs
         
         // Count total tokens matching filter (without pagination)
         const totalCount = await prisma.token.count({ where: filter });
@@ -2021,30 +2017,19 @@ export const resolvers = {
         // Use the relevant token's decimals based on which price we're showing
         const relevantDecimals = (isToken0Stablecoin || isToken1Stablecoin) ? token1Decimals : token0Decimals;
 
-        // Apply consistent scaling based on token decimals
+        // No longer using detectNeedsDecimalNormalization
+        // Instead, apply consistent scaling based on token decimals
         // This ensures the chart y-axis values match the token prices shown elsewhere
         const normalizedChartData = chartData.map((point) => {
-          // Calculate normalized value
-          let normalizedValue = point.value;
-          
-          // Apply normalization if needed
-          if (point.value !== 0 && (point.value < 0.000001 || point.value > 1000000)) {
-            normalizedValue = point.value / Math.pow(10, relevantDecimals);
+          // Skip normalization for zero values or already normalized values
+          if (point.value === 0 || (point.value > 0.000001 && point.value < 1000000)) {
+            return point;
           }
           
-          // Prevent exponential notation by using toFixed and converting back to number
-          // This ensures small numbers are displayed normally
-          if (normalizedValue < 0.000001 && normalizedValue > 0) {
-            normalizedValue = parseFloat(normalizedValue.toFixed(18));
-            // If the value is still too small after formatting, use a minimum value
-            if (normalizedValue === 0) {
-              normalizedValue = 0.000001; // Minimum displayable value
-            }
-          }
-          
+          // Apply normalization using the relevant token's decimals
           return {
-            time: point.time,
-            value: normalizedValue
+            ...point,
+            value: point.value / Math.pow(10, relevantDecimals)
           };
         });
         
@@ -2107,18 +2092,27 @@ export const resolvers = {
         let token0PriceUSD: number = 0
         let token1PriceUSD: number = 0
 
-        // Replace hardcoded stablecoin prices - use TokenPriceService for all tokens
-        // Get token0 price from the price service
-        token0PriceUSD = await TokenPriceService.getTokenPriceUSD(
-          pair.token0.id,
-          token0Decimals
-        )
+        // If token0 is a stablecoin, its price is 1 USD
+        if (isToken0Stablecoin) {
+          token0PriceUSD = 1.0
+        } else {
+          // Get token0 price from the price service
+          token0PriceUSD = await TokenPriceService.getTokenPriceUSD(
+            pair.token0.id,
+            token0Decimals
+          )
+        }
 
-        // Get token1 price from the price service
-        token1PriceUSD = await TokenPriceService.getTokenPriceUSD(
-          pair.token1.id,
-          token1Decimals
-        )
+        // If token1 is a stablecoin, its price is 1 USD
+        if (isToken1Stablecoin) {
+          token1PriceUSD = 1.0
+        } else {
+          // Get token1 price from the price service
+          token1PriceUSD = await TokenPriceService.getTokenPriceUSD(
+            pair.token1.id,
+            token1Decimals
+          )
+        }
 
         // Determine time window based on timeframe
         const now = Math.floor(Date.now() / 1000)

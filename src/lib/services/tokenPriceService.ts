@@ -9,7 +9,6 @@ import { CURRENT_CHAIN } from '@/src/constants/chains'
 import { ORACLE_ABI } from '@/src/constants/abis'
 import { ORACLE_ADDRESS } from '@/src/constants/addresses'
 import {
-  detectNeedsDecimalNormalization,
   getStablecoinAddresses,
   normalizePrice,
   isStablecoin,
@@ -863,7 +862,6 @@ export const TokenPriceService = {
   // Re-export the utility functions for convenience on the server
   getStablecoinAddresses,
   normalizePrice,
-  detectNeedsDecimalNormalization,
   isStablecoin,
   isStablecoinBySymbol,
   getStablecoinSymbols,

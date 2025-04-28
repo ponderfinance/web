@@ -13,6 +13,7 @@ import {
   MouseEventParams,
   UTCTimestamp,
   PriceFormat,
+  ISeriesApi,
 } from 'lightweight-charts'
 import { formatCurrency } from '@/src/lib/utils/tokenPriceUtils'
 
@@ -99,6 +100,10 @@ export default function PriceChart({
     const values = cleanedData.map((item) => item.value)
     const minValue = Math.min(...values)
     const maxValue = Math.max(...values)
+    const avgValue = values.reduce((sum, val) => sum + val, 0) / values.length
+    
+    // Log the data range to help with debugging
+    console.log(`[DEBUG] Chart data range - Min: ${minValue}, Max: ${maxValue}, Avg: ${avgValue}`)
 
     // Create a unified formatter for both the y-axis and tooltip
     const createPriceFormatter = (price: number) => {
@@ -129,7 +134,7 @@ export default function PriceChart({
       formatter: createPriceFormatter,
     }
 
-    // Create chart with dark theme styling to match the screenshot
+    // Create chart with dark theme styling
     const chart = createChart(chartContainerRef.current, {
       layout: {
         background: { color: '#1e1e1e', type: ColorType.Solid },
@@ -143,8 +148,8 @@ export default function PriceChart({
       width: chartContainerRef.current.clientWidth,
       height: height,
       grid: {
-        vertLines: { color: 'var(--rs-color-foreground-neutral-faded)', visible: false, style: 4 }, // Dotted style
-        horzLines: { color: 'var(--rs-color-foreground-neutral-faded)', visible: false, style: 4 }, // Dotted style
+        vertLines: { color: 'var(--rs-color-foreground-neutral-faded)', visible: false, style: 4 },
+        horzLines: { color: 'var(--rs-color-foreground-neutral-faded)', visible: false, style: 4 },
       },
       timeScale: {
         timeVisible: true,
@@ -161,9 +166,6 @@ export default function PriceChart({
         textColor: '#999999',
         entireTextOnly: false,
         borderVisible: false,
-        autoScale: true,
-        mode: 2, // Use mode 2 for better small value display
-        alignLabels: true,
       },
       crosshair: {
         horzLine: {
@@ -188,6 +190,17 @@ export default function PriceChart({
       value: point.value,
     }))
 
+    // Determine appropriate y-axis scale
+    const range = maxValue - minValue;
+    const buffer = Math.max(range * 0.1, maxValue * 0.05); // At least 5% buffer or 10% of range
+    
+    // Calculate reasonable chart bounds
+    const yAxisMin = Math.max(0, minValue - buffer); // Prevent negative values unless data is negative
+    const yAxisMax = maxValue + buffer;
+    
+    // Detect if this is likely a stablecoin
+    const isStablecoinLike = avgValue > 0.5 && avgValue < 1.5 && range < 0.5;
+
     // Calculate color variants for area gradient
     const getAlphaColor = (baseColor: string, alpha: number) => {
       const r = parseInt(baseColor.slice(1, 3), 16)
@@ -196,23 +209,18 @@ export default function PriceChart({
       return `rgba(${r}, ${g}, ${b}, ${alpha})`
     }
 
+    let series: ISeriesApi<'Area' | 'Line' | 'Histogram'>;
+    
     // Add the appropriate series based on chart type
-    let series
     if (type === 'line') {
       series = chart.addLineSeries({
         color: brandColor,
         lineWidth: 2,
         crosshairMarkerVisible: true,
         lastValueVisible: true,
-        priceLineVisible: false, // Remove price line to match screenshot
+        priceLineVisible: false,
         priceFormat: priceFormat,
-        lineType: 0, // Solid line
-        autoscaleInfoProvider: () => ({
-          priceRange: {
-            minValue: minValue * 0.95,
-            maxValue: maxValue * 1.05,
-          },
-        }),
+        lineType: 0,
       })
       series.setData(formattedData as LineData<UTCTimestamp>[])
     } else if (type === 'volume') {
@@ -232,32 +240,31 @@ export default function PriceChart({
         bottomColor: getAlphaColor(brandColor, 0.05),
         lineWidth: 2,
         crosshairMarkerVisible: true,
-        lastValueVisible: false, // Hide last value to match screenshot
-        priceLineVisible: false, // Hide price line to match screenshot
+        lastValueVisible: false,
+        priceLineVisible: false,
         priceFormat: priceFormat,
-        autoscaleInfoProvider: () => ({
-          priceRange: {
-            minValue: minValue * 0.95,
-            maxValue: maxValue * 1.05,
-          },
-        }),
       })
       series.setData(formattedData as AreaData<UTCTimestamp>[])
     }
-
-    // If we have enough data points, auto-fit the time scale
-    if (formattedData.length > 1) {
-      chart.timeScale().fitContent()
+    
+    // For non-volume charts, set appropriate price range
+    if (type !== 'volume') {
+      // Log the bounds we're using
+      console.log(`[DEBUG] Setting price range: ${yAxisMin} to ${yAxisMax}, isStablecoinLike: ${isStablecoinLike}`);
+      
+      // Configure price range through the series
+      series.applyOptions({
+        autoscaleInfoProvider: () => ({
+          priceRange: {
+            minValue: yAxisMin,
+            maxValue: yAxisMax,
+          },
+        }),
+      });
     }
 
-    // Ensure the price axis is properly scaled 
-    chart.priceScale('right').applyOptions({
-      autoScale: true,
-      entireTextOnly: false,
-      mode: 0, 
-      invertScale: false,
-      ticksVisible: true,
-    });
+    // Fit time scale to show all data points
+    chart.timeScale().fitContent();
 
     // Setup custom tooltip
     const tooltipElement = document.createElement('div')
