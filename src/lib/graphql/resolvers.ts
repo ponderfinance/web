@@ -1859,5 +1859,59 @@ export const resolvers = {
         return [];
       }
     },
+
+    // Get user positions (liquidity positions, farming positions, and staking position)
+    userPositions: async (
+      _parent: Empty,
+      { userAddress }: { userAddress: string },
+      { prisma }: Context
+    ) => {
+      try {
+        // Normalize user address to lowercase
+        const normalizedAddress = userAddress.toLowerCase();
+
+        // Find liquidity positions for the user
+        const liquidityPositions = await prisma.liquidityPosition.findMany({
+          where: { userAddress: normalizedAddress },
+          include: {
+            pair: {
+              include: {
+                token0: true,
+                token1: true,
+              },
+            },
+          },
+        });
+
+        // Find farming positions for the user
+        const farmingPositions = await prisma.farmingPosition.findMany({
+          where: { userAddress: normalizedAddress },
+          include: {
+            pool: true,
+          },
+        });
+
+        // Find staking position for the user
+        const stakingPosition = await prisma.stakingPosition.findUnique({
+          where: { userAddress: normalizedAddress },
+        });
+
+        // Return positions with proper data structure
+        // Important: return empty arrays instead of null for non-nullable fields
+        return {
+          liquidityPositions: liquidityPositions || [],
+          farmingPositions: farmingPositions || [],
+          stakingPosition, // This is nullable in the schema
+        };
+      } catch (error) {
+        console.error('Error fetching user positions:', error);
+        // Return empty arrays instead of null to satisfy non-nullable field requirements
+        return {
+          liquidityPositions: [],
+          farmingPositions: [],
+          stakingPosition: null,
+        };
+      }
+    },
   },
 }
