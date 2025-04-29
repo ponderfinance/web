@@ -261,61 +261,84 @@ export async function GET(request: NextRequest) {
           const reserve0 = Number(BigInt(kkubPair.reserve0)) / 10 ** token0Decimals
           const reserve1 = Number(BigInt(kkubPair.reserve1)) / 10 ** token1Decimals
           
-          // Assume historical KKUB price range as reference
-          // If price is within reasonable stablecoin range (0.95-1.05), use 1.0
-          // This approximation is reasonable as stablecoins are typically ~$1
-          let stablecoinPrice;
+          // Try to get the real stablecoin price instead of using a hardcoded value
+          const stablecoinPrice = await TokenPriceService.getReliableTokenUsdPrice({
+            id: stablecoinToken.id,
+            address: stablecoinToken.address,
+            decimals: stablecoinToken.decimals || 18,
+            symbol: stablecoinToken.symbol || undefined
+          }, prisma);
           
-          if (isToken0) {
-            const kkubPerStable = reserve1 / reserve0
-            // If reasonable stablecoin/KKUB ratio, use 1.0
-            stablecoinPrice = (kkubPerStable > 0.5 && kkubPerStable < 2) ? 1.0 : kkubPerStable;
+          if (stablecoinPrice > 0) {
+            await prisma.token.update({
+              where: { id: stablecoinToken.id },
+              data: {
+                priceUSD: stablecoinPrice.toString(),
+                lastPriceUpdate: new Date()
+              }
+            });
+            
+            await redis.set(`token:${stablecoinToken.id}:priceUSD`, stablecoinPrice.toString(), 'EX', 300);
+            
+            updatedTokens.push(stablecoinToken.id);
+            tokenDebug.push({
+              symbol: stablecoinToken.symbol || stablecoinToken.address.substring(0, 8),
+              address: stablecoinToken.address,
+              oldPrice: stablecoinToken.priceUSD,
+              newPrice: stablecoinPrice.toString(),
+              method: 'calculated'
+            });
           } else {
-            const kkubPerStable = reserve0 / reserve1
-            stablecoinPrice = (kkubPerStable > 0.5 && kkubPerStable < 2) ? 1.0 : kkubPerStable;
+            console.warn(`Failed to calculate price for stablecoin ${stablecoinToken.symbol || stablecoinToken.address}`);
+            
+            tokenDebug.push({
+              symbol: stablecoinToken.symbol || stablecoinToken.address.substring(0, 8),
+              address: stablecoinToken.address,
+              oldPrice: stablecoinToken.priceUSD,
+              newPrice: 'Failed to calculate',
+              method: 'failed'
+            });
           }
-          
-          // Update price in DB and cache
-          await prisma.token.update({
-            where: { id: stablecoinToken.id },
-            data: {
-              priceUSD: stablecoinPrice.toString(),
-              lastPriceUpdate: new Date()
-            }
-          })
-          
-          await redis.set(`token:${stablecoinToken.id}:priceUSD`, stablecoinPrice.toString(), 'EX', 300)
-          
-          updatedTokens.push(stablecoinToken.id)
-          tokenDebug.push({
-            symbol: stablecoinToken.symbol || stablecoinToken.address.substring(0, 8),
-            address: stablecoinToken.address,
-            oldPrice: stablecoinToken.priceUSD,
-            newPrice: stablecoinPrice.toString(),
-            method: 'kkub-derived'
-          })
         } else {
-          // In absence of any market data, use default but log a warning
-          console.warn(`No market pairs found for stablecoin ${stablecoin.symbol}, using default price of 1.0`)
-          
-          await prisma.token.update({
-            where: { id: stablecoinToken.id },
-            data: {
-              priceUSD: '1.0',
-              lastPriceUpdate: new Date()
-            }
-          })
-          
-          await redis.set(`token:${stablecoinToken.id}:priceUSD`, '1.0', 'EX', 300)
-          
-          updatedTokens.push(stablecoinToken.id)
-          tokenDebug.push({
-            symbol: stablecoinToken.symbol || stablecoinToken.address.substring(0, 8),
+          // In absence of any market data, try other pricing methods
+          // Try to get the real stablecoin price instead of using a hardcoded value
+          const stablecoinPrice = await TokenPriceService.getReliableTokenUsdPrice({
+            id: stablecoinToken.id,
             address: stablecoinToken.address,
-            oldPrice: stablecoinToken.priceUSD,
-            newPrice: '1.0',
-            method: 'default-fallback'
-          })
+            decimals: stablecoinToken.decimals || 18,
+            symbol: stablecoinToken.symbol || undefined
+          }, prisma);
+          
+          if (stablecoinPrice > 0) {
+            await prisma.token.update({
+              where: { id: stablecoinToken.id },
+              data: {
+                priceUSD: stablecoinPrice.toString(),
+                lastPriceUpdate: new Date()
+              }
+            });
+            
+            await redis.set(`token:${stablecoinToken.id}:priceUSD`, stablecoinPrice.toString(), 'EX', 300);
+            
+            updatedTokens.push(stablecoinToken.id);
+            tokenDebug.push({
+              symbol: stablecoinToken.symbol || stablecoinToken.address.substring(0, 8),
+              address: stablecoinToken.address,
+              oldPrice: stablecoinToken.priceUSD,
+              newPrice: stablecoinPrice.toString(),
+              method: 'calculated'
+            });
+          } else {
+            console.warn(`Failed to calculate price for stablecoin ${stablecoinToken.symbol || stablecoinToken.address}`);
+            
+            tokenDebug.push({
+              symbol: stablecoinToken.symbol || stablecoinToken.address.substring(0, 8),
+              address: stablecoinToken.address,
+              oldPrice: stablecoinToken.priceUSD,
+              newPrice: 'Failed to calculate',
+              method: 'failed'
+            });
+          }
         }
       }
     }

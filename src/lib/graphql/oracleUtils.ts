@@ -214,11 +214,25 @@ export async function calculateReservesUSD(
     // Get token details
     const token0 = await prisma.token.findUnique({
       where: { id: pair.token0Id },
-    })
+      select: {
+        id: true,
+        address: true,
+        decimals: true,
+        symbol: true,
+        priceUSD: true
+      }
+    });
 
     const token1 = await prisma.token.findUnique({
       where: { id: pair.token1Id },
-    })
+      select: {
+        id: true,
+        address: true,
+        decimals: true,
+        symbol: true,
+        priceUSD: true
+      }
+    });
 
     if (!token0 || !token1) {
       console.error(`Tokens not found for pair ${pair.id}`)
@@ -230,9 +244,23 @@ export async function calculateReservesUSD(
 
     // Method 1: Check if token is USDT
     if (token0.address.toLowerCase() === USDT_ADDRESS) {
-      token0PriceUSD = 1 // USDT price is $1
+      // Always use the actual USDT price from the database
+      if (token0.priceUSD) {
+        token0PriceUSD = parseFloat(token0.priceUSD);
+        console.log(`Using actual USDT price from database: $${token0PriceUSD}`);
+      } else {
+        // If no price in database, use oracle or other methods but don't fallback to 1
+        console.log(`No USDT price in database for ${token0.id}, will try other price sources`);
+      }
     } else if (token1.address.toLowerCase() === USDT_ADDRESS) {
-      token1PriceUSD = 1 // USDT price is $1
+      // Always use the actual USDT price from the database
+      if (token1.priceUSD) {
+        token1PriceUSD = parseFloat(token1.priceUSD);
+        console.log(`Using actual USDT price from database: $${token1PriceUSD}`);
+      } else {
+        // If no price in database, use oracle or other methods but don't fallback to 1
+        console.log(`No USDT price in database for ${token1.id}, will try other price sources`);
+      }
     }
 
     // Method 2: Check if token is KKUB and get price from USDT pair

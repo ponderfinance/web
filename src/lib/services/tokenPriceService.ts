@@ -850,8 +850,9 @@ export const TokenPriceService = {
         console.error(`Error calculating stablecoin fallback price for ${counterpartToken.symbol}:`, error);
       }
       
-      // Final fallback - only use if we have no other data
-      return 1.0;
+      // Final fallback - don't assume any price, just return 0 to indicate we couldn't determine the price
+      console.warn(`Could not determine price for stablecoin ${counterpartToken.symbol} - returning 0`);
+      return 0;
     }
     
     // For non-stablecoins with no price data
