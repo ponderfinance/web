@@ -2323,8 +2323,11 @@ export const resolvers = {
           console.log(`[CHART] ${token.symbol} value range: min=${min}, max=${max}, avg=${avg}`);
         }
         
-        // Return values directly - we don't need additional conversion since the service returns proper number values
-        return chartData;
+        // Ensure all values are proper numbers before returning to client
+        return chartData.map(point => ({
+          time: typeof point.time === 'string' ? parseInt(point.time, 10) : Number(point.time),
+          value: typeof point.value === 'string' ? parseFloat(point.value) : Number(point.value)
+        }));
       } catch (error) {
         console.error('[CHART] Error in tokenPriceChart:', error);
         return [];

@@ -124,39 +124,49 @@ export class PriceChartService {
         const tokenDecimals = token.decimals || 18;
         console.log(`[DEBUG] Using token decimals: ${tokenDecimals}`);
         
-        // Create chart points from snapshots without complex normalization
-        // Instead, use direct values from snapshots which should already be correct
-        const chartData: ChartDataPoint[] = filteredSnapshots.map(snapshot => {
+        // Parse and clean price values
+        console.log(`[CHART] Processing ${filteredSnapshots.length} price snapshots from Redis...`);
+        const dataPoints = filteredSnapshots.map((snapshot) => {
           try {
-            const timestamp = Number(snapshot.timestamp);
             const rawPrice = isToken0 ? snapshot.price0! : snapshot.price1!;
-            const price = parseFloat(String(rawPrice));
-            
-            // Ensure value is a valid number
-            if (isNaN(price) || price <= 0) {
-              console.log(`[DEBUG] Skipping invalid price: ${rawPrice}`);
+            const priceValue = parseFloat(String(rawPrice));
+            if (isNaN(priceValue) || priceValue === 0) {
+              console.warn(`[CHART] Invalid price value found: ${rawPrice}`);
               return null;
             }
-            
+
+            // Process timestamp
+            let time: number;
+            if (typeof snapshot.timestamp === 'bigint') {
+              time = Number(snapshot.timestamp);
+            } else if (typeof snapshot.timestamp === 'string') {
+              time = parseInt(snapshot.timestamp, 10);
+            } else {
+              time = Number(snapshot.timestamp);
+            }
+
+            // Normalize the price value to prevent exponential notation for small numbers
+            const normalizedPrice = this.normalizePrice(priceValue, tokenDecimals);
+
             return {
-              time: timestamp,
-              value: price
+              time,
+              value: normalizedPrice
             };
-          } catch (error) {
-            console.error('[DEBUG] Error processing snapshot:', error);
+          } catch (err) {
+            console.error(`[CHART] Error processing snapshot: ${err}`);
             return null;
           }
         }).filter(Boolean) as ChartDataPoint[];
         
-        console.log(`[DEBUG] Created ${chartData.length} valid chart points`);
+        console.log(`[DEBUG] Created ${dataPoints.length} valid chart points`);
         
-        if (chartData.length === 0) {
+        if (dataPoints.length === 0) {
           console.log('[DEBUG] No valid chart points could be created');
           return [];
         }
         
         // Sort by timestamp (ascending)
-        const sortedData = chartData.sort((a, b) => a.time - b.time);
+        const sortedData = dataPoints.sort((a, b) => a.time - b.time);
         
         // Apply a limit if specified
         const limitedData = limit > 0 ? sortedData.slice(0, limit) : sortedData;
@@ -289,6 +299,18 @@ export class PriceChartService {
     } catch (error) {
       console.error('[DEBUG] Error finding best price data pair:', error);
       return null;
+    }
+  }
+
+  // Helper method to normalize price
+  static normalizePrice(price: number, decimals: number): number {
+    const formattedPrice = price.toString();
+    if (formattedPrice.includes('e')) {
+      const exponent = parseInt(formattedPrice.split('e')[1], 10);
+      const base = parseFloat(formattedPrice.split('e')[0]);
+      return base * Math.pow(10, exponent - decimals);
+    } else {
+      return parseFloat(formattedPrice);
     }
   }
 } 

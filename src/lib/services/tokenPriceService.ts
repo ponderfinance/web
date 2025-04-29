@@ -17,7 +17,7 @@ import {
 } from '@/src/lib/utils/tokenPriceUtils'
 
 // Constants
-const CACHE_TTL_SECONDS = 300 // 5 minutes
+const CACHE_TTL_SECONDS = 5 // 5 seconds (was 5 minutes)
 const STABLECOIN_ADDRESSES = getStablecoinAddresses()
 
 // Create a viem public client for blockchain interactions
@@ -107,8 +107,8 @@ export const TokenPriceService = {
       
       if (price > 0) {
         console.log(`Got valid price ${price} for token ${token.symbol}`)
-        // Cache this price for future use (5 minutes TTL)
-        await this.cacheTokenPrice(tokenId, price, 300)
+        // Cache this price for future use
+        await this.cacheTokenPrice(tokenId, price, CACHE_TTL_SECONDS)
         return price
       }
 
@@ -390,7 +390,7 @@ export const TokenPriceService = {
   /**
    * Cache token price in Redis
    */
-  async cacheTokenPrice(tokenId: string, price: number, ttlSeconds: number = 300): Promise<void> {
+  async cacheTokenPrice(tokenId: string, price: number, ttlSeconds: number = CACHE_TTL_SECONDS): Promise<void> {
     try {
       const redis = getRedisClient()
       const cacheKey = `token:${tokenId}:priceUSD`
