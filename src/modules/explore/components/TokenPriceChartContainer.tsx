@@ -128,8 +128,24 @@ function TokenPriceChartContent({
 
   const tokenPriceChart = data.tokenPriceChart
 
-  // Add debugging to see the raw data
-  console.log(`[DEBUG] Raw token data for ${tokenSymbol}:`, { tokenAddress, tokenSymbol, tokenDecimals });
+  // Enhanced debugging to see the raw data
+  console.log(`[DEBUG] Raw token data for ${tokenSymbol}:`, { 
+    tokenAddress, 
+    tokenSymbol, 
+    tokenDecimals,
+    hasChartData: !!tokenPriceChart && tokenPriceChart.length > 0,
+    dataPointCount: tokenPriceChart?.length || 0
+  });
+  
+  if (tokenPriceChart && tokenPriceChart.length > 0) {
+    console.log(`[DEBUG] First few data points:`, 
+      tokenPriceChart.slice(0, 3).map(point => ({
+        time: point.time,
+        value: point.value,
+        timeFormatted: new Date(point.time * 1000).toISOString()
+      }))
+    );
+  }
 
   // More robust empty state checking
   if (!tokenPriceChart || tokenPriceChart.length === 0) {
@@ -142,12 +158,12 @@ function TokenPriceChartContent({
   }
 
   // Very minimal data detection
-  if (tokenPriceChart.length < 3) {
+  if (tokenPriceChart.length < 2) {
     console.log(`[DEBUG] Insufficient price data for ${tokenSymbol} (only ${tokenPriceChart.length} points)`);
     return (
       <View height={400} align="center" justify="center">
         <Text>Insufficient price data for {tokenSymbol}</Text>
-        <Text variant="caption-1" color="neutral-faded">The chart requires at least 3 data points</Text>
+        <Text variant="caption-1" color="neutral-faded">The chart requires at least 2 data points</Text>
       </View>
     )
   }
@@ -159,9 +175,19 @@ function TokenPriceChartContent({
   const chartData = [...tokenPriceChart]
     .map((point) => {
       try {
+        // Make sure both time and value are proper numbers
+        const timeValue = typeof point.time === 'string' ? parseInt(point.time, 10) : Number(point.time);
+        const priceValue = typeof point.value === 'string' ? parseFloat(point.value) : Number(point.value);
+        
+        // Log any issues with data conversion
+        if (isNaN(timeValue) || isNaN(priceValue)) {
+          console.error(`[DEBUG] Invalid chart point:`, point);
+          return null;
+        }
+        
         return {
-          time: typeof point.time === 'string' ? parseInt(point.time, 10) : Number(point.time),
-          value: typeof point.value === 'string' ? parseFloat(point.value) : Number(point.value)
+          time: timeValue,
+          value: priceValue
         };
       } catch (error) {
         console.error(`[DEBUG] Error processing chart point:`, error, point);
@@ -190,7 +216,7 @@ function TokenPriceChartContent({
   }
   
   // Check if we still have enough valid points after filtering
-  if (chartData.length < 3) {
+  if (chartData.length < 2) {
     console.log(`[DEBUG] Insufficient valid price data after filtering for ${tokenSymbol}`);
     return (
       <View height={400} align="center" justify="center">

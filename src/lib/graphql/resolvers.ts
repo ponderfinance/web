@@ -11,23 +11,30 @@ import {
   getCachedPairReserveUSDBulk
 } from '@/src/lib/redis/pairCache'
 import { getRedisClient } from '@/src/lib/redis/client'
-import { TokenPriceService } from '@/src/lib/services/tokenPriceService'
 import { createCursorPagination, decodeCursor } from './utils'
 import DataLoader from 'dataloader'
 import { ObjectId } from 'mongodb'
-import { PrismaClient } from '@prisma/client'
+import { PrismaClient, Prisma } from '@prisma/client'
 import { GraphQLResolveInfo } from 'graphql'
 import { MongoClient } from 'mongodb'
 import { PriceChartService } from '@/src/lib/services/priceChartService'
-import { BuySellType, MintBurnType, PrismaTokenPriceService, PrismaContribution } from '@prisma/client'
-import { normalizePrice } from '@/src/lib/utils/tokenPriceUtils'
-import { pairResolvers } from './pairResolvers'
-import { tokenResolvers } from './tokenResolvers'
-import { poolResolvers } from './poolResolvers'
+import { formatCurrency } from '@/src/lib/utils/tokenPriceUtils'
+import { TokenPriceService } from '@/src/lib/services/tokenPriceService'
 
 // Define constants for USDT and Oracle addresses
 const USDT_ADDRESS = '0x55d398326f99059fF775485246999027B3197955'
 const ORACLE_ADDRESS = '0x1B5C4c1D5b0BbBcEc97fa477b3d5F2FEBA5b481f'
+
+// Define enums that were previously imported from Prisma
+const BuySellType = {
+  BUY: 'BUY',
+  SELL: 'SELL'
+};
+
+const MintBurnType = {
+  MINT: 'MINT',
+  BURN: 'BURN'
+};
 
 // Create DataLoader for token prices to optimize multiple price lookups
 const createTokenPriceLoader = () => {
@@ -2267,7 +2274,7 @@ export const resolvers = {
             id: true,
             symbol: true,
             decimals: true,
-            priceUSD: true  // Add priceUSD to get current price
+            priceUSD: true
           }
         });
 
@@ -2278,13 +2285,14 @@ export const resolvers = {
         
         console.log(`[CHART] Processing chart for ${token.symbol} (id: ${token.id}), current price: $${token.priceUSD || 'unknown'}`);
         
-        // Check if token is a stablecoin - use symbol for more reliable detection
+        // Check if token is a stablecoin for debug purposes
         const isStablecoin = ['USDT', 'USDC', 'DAI', 'BUSD', 'TUSD'].includes(token.symbol?.toUpperCase() || '');
         if (isStablecoin) {
-          console.log(`[CHART] ${token.symbol} is a stablecoin, checking if we should use special handling`);
+          console.log(`[CHART] ${token.symbol} is a stablecoin`);
         }
         
         // Use PriceChartService to get the chart data
+        // The service now properly handles historical data and returns correct prices
         const chartData = await PriceChartService.getTokenPriceChartData(
           normalizedAddress,
           token.id,
@@ -2295,37 +2303,27 @@ export const resolvers = {
         
         console.log(`[CHART] Retrieved ${chartData.length} price chart data points for ${token.symbol}`);
         
-        // Add diagnostic info for first few points to help debug
+        // No data case
+        if (chartData.length === 0) {
+          console.log(`[CHART] No chart data returned for ${token.symbol}`);
+          return [];
+        }
+        
+        // Debug information about data range
         if (chartData.length > 0) {
-          console.log(`[CHART] First few data points for ${token.symbol}:`);
-          chartData.slice(0, 3).forEach((point, i) => {
-            console.log(`[CHART] Point ${i}: time=${new Date(point.time * 1000).toISOString()}, value=${point.value}`);
-          });
+          const firstPoint = chartData[0];
+          const lastPoint = chartData[chartData.length - 1];
+          console.log(`[CHART] Data range: ${new Date(firstPoint.time * 1000).toISOString()} to ${new Date(lastPoint.time * 1000).toISOString()}`);
+          
+          // Value statistics
+          const values = chartData.map(p => Number(p.value));
+          const min = Math.min(...values);
+          const max = Math.max(...values);
+          const avg = values.reduce((sum, val) => sum + val, 0) / values.length;
+          console.log(`[CHART] ${token.symbol} value range: min=${min}, max=${max}, avg=${avg}`);
         }
         
-        // For stablecoins, make sure the price range isn't too extreme
-        if (isStablecoin && chartData.length > 0) {
-          // Find min and max values
-          const values = chartData.map(p => p.value);
-          const minValue = Math.min(...values);
-          const maxValue = Math.max(...values);
-          
-          console.log(`[CHART] ${token.symbol} price range: ${minValue} to ${maxValue}`);
-          
-          // If we have very low values (near zero) mixed with reasonable values,
-          // filter out the extremely low values which are likely errors
-          if (minValue < 0.1 && maxValue > 0.3) {
-            console.log(`[CHART] Filtering out extremely low values for ${token.symbol}`);
-            const filteredData = chartData.filter(p => p.value >= 0.1);
-            
-            // Only use filtered data if we have enough points left
-            if (filteredData.length > 5) {
-              console.log(`[CHART] After filtering: ${filteredData.length} points remain`);
-              return filteredData;
-            }
-          }
-        }
-        
+        // Return values directly - we don't need additional conversion since the service returns proper number values
         return chartData;
       } catch (error) {
         console.error('[CHART] Error in tokenPriceChart:', error);

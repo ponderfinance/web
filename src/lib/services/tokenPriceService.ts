@@ -10,7 +10,6 @@ import { ORACLE_ABI } from '@/src/constants/abis'
 import { ORACLE_ADDRESS } from '@/src/constants/addresses'
 import {
   getStablecoinAddresses,
-  normalizePrice,
   isStablecoin,
   isStablecoinBySymbol,
   getStablecoinSymbols,
@@ -861,7 +860,6 @@ export const TokenPriceService = {
 
   // Re-export the utility functions for convenience on the server
   getStablecoinAddresses,
-  normalizePrice,
   isStablecoin,
   isStablecoinBySymbol,
   getStablecoinSymbols,

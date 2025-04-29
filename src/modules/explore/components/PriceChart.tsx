@@ -194,12 +194,15 @@ export default function PriceChart({
     const range = maxValue - minValue;
     const buffer = Math.max(range * 0.1, maxValue * 0.05); // At least 5% buffer or 10% of range
     
-    // Check if this is a stablecoin chart based only on title
-    const isStablecoinChart = title && (
-      title.includes('USDT') || 
-      title.includes('USDC') || 
-      title.includes('DAI')
-    );
+    // Check if this is a stablecoin chart based on title or price values
+    const isStablecoinChart = 
+      (title && (
+        title.includes('USDT') || 
+        title.includes('USDC') || 
+        title.includes('DAI')
+      )) ||
+      // Also detect stablecoins by their price range
+      (minValue > 0.1 && maxValue < 2.0);
 
     console.log(`Chart ${title || 'Unknown'} - isStablecoin: ${isStablecoinChart}, minValue: ${minValue}, maxValue: ${maxValue}`);
 

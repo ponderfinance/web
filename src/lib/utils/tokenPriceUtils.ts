@@ -24,22 +24,51 @@ export function processPriceHistoryData(
   tokenDecimals?: number,
   isStablecoin: boolean = false
 ): Array<{ time: number; value: number }> {
+  console.log(`[DEBUG_CHART] processPriceHistoryData called with ${data?.length || 0} points, decimals=${tokenDecimals}, isStablecoin=${isStablecoin}`);
+  
   if (!data || data.length === 0) {
+    console.log(`[DEBUG_CHART] Empty or null data provided to processPriceHistoryData`);
     return [];
   }
+
+  // Log the first few raw data points
+  console.log(`[DEBUG_CHART] First few raw data points:`, 
+    data.slice(0, 3).map(p => ({
+      time: p.time,
+      value: p.value,
+      timeType: typeof p.time,
+      valueType: typeof p.value
+    }))
+  );
 
   // Convert all values to numbers and ensure time is an integer
   const convertedData = data.map((point) => ({
     time: Math.floor(Number(point.time)),
     value: typeof point.value === 'string' ? parseFloat(point.value) : point.value,
-  }))
+  }));
+
+  // Log after conversion
+  console.log(`[DEBUG_CHART] After conversion:`, 
+    convertedData.slice(0, 3).map(p => ({
+      time: p.time,
+      value: p.value,
+      timeIsValid: !isNaN(p.time) && p.time > 0,
+      valueIsValid: !isNaN(p.value) && p.value > 0
+    }))
+  );
 
   // Filter out invalid data points (NaN, negative or zero values)
   const validData = convertedData.filter(point => 
-    !isNaN(point.value) && point.value > 0
+    !isNaN(point.time) && 
+    point.time > 0 && 
+    !isNaN(point.value) && 
+    point.value > 0
   );
   
+  console.log(`[DEBUG_CHART] After filtering invalid points: ${validData.length} points remain`);
+  
   if (validData.length === 0) {
+    console.log(`[DEBUG_CHART] No valid data points after filtering`);
     return [];
   }
   
@@ -48,34 +77,76 @@ export function processPriceHistoryData(
   if (isStablecoin) {
     // Use more generous bounds for stablecoins - allow values from $0.1 to $10
     // This handles a wider range of stablecoin values including USDC at ~$0.49
-    return validData.filter(point => point.value > 0.1 && point.value < 10);
+    const filteredStable = validData.filter(point => point.value > 0.1 && point.value < 10);
+    
+    console.log(`[DEBUG_CHART] Stablecoin filtering: from ${validData.length} to ${filteredStable.length} points`);
+    
+    // Calculate statistics for better debugging
+    if (filteredStable.length > 0) {
+      const values = filteredStable.map(p => p.value);
+      const min = Math.min(...values);
+      const max = Math.max(...values);
+      const avg = values.reduce((sum, val) => sum + val, 0) / values.length;
+      console.log(`[DEBUG_CHART] Stablecoin chart stats - min: ${min}, max: ${max}, avg: ${avg}`);
+    }
+    
+    return filteredStable;
   }
   
   // For regular tokens: check if they need normalization
   // First, check if values are already in a reasonable range
   const values = validData.map(point => point.value);
   const maxValue = Math.max(...values);
+  const minValue = Math.min(...values);
+  const avgValue = values.reduce((sum, val) => sum + val, 0) / values.length;
+  
+  console.log(`[DEBUG_CHART] Regular token stats - min: ${minValue}, max: ${maxValue}, avg: ${avgValue}`);
   
   // If maximum value is already in a reasonable range (< 1 million), no normalization needed
   if (maxValue < 1_000_000) {
+    console.log(`[DEBUG_CHART] No normalization needed, values in reasonable range`);
     return validData;
   }
   
   // Otherwise, apply normalization based on token decimals
   if (tokenDecimals && tokenDecimals > 0) {
-    return validData.map(point => ({
+    console.log(`[DEBUG_CHART] Normalizing based on token decimals: ${tokenDecimals}`);
+    
+    const normalizedData = validData.map(point => ({
       time: point.time,
       value: point.value / Math.pow(10, tokenDecimals)
     }));
+    
+    // Log after normalization
+    if (normalizedData.length > 0) {
+      const normalizedValues = normalizedData.map(p => p.value);
+      const normalizedMin = Math.min(...normalizedValues);
+      const normalizedMax = Math.max(...normalizedValues);
+      console.log(`[DEBUG_CHART] After decimal normalization - min: ${normalizedMin}, max: ${normalizedMax}`);
+    }
+    
+    return normalizedData;
   } else {
     // Without token decimals, guess based on magnitude
     const magnitude = Math.floor(Math.log10(maxValue));
     const decimalsToUse = Math.floor(magnitude / 3) * 3; // Round to nearest power of 1000
     
-    return validData.map(point => ({
+    console.log(`[DEBUG_CHART] Normalizing based on guessed decimals: ${decimalsToUse}`);
+    
+    const normalizedData = validData.map(point => ({
       time: point.time,
       value: point.value / Math.pow(10, decimalsToUse)
     }));
+    
+    // Log after normalization
+    if (normalizedData.length > 0) {
+      const normalizedValues = normalizedData.map(p => p.value);
+      const normalizedMin = Math.min(...normalizedValues);
+      const normalizedMax = Math.max(...normalizedValues);
+      console.log(`[DEBUG_CHART] After magnitude normalization - min: ${normalizedMin}, max: ${normalizedMax}`);
+    }
+    
+    return normalizedData;
   }
 }
 
