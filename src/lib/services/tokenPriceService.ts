@@ -441,48 +441,48 @@ export const TokenPriceService = {
   ): Promise<number> {
     try {
       // Get token info for logging
-      const tokenId = token.id
-      const tokenSymbol = token.symbol || 'Unknown'
+    const tokenId = token.id
+    const tokenSymbol = token.symbol || 'Unknown'
       const db = prismaDb || prismaClient
-      
+
       console.log(`Starting price calculation for ${tokenSymbol} (${tokenId})`)
-      
-      // Track attempt methods for debugging
-      const attemptMethods: string[] = []
-      
+
+    // Track attempt methods for debugging
+    const attemptMethods: string[] = []
+
       // 1. Try cache first (fastest)
-      attemptMethods.push('cache')
-      try {
-        const cachedPrice = await this.getCachedTokenPrice(tokenId)
-        if (cachedPrice !== null && cachedPrice > 0) {
-          console.log(`Found cached price ${cachedPrice} for ${tokenSymbol}`)
-          return cachedPrice
-        }
-      } catch (error) {
-        console.warn(`Cache lookup failed for ${tokenSymbol} (${tokenId})`, error)
+    attemptMethods.push('cache')
+    try {
+      const cachedPrice = await this.getCachedTokenPrice(tokenId)
+      if (cachedPrice !== null && cachedPrice > 0) {
+        console.log(`Found cached price ${cachedPrice} for ${tokenSymbol}`)
+        return cachedPrice
       }
-      
-      // 2. Try database stored value
-      attemptMethods.push('database')
-      try {
-        const tokenData = await db.token.findUnique({
-          where: { id: tokenId },
-          select: { priceUSD: true },
-        })
-        
-        if (tokenData?.priceUSD) {
-          const dbPrice = parseFloat(tokenData.priceUSD)
+    } catch (error) {
+      console.warn(`Cache lookup failed for ${tokenSymbol} (${tokenId})`, error)
+    }
+
+    // 2. Try database stored value
+    attemptMethods.push('database')
+    try {
+      const tokenData = await db.token.findUnique({
+        where: { id: tokenId },
+        select: { priceUSD: true },
+      })
+
+      if (tokenData?.priceUSD) {
+        const dbPrice = parseFloat(tokenData.priceUSD)
           // Basic validation - price should be positive
           if (dbPrice > 0) {
             console.log(`Found database price ${dbPrice} for ${tokenSymbol}`)
-            await this.cacheTokenPrice(tokenId, dbPrice)
-            return dbPrice
-          }
+          await this.cacheTokenPrice(tokenId, dbPrice)
+          return dbPrice
         }
-      } catch (error) {
-        console.warn(`Database lookup failed for ${tokenSymbol} (${tokenId})`, error)
       }
-      
+    } catch (error) {
+        console.warn(`Database lookup failed for ${tokenSymbol} (${tokenId})`, error)
+    }
+
       // 3. Calculate from trading pairs
       attemptMethods.push('trading pairs')
       
@@ -509,9 +509,9 @@ export const TokenPriceService = {
         console.warn(`No trading pairs found for ${tokenSymbol}`)
         return 0
       }
-      
+
       console.log(`Found ${pairs.length} trading pairs for ${tokenSymbol}`)
-      
+
       // Try each pair until we find a valid price
       for (const pair of pairs) {
         const isToken0 = pair.token0Id === tokenId
@@ -550,20 +550,20 @@ export const TokenPriceService = {
             if (kkubToken && kkubToken.priceUSD) {
               // Find pair with KKUB
               const kkubPair = await db.pair.findFirst({
-                where: {
-                  OR: [
-                    {
+          where: {
+            OR: [
+              {
                       token0Id: counterpartToken.id,
                       token1Id: kkubToken.id
-                    },
-                    {
+              },
+              {
                       token0Id: kkubToken.id,
                       token1Id: counterpartToken.id
                     }
                   ]
-                },
-                include: {
-                  token0: true,
+          },
+          include: {
+            token0: true,
                   token1: true
                 }
               });
@@ -587,7 +587,7 @@ export const TokenPriceService = {
                     // Stablecoin is token0, KKUB is token1
                     // price = (reserve1/reserve0) * kkubPrice
                     counterpartPrice = (reserve1Formatted / reserve0Formatted) * kkubPrice;
-                  } else {
+              } else {
                     // Stablecoin is token1, KKUB is token0
                     // price = (reserve0/reserve1) * kkubPrice
                     counterpartPrice = (reserve0Formatted / reserve1Formatted) * kkubPrice;
@@ -596,28 +596,28 @@ export const TokenPriceService = {
                   // Validate the calculated price for stablecoins (should be close to 1)
                   if (counterpartPrice > 0.5 && counterpartPrice < 1.5) {
                     console.log(`Calculated stablecoin price ${counterpartPrice} for ${counterpartToken.symbol} using KKUB pair`);
-                    
+
                     // Store in database
-                    try {
-                      await db.token.update({
+                try {
+                  await db.token.update({
                         where: { id: counterpartToken.id },
                         data: { priceUSD: counterpartPrice.toString() }
                       });
                       console.log(`Updated database with price ${counterpartPrice} for stablecoin ${counterpartToken.symbol}`);
                     } catch (dbError) {
                       console.error(`Failed to update database with price for ${counterpartToken.symbol}:`, dbError);
-                    }
+                }
                     
                     // Cache the price
                     await this.cacheTokenPrice(counterpartToken.id, counterpartPrice);
-                  }
-                }
-              }
             }
-          } catch (error) {
-            console.error(`Error calculating stablecoin price for ${counterpartToken.symbol}:`, error);
           }
-          
+        }
+      }
+    } catch (error) {
+            console.error(`Error calculating stablecoin price for ${counterpartToken.symbol}:`, error);
+    }
+
           // If we failed to calculate a market price for the stablecoin,
           // fall back to using a reasonable approximation
           if (counterpartPrice <= 0 || counterpartPrice > 1.5 || counterpartPrice < 0.5) {
@@ -669,31 +669,31 @@ export const TokenPriceService = {
               try {
                 await db.token.update({
                   where: { id: tokenId },
-                  data: { priceUSD: calculatedPrice.toString() }
+                    data: { priceUSD: calculatedPrice.toString() }
                 })
-                console.log(`Updated database with price ${calculatedPrice} for ${tokenSymbol}`)
+                  console.log(`Updated database with price ${calculatedPrice} for ${tokenSymbol}`)
               } catch (dbError) {
                 console.error(`Failed to update database with price for ${tokenSymbol}:`, dbError)
               }
               
               // Cache the price
-              await this.cacheTokenPrice(tokenId, calculatedPrice)
+                await this.cacheTokenPrice(tokenId, calculatedPrice)
               
-              return calculatedPrice
-            } else {
+                return calculatedPrice
+              } else {
               console.warn(`Calculated price ${calculatedPrice} for ${tokenSymbol} is outside reasonable bounds`)
-            }
+              }
           } else {
             console.warn(`Zero reserves in pair ${pair.id}, trying next pair`)
-          }
-        } catch (error) {
+      }
+    } catch (error) {
           console.error(`Error calculating price from reserves for ${tokenSymbol}:`, error)
         }
-      }
-      
+    }
+
       // If we get here, we couldn't calculate a price from any pair
       console.warn(`Failed to determine price for ${tokenSymbol} after trying: ${attemptMethods.join(', ')}`)
-      return 0
+    return 0
     } catch (error) {
       console.error(`Error in getReliableTokenUsdPrice:`, error)
       return 0

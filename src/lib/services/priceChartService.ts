@@ -87,6 +87,39 @@ export class PriceChartService {
       console.log(`[DEBUG] Time range: from ${new Date(fromTimestamp * 1000).toISOString()} to ${new Date(now * 1000).toISOString()}`);
 
       try {
+        // Get pair information to determine counterpart token
+        const pair = await prisma.pair.findUnique({
+          where: { id: pairId },
+          include: {
+            token0: true,
+            token1: true
+          }
+        });
+        
+        if (!pair) {
+          console.error(`[DEBUG] Pair ${pairId} not found`);
+          return [];
+        }
+        
+        // Get the counterpart token - the other token in the pair
+        const counterpartToken = isToken0 ? pair.token1 : pair.token0;
+        
+        // Get the current USD price of the counterpart token
+        // We need this to convert exchange rates to USD prices
+        console.log(`Using actual ${counterpartToken.symbol} price from database: $${counterpartToken.priceUSD}`);
+        let counterpartTokenPrice = parseFloat(counterpartToken.priceUSD || '0');
+        
+        // If we don't have a stored price, try to get it from TokenPriceService
+        if (!counterpartTokenPrice) {
+          counterpartTokenPrice = await TokenPriceService.getTokenPriceUSD(counterpartToken.id);
+          console.log(`Got ${counterpartToken.symbol} price from TokenPriceService: $${counterpartTokenPrice}`);
+        }
+        
+        if (!counterpartTokenPrice) {
+          console.error(`[DEBUG] Could not determine price for counterpart token ${counterpartToken.symbol}`);
+          return [];
+        }
+
         // Get ALL snapshots for this pair regardless of time (we'll filter later)
         // This ensures we don't miss historical data
         const snapshots = await prisma.priceSnapshot.findMany({
@@ -128,10 +161,13 @@ export class PriceChartService {
         console.log(`[CHART] Processing ${filteredSnapshots.length} price snapshots from Redis...`);
         const dataPoints = filteredSnapshots.map((snapshot) => {
           try {
-            const rawPrice = isToken0 ? snapshot.price0! : snapshot.price1!;
-            const priceValue = parseFloat(String(rawPrice));
-            if (isNaN(priceValue) || priceValue === 0) {
-              console.warn(`[CHART] Invalid price value found: ${rawPrice}`);
+            // Get the exchange rate from the snapshot - this is NOT a USD price!
+            // It's the exchange rate between the tokens in the pair
+            const rawExchangeRate = isToken0 ? snapshot.price0! : snapshot.price1!;
+            const exchangeRate = parseFloat(String(rawExchangeRate));
+            
+            if (isNaN(exchangeRate) || exchangeRate === 0) {
+              console.warn(`[CHART] Invalid price value found: ${rawExchangeRate}`);
               return null;
             }
 
@@ -145,12 +181,30 @@ export class PriceChartService {
               time = Number(snapshot.timestamp);
             }
 
-            // Normalize the price value to prevent exponential notation for small numbers
-            const normalizedPrice = this.normalizePrice(priceValue, tokenDecimals);
+            // Convert exchange rate to USD price
+            // If token is token0: 
+            //    price1 shows how much of token1 you get for 1 token0
+            //    BUT we need to MULTIPLY by counterpart price  
+            // If token is token1:
+            //    price0 shows how much of token0 you get for 1 token1
+            //    BUT we need to MULTIPLY by counterpart price
+            let usdPrice: number;
+            
+            if (isToken0) {
+              // If our token is token0, then price0 is the price of token0 in terms of token1
+              // So we multiply by the USD price of token1
+              usdPrice = exchangeRate * counterpartTokenPrice;
+            } else {
+              // If our token is token1, then price1 is the price of token1 in terms of token0
+              // So we multiply by the USD price of token0  
+              usdPrice = exchangeRate * counterpartTokenPrice;
+            }
+            
+            console.log(`[CHART] Raw exchange rate: ${exchangeRate}, Converted to USD: ${usdPrice}`);
 
             return {
               time,
-              value: normalizedPrice
+              value: usdPrice
             };
           } catch (err) {
             console.error(`[CHART] Error processing snapshot: ${err}`);
@@ -194,6 +248,10 @@ export class PriceChartService {
   /**
    * Find the best trading pair to use for price chart data
    */
+
+  /**
+   * Find the best trading pair to use for price chart data
+   */
   static async findBestPriceDataPair(
     tokenId: string,
     tokenAddress: string,
@@ -219,7 +277,7 @@ export class PriceChartService {
       // Find all pairs where this token is involved
       const pairsAsToken0 = await prisma.pair.findMany({
         where: { token0Id: tokenId },
-        orderBy: { reserve1: 'desc' },
+        orderBy: { reserve0: 'desc' }, // Use reserve0 for sorting
         include: {
           token1: { select: { symbol: true, decimals: true } }
         }
@@ -227,7 +285,7 @@ export class PriceChartService {
       
       const pairsAsToken1 = await prisma.pair.findMany({
         where: { token1Id: tokenId },
-        orderBy: { reserve0: 'desc' },
+        orderBy: { reserve1: 'desc' }, // Use reserve1 for sorting
         include: {
           token0: { select: { symbol: true, decimals: true } }
         }
@@ -235,53 +293,8 @@ export class PriceChartService {
       
       console.log(`[DEBUG] Found ${pairsAsToken0.length} pairs as token0 and ${pairsAsToken1.length} pairs as token1`);
       
-      // Special handling for important tokens
-      const isStablecoin = ['USDT', 'USDC', 'DAI', 'BUSD', 'TUSD'].includes(token.symbol?.toUpperCase() || '');
-      const isMainToken = token.symbol?.toUpperCase() === 'KKUB';
-      
-      // For stablecoins, prefer pairs with KKUB
-      if (isStablecoin) {
-        console.log(`[DEBUG] Token ${token.symbol} is a stablecoin, looking for KKUB pairs`);
-        
-        // Look for pairs with KKUB as token0
-        for (const pair of pairsAsToken1) {
-          if (pair.token0.symbol?.toUpperCase() === 'KKUB') {
-            console.log(`[DEBUG] Found KKUB/${token.symbol} pair: ${pair.id}`);
-            return { pairId: pair.id, isToken0: false };
-          }
-        }
-        
-        // Look for pairs with KKUB as token1
-        for (const pair of pairsAsToken0) {
-          if (pair.token1.symbol?.toUpperCase() === 'KKUB') {
-            console.log(`[DEBUG] Found ${token.symbol}/KKUB pair: ${pair.id}`);
-            return { pairId: pair.id, isToken0: true };
-          }
-        }
-      }
-      
-      // For KKUB, prefer pairs with stablecoins
-      if (isMainToken) {
-        console.log(`[DEBUG] Token is KKUB, looking for stablecoin pairs`);
-        
-        const stablecoinSymbols = ['USDT', 'USDC', 'DAI', 'BUSD', 'TUSD'];
-        
-        // Look for pairs with stablecoins as token1
-        for (const pair of pairsAsToken0) {
-          if (stablecoinSymbols.includes(pair.token1.symbol?.toUpperCase() || '')) {
-            console.log(`[DEBUG] Found KKUB/${pair.token1.symbol} pair: ${pair.id}`);
-            return { pairId: pair.id, isToken0: true };
-          }
-        }
-        
-        // Look for pairs with stablecoins as token0
-        for (const pair of pairsAsToken1) {
-          if (stablecoinSymbols.includes(pair.token0.symbol?.toUpperCase() || '')) {
-            console.log(`[DEBUG] Found ${pair.token0.symbol}/KKUB pair: ${pair.id}`);
-            return { pairId: pair.id, isToken0: false };
-          }
-        }
-      }
+      // SIMPLIFIED APPROACH: Just use the pair with highest liquidity, regardless of token type
+      // Remove all special handling for stablecoins or KKUB
       
       // For regular tokens, use the pair with highest liquidity
       if (pairsAsToken0.length > 0) {
@@ -299,18 +312,6 @@ export class PriceChartService {
     } catch (error) {
       console.error('[DEBUG] Error finding best price data pair:', error);
       return null;
-    }
-  }
-
-  // Helper method to normalize price
-  static normalizePrice(price: number, decimals: number): number {
-    const formattedPrice = price.toString();
-    if (formattedPrice.includes('e')) {
-      const exponent = parseInt(formattedPrice.split('e')[1], 10);
-      const base = parseFloat(formattedPrice.split('e')[0]);
-      return base * Math.pow(10, exponent - decimals);
-    } else {
-      return parseFloat(formattedPrice);
     }
   }
 } 
