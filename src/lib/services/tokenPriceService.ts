@@ -432,328 +432,272 @@ export const TokenPriceService = {
   },
 
   /**
-   * Get reliable USD price for a token with multiple fallback mechanisms
-   * This is a more comprehensive version of getTokenPriceUSD that tries multiple sources
+   * Get reliable USD price for a token with market data
+   * This method uses a consistent approach for all tokens
    */
   async getReliableTokenUsdPrice(
     token: { id: string; address: string; decimals?: number; symbol?: string },
     prismaDb?: PrismaClientType
   ): Promise<number> {
-    const tokenId = token.id
-    const tokenAddress = token.address
-    const tokenDecimals = token.decimals || 18
-    const tokenSymbol = token.symbol || 'Unknown'
-
-    console.log(`Starting price resolution for ${tokenSymbol} (${tokenId})`)
-
-    // Track attempt methods for debugging
-    const attemptMethods: string[] = []
-
-    // 1. Try Redis cache first (fastest)
-    attemptMethods.push('cache')
     try {
-      const cachedPrice = await this.getCachedTokenPrice(tokenId)
-      if (cachedPrice !== null && cachedPrice > 0) {
-        console.log(`Found cached price ${cachedPrice} for ${tokenSymbol}`)
-        return cachedPrice
-      }
-    } catch (error) {
-      console.warn(`Cache lookup failed for ${tokenSymbol} (${tokenId})`, error)
-    }
-
-    // Use the provided prisma client or the global instance
-    const db = prismaDb || prismaClient
-
-    // 2. Try database stored value
-    attemptMethods.push('database')
-    try {
-      const tokenData = await db.token.findUnique({
-        where: { id: tokenId },
-        select: { priceUSD: true },
-      })
-
-      if (tokenData?.priceUSD) {
-        const dbPrice = parseFloat(tokenData.priceUSD)
-        // Only accept database price if it's reasonable (not extremely small)
-        if (dbPrice > 0.000001) {
-          console.log(`Found valid database price ${dbPrice} for ${tokenSymbol}`)
-          await this.cacheTokenPrice(tokenId, dbPrice)
-          return dbPrice
-        } else {
-          console.log(`Found invalid database price ${dbPrice} for ${tokenSymbol}, will recalculate`)
-          // Clear invalid price from database
-          await db.token.update({
-            where: { id: tokenId },
-            data: { priceUSD: null }
-          })
+      // Get token info for logging
+      const tokenId = token.id
+      const tokenSymbol = token.symbol || 'Unknown'
+      const db = prismaDb || prismaClient
+      
+      console.log(`Starting price calculation for ${tokenSymbol} (${tokenId})`)
+      
+      // Track attempt methods for debugging
+      const attemptMethods: string[] = []
+      
+      // 1. Try cache first (fastest)
+      attemptMethods.push('cache')
+      try {
+        const cachedPrice = await this.getCachedTokenPrice(tokenId)
+        if (cachedPrice !== null && cachedPrice > 0) {
+          console.log(`Found cached price ${cachedPrice} for ${tokenSymbol}`)
+          return cachedPrice
         }
+      } catch (error) {
+        console.warn(`Cache lookup failed for ${tokenSymbol} (${tokenId})`, error)
       }
-    } catch (error) {
-      console.warn(`DB lookup failed for ${tokenSymbol} (${tokenId})`, error)
-    }
-
-    // 3. Try from stablecoin pairs (using existing method)
-    attemptMethods.push('stablecoin pairs')
-    try {
-      const priceFromPairs = await this.getPriceFromStablecoinPairs(
-        tokenId,
-        tokenDecimals,
-        db
-      )
-
-      if (priceFromPairs > 0.000001) {  // Only accept reasonable prices
-        console.log(`Found valid price ${priceFromPairs} from stablecoin pairs for ${tokenSymbol}`)
-        // Store in database and cache
-        try {
-          await db.token.update({
-            where: { id: tokenId },
-            data: { priceUSD: priceFromPairs.toString() }
-          })
-          console.log(`Updated database with price ${priceFromPairs} for ${tokenSymbol}`)
-        } catch (error) {
-          console.error(`Failed to update database with price for ${tokenSymbol}:`, error)
-        }
-        await this.cacheTokenPrice(tokenId, priceFromPairs)
-        return priceFromPairs
-      } else {
-        console.log(`Found invalid price ${priceFromPairs} from stablecoin pairs for ${tokenSymbol}, trying next method`)
-      }
-    } catch (error) {
-      console.warn(`Stablecoin pair lookup failed for ${tokenSymbol} (${tokenId})`, error)
-    }
-
-    // 4. Try reference tokens (tokens with reliable prices)
-    attemptMethods.push('reference tokens')
-    try {
-      // Get list of tokens that have known prices
-      const tokensWithPrices = await db.token.findMany({
-        where: {
-          priceUSD: { not: null },
-          id: { not: tokenId }, // Exclude the current token
-        },
-        select: {
-          id: true,
-          address: true,
-          symbol: true,
-          priceUSD: true,
-          decimals: true,
-        },
-        orderBy: [
-          { createdAt: 'asc' }, // Older tokens are typically more established
-        ],
-        take: 10,
-      })
-
-      console.log(`Found ${tokensWithPrices.length} reference tokens for ${tokenSymbol}`)
-
-      // Filter to tokens with valid prices
-      const referenceTokens = tokensWithPrices.filter(
-        (t: Token) => t.priceUSD && parseFloat(t.priceUSD) > 0
-      )
-
-      for (const refToken of referenceTokens) {
-        const refTokenPrice = parseFloat(refToken.priceUSD as string)
-        console.log(`Trying reference token ${refToken.symbol} with price ${refTokenPrice}`)
-
-        // Find pair between our token and this reference token
-        const pair = await db.pair.findFirst({
-          where: {
-            OR: [
-              {
-                token0Id: tokenId,
-                token1Id: refToken.id,
-              },
-              {
-                token0Id: refToken.id,
-                token1Id: tokenId,
-              },
-            ],
-          },
-          include: {
-            token0: true,
-            token1: true,
-          },
+      
+      // 2. Try database stored value
+      attemptMethods.push('database')
+      try {
+        const tokenData = await db.token.findUnique({
+          where: { id: tokenId },
+          select: { priceUSD: true },
         })
-
-        if (pair) {
-          console.log(`Found pair ${pair.address} with reference token ${refToken.symbol}`)
-          // Get the most recent price snapshot
-          const snapshot = await db.priceSnapshot.findFirst({
-            where: { pairId: pair.id },
-            orderBy: { timestamp: 'desc' },
-          })
-
-          if (snapshot) {
-            const isToken0 = pair.token0Id === tokenId
-            const refIsToken0 = pair.token0Id === refToken.id
-
-            try {
-              // Import viem's formatUnits to properly handle blockchain values
-              const { formatUnits } = await import('viem')
-              
-              // Get the raw price
-              let rawPrice: string
-            if (isToken0 && !refIsToken0) {
-              // Our token is token0, reference token is token1
-                rawPrice = snapshot.price0 || snapshot.token0Price
-            } else if (!isToken0 && refIsToken0) {
-              // Our token is token1, reference token is token0
-                rawPrice = snapshot.price1 || snapshot.token1Price
-              } else {
-                // This shouldn't happen in a properly formed pair
-                console.warn(`Invalid pair configuration for ${pair.address}`)
-                continue
-              }
-              
-              if (!rawPrice) {
-                console.warn(`No price available in snapshot for ${pair.address}`)
-                continue
-              }
-              
-              // Use the token's decimals for proper normalization
-              const tokenDecimalsFinal = isToken0 ? (pair.token0.decimals || 18) : (pair.token1.decimals || 18)
-              
-              // Normalize the raw price using viem's formatUnits
-              // This properly handles the large blockchain values
-              const normalizedPrice = parseFloat(formatUnits(BigInt(rawPrice), tokenDecimalsFinal))
-              console.log(`Normalized price from ${rawPrice} to ${normalizedPrice} using ${tokenDecimalsFinal} decimals`)
-              
-              // Calculate the final price in USD
-              const calculatedPrice = normalizedPrice * refTokenPrice
-              
-              console.log(`Calculated price ${calculatedPrice} from ${normalizedPrice} * ${refTokenPrice}`)
-
-              // Validate the price is reasonable
-              if (calculatedPrice > 0 && calculatedPrice < 1000000) {
-                try {
-                  await db.token.update({
-                    where: { id: tokenId },
-                    data: { priceUSD: calculatedPrice.toString() }
-                  })
-                  console.log(`Updated database with price ${calculatedPrice} for ${tokenSymbol}`)
-                } catch (error) {
-                  console.error(`Failed to update database with price for ${tokenSymbol}:`, error)
-                }
-                await this.cacheTokenPrice(tokenId, calculatedPrice)
-                return calculatedPrice
-              } else {
-                console.warn(`Calculated price ${calculatedPrice} appears outside reasonable bounds`)
-              }
-            } catch (error) {
-              console.error(`Error normalizing price for ${tokenSymbol}:`, error)
-              // Continue to try other approaches
-            }
+        
+        if (tokenData?.priceUSD) {
+          const dbPrice = parseFloat(tokenData.priceUSD)
+          // Basic validation - price should be positive
+          if (dbPrice > 0) {
+            console.log(`Found database price ${dbPrice} for ${tokenSymbol}`)
+            await this.cacheTokenPrice(tokenId, dbPrice)
+            return dbPrice
           }
         }
+      } catch (error) {
+        console.warn(`Database lookup failed for ${tokenSymbol} (${tokenId})`, error)
       }
-    } catch (error) {
-      console.warn(`Reference token lookup failed for ${tokenSymbol} (${tokenId})`, error)
-    }
-
-    // 5. Try price derived from token0Price/token1Price in most liquid pair
-    attemptMethods.push('price snapshots')
-    try {
-      // Find most liquid pair for this token
-      const mostLiquidPair = await db.pair.findFirst({
+      
+      // 3. Calculate from trading pairs
+      attemptMethods.push('trading pairs')
+      
+      // Find all pairs where this token is traded
+      const pairs = await db.pair.findMany({
         where: {
-          OR: [{ token0Id: tokenId }, { token1Id: tokenId }],
+          OR: [
+            { token0Id: tokenId },
+            { token1Id: tokenId }
+          ]
         },
-        orderBy: [
-          { reserve0: 'desc' }, // Order by liquidity
-        ],
         include: {
           token0: true,
-          token1: true,
+          token1: true
         },
+        orderBy: [
+          // Order by liquidity (reserves) to prioritize most liquid pairs
+          { reserveUSD: 'desc' },
+          { createdAt: 'desc' }
+        ]
       })
-
-      if (mostLiquidPair) {
-        console.log(`Found most liquid pair ${mostLiquidPair.address} for ${tokenSymbol}`)
-        const snapshot = await db.priceSnapshot.findFirst({
-          where: { pairId: mostLiquidPair.id },
-          orderBy: { timestamp: 'desc' },
-        })
-
-        if (snapshot) {
-          const isToken0 = mostLiquidPair.token0Id === tokenId
-          const counterpartToken = isToken0
-            ? mostLiquidPair.token1
-            : mostLiquidPair.token0
-
-          console.log(`Getting counterpart token ${counterpartToken.symbol} price`)
-          // Try to get counterpart token's price
-          const counterpartPrice = await this.getTokenPriceUSD(
-            counterpartToken.id,
-            counterpartToken.decimals ?? undefined
-          )
-
-          if (counterpartPrice > 0) {
-            try {
-              // Import viem for proper formatting
-              const { formatUnits } = await import('viem')
-
-              // Get the raw price from the snapshot
-              let rawPrice: string
+      
+      if (pairs.length === 0) {
+        console.warn(`No trading pairs found for ${tokenSymbol}`)
+        return 0
+      }
+      
+      console.log(`Found ${pairs.length} trading pairs for ${tokenSymbol}`)
+      
+      // Try each pair until we find a valid price
+      for (const pair of pairs) {
+        const isToken0 = pair.token0Id === tokenId
+        const counterpartToken = isToken0 ? pair.token1 : pair.token0
+        
+        console.log(`Trying pair with ${counterpartToken.symbol}`)
+        
+        // Skip self-pairings or already processing counterpart
+        if (counterpartToken.id === tokenId) {
+          continue
+        }
+        
+        // Get counterpart token price
+        let counterpartPrice = 0
+        
+        // MODIFIED: Always calculate counterpart prices from market data
+        // We no longer assume stablecoins have a price of 1
+        // Instead we calculate their price based on actual market data
+        
+        // First check if this is a stablecoin
+        const isStablecoinCounterpart = counterpartToken.symbol === 'USDT' || 
+                                       counterpartToken.symbol === 'USDC' ||
+                                       isStablecoinBySymbol(counterpartToken.symbol || '');
+        
+        if (isStablecoinCounterpart) {
+          console.log(`Calculating market price for stablecoin ${counterpartToken.symbol}`);
+          
+          // Try to find the stablecoin's price relative to KKUB
+          try {
+            // Find KKUB token
+            const kkubToken = await db.token.findFirst({
+              where: { symbol: MAIN_TOKEN_SYMBOL },
+              select: { id: true, priceUSD: true }
+            });
+            
+            if (kkubToken && kkubToken.priceUSD) {
+              // Find pair with KKUB
+              const kkubPair = await db.pair.findFirst({
+                where: {
+                  OR: [
+                    {
+                      token0Id: counterpartToken.id,
+                      token1Id: kkubToken.id
+                    },
+                    {
+                      token0Id: kkubToken.id,
+                      token1Id: counterpartToken.id
+                    }
+                  ]
+                },
+                include: {
+                  token0: true,
+                  token1: true
+                }
+              });
+              
+              if (kkubPair) {
+                // Calculate from reserves
+                const isToken0 = kkubPair.token0Id === counterpartToken.id;
+                const reserve0 = BigInt(kkubPair.reserve0);
+                const reserve1 = BigInt(kkubPair.reserve1);
+                
+                if (reserve0 > 0n && reserve1 > 0n) {
+                  const token0Decimals = kkubPair.token0.decimals || 18;
+                  const token1Decimals = kkubPair.token1.decimals || 18;
+                  
+                  // Format reserves using appropriate decimals
+                  const reserve0Formatted = Number(formatUnits(reserve0, token0Decimals));
+                  const reserve1Formatted = Number(formatUnits(reserve1, token1Decimals));
+                  const kkubPrice = parseFloat(kkubToken.priceUSD);
+                  
+                  if (isToken0) {
+                    // Stablecoin is token0, KKUB is token1
+                    // price = (reserve1/reserve0) * kkubPrice
+                    counterpartPrice = (reserve1Formatted / reserve0Formatted) * kkubPrice;
+                  } else {
+                    // Stablecoin is token1, KKUB is token0
+                    // price = (reserve0/reserve1) * kkubPrice
+                    counterpartPrice = (reserve0Formatted / reserve1Formatted) * kkubPrice;
+                  }
+                  
+                  // Validate the calculated price for stablecoins (should be close to 1)
+                  if (counterpartPrice > 0.5 && counterpartPrice < 1.5) {
+                    console.log(`Calculated stablecoin price ${counterpartPrice} for ${counterpartToken.symbol} using KKUB pair`);
+                    
+                    // Store in database
+                    try {
+                      await db.token.update({
+                        where: { id: counterpartToken.id },
+                        data: { priceUSD: counterpartPrice.toString() }
+                      });
+                      console.log(`Updated database with price ${counterpartPrice} for stablecoin ${counterpartToken.symbol}`);
+                    } catch (dbError) {
+                      console.error(`Failed to update database with price for ${counterpartToken.symbol}:`, dbError);
+                    }
+                    
+                    // Cache the price
+                    await this.cacheTokenPrice(counterpartToken.id, counterpartPrice);
+                  }
+                }
+              }
+            }
+          } catch (error) {
+            console.error(`Error calculating stablecoin price for ${counterpartToken.symbol}:`, error);
+          }
+          
+          // If we failed to calculate a market price for the stablecoin,
+          // fall back to using a reasonable approximation
+          if (counterpartPrice <= 0 || counterpartPrice > 1.5 || counterpartPrice < 0.5) {
+            console.warn(`Could not determine reliable market price for stablecoin ${counterpartToken.symbol}, using default approximation`);
+            counterpartPrice = 1;
+          }
+        } else {
+          // For non-stablecoins, use the existing logic
+          console.log(`Calculating price for non-stablecoin counterpart token ${counterpartToken.symbol}`);
+          counterpartPrice = await this.getTokenPriceUSD(counterpartToken.id);
+        }
+        
+        if (counterpartPrice <= 0) {
+          console.log(`No valid price found for counterpart ${counterpartToken.symbol}, trying next pair`);
+          continue;
+        }
+        
+        console.log(`Using counterpart price ${counterpartPrice} for ${counterpartToken.symbol}`);
+        
+        // Calculate this token's price based on pair reserves and counterpart price
+        try {
+          const reserve0 = BigInt(pair.reserve0)
+          const reserve1 = BigInt(pair.reserve1)
+          
+          // Only calculate if both reserves are non-zero
+          if (reserve0 > 0n && reserve1 > 0n) {
+            const token0Decimals = pair.token0.decimals || 18
+            const token1Decimals = pair.token1.decimals || 18
+            
+            // Format reserves using appropriate decimals
+            const reserve0Formatted = Number(formatUnits(reserve0, token0Decimals))
+            const reserve1Formatted = Number(formatUnits(reserve1, token1Decimals))
+            
+            let calculatedPrice: number
+            
             if (isToken0) {
-                // Our token is token0
-                rawPrice = snapshot.price0 || snapshot.token0Price
+              // Our token is token0, so price = (reserve1/reserve0) * counterpartPrice
+              calculatedPrice = (reserve1Formatted / reserve0Formatted) * counterpartPrice
             } else {
-                // Our token is token1
-                rawPrice = snapshot.price1 || snapshot.token1Price
-              }
+              // Our token is token1, so price = (reserve0/reserve1) * counterpartPrice
+              calculatedPrice = (reserve0Formatted / reserve1Formatted) * counterpartPrice
+            }
+            
+            // Basic validation - price should be positive and reasonable
+            if (calculatedPrice > 0 && calculatedPrice < Number.MAX_SAFE_INTEGER) {
+              console.log(`Calculated price ${calculatedPrice} for ${tokenSymbol} using ${counterpartToken.symbol} pair`)
               
-              if (!rawPrice) {
-                console.warn(`No price available in snapshot for ${mostLiquidPair.address}`)
-                return 0
-              }
-              
-              // Use the token's decimals for proper normalization
-              const tokenDecimalsFinal = isToken0 
-                ? (mostLiquidPair.token0.decimals || 18) 
-                : (mostLiquidPair.token1.decimals || 18)
-              
-              // Normalize the raw price using viem's formatUnits
-              const normalizedPrice = parseFloat(formatUnits(BigInt(rawPrice), tokenDecimalsFinal))
-              console.log(`Normalized price from ${rawPrice} to ${normalizedPrice} using ${tokenDecimalsFinal} decimals`)
-              
-              // Calculate the final price in USD
-              const calculatedPrice = normalizedPrice * counterpartPrice
-              console.log(`Calculated price ${calculatedPrice} from ${normalizedPrice} * ${counterpartPrice}`)
-              
-              // Validate the price is reasonable
-              if (calculatedPrice > 0 && calculatedPrice < 1000000) {
+              // Store in database
               try {
                 await db.token.update({
                   where: { id: tokenId },
-                    data: { priceUSD: calculatedPrice.toString() }
+                  data: { priceUSD: calculatedPrice.toString() }
                 })
-                  console.log(`Updated database with price ${calculatedPrice} for ${tokenSymbol}`)
-              } catch (error) {
-                console.error(`Failed to update database with price for ${tokenSymbol}:`, error)
+                console.log(`Updated database with price ${calculatedPrice} for ${tokenSymbol}`)
+              } catch (dbError) {
+                console.error(`Failed to update database with price for ${tokenSymbol}:`, dbError)
               }
-                await this.cacheTokenPrice(tokenId, calculatedPrice)
-                return calculatedPrice
-              } else {
-                console.warn(`Calculated price ${calculatedPrice} appears outside reasonable bounds`)
-              }
-            } catch (error) {
-              console.error(`Error normalizing price for ${tokenSymbol}:`, error)
+              
+              // Cache the price
+              await this.cacheTokenPrice(tokenId, calculatedPrice)
+              
+              return calculatedPrice
+            } else {
+              console.warn(`Calculated price ${calculatedPrice} for ${tokenSymbol} is outside reasonable bounds`)
             }
+          } else {
+            console.warn(`Zero reserves in pair ${pair.id}, trying next pair`)
           }
+        } catch (error) {
+          console.error(`Error calculating price from reserves for ${tokenSymbol}:`, error)
         }
       }
+      
+      // If we get here, we couldn't calculate a price from any pair
+      console.warn(`Failed to determine price for ${tokenSymbol} after trying: ${attemptMethods.join(', ')}`)
+      return 0
     } catch (error) {
-      console.warn(
-        `Price snapshot approach failed for ${tokenSymbol} (${tokenId})`,
-        error
-      )
+      console.error(`Error in getReliableTokenUsdPrice:`, error)
+      return 0
     }
-
-    // 6. If all else fails, return 0
-    console.warn(
-      `Failed to determine price for ${tokenSymbol} (${tokenId}) after trying: ${attemptMethods.join(', ')}`
-    )
-    return 0
   },
 
   /**
