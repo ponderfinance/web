@@ -72,25 +72,10 @@ export function processPriceHistoryData(
     return [];
   }
   
-  // For stablecoins: simply filter out extreme outliers 
-  // without complex normalization logic
+  // For stablecoins: return the data directly without filtering
   if (isStablecoin) {
-    // Use more generous bounds for stablecoins - allow values from $0.1 to $10
-    // This handles a wider range of stablecoin values including USDC at ~$0.49
-    const filteredStable = validData.filter(point => point.value > 0.1 && point.value < 10);
-    
-    console.log(`[DEBUG_CHART] Stablecoin filtering: from ${validData.length} to ${filteredStable.length} points`);
-    
-    // Calculate statistics for better debugging
-    if (filteredStable.length > 0) {
-      const values = filteredStable.map(p => p.value);
-      const min = Math.min(...values);
-      const max = Math.max(...values);
-      const avg = values.reduce((sum, val) => sum + val, 0) / values.length;
-      console.log(`[DEBUG_CHART] Stablecoin chart stats - min: ${min}, max: ${max}, avg: ${avg}`);
-    }
-    
-    return filteredStable;
+    console.log(`[DEBUG_CHART] Stablecoin detected, using original data without filtering`);
+    return validData;
   }
   
   // For regular tokens: check if they need normalization

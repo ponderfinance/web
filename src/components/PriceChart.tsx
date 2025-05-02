@@ -130,23 +130,23 @@ const PriceChart: React.FC<PriceChartProps> = ({
       (title?.includes('USDT') || 
        title?.includes('USDC') || 
        title?.includes('DAI') || 
-       title?.includes('Stablecoin')) ||
+       title?.includes('Stablecoin') ||
+       title?.includes('Tether USD')) ||
       (title?.includes('USD') && data.some(point => point.value > 0.1 && point.value < 5.0));
     
     console.log(`Chart for ${title} - isStablecoin: ${isStablecoinChart}`);
     
-    // Calculate appropriate scale margins based on chart type
-    const scaleMargins = isStablecoinChart
-      ? { top: 0.15, bottom: 0.15 } // Tighter margins for stablecoins to highlight price changes
-      : { top: 0.1, bottom: 0.2 }; // Default margins for regular tokens
-    
-    // Find min/max values for scaling
+    // Get data value range for debugging
     const values = data.map(point => point.value);
     const minValue = Math.min(...values);
     const maxValue = Math.max(...values);
     const avgValue = values.reduce((sum, val) => sum + val, 0) / values.length;
+    const range = maxValue - minValue;
     
-    console.log(`Chart data range - Min: ${minValue}, Max: ${maxValue}, Avg: ${avgValue}`);
+    console.log(`[CHART] Data range for ${title} - Min: ${minValue}, Max: ${maxValue}, Range: ${range}, Avg: ${avgValue}`);
+    
+    // Calculate appropriate scale margins - simpler approach
+    const scaleMargins = { top: 0.1, bottom: 0.2 };
 
     // Calculate container width if autoSize is true
     const containerWidth =
@@ -285,20 +285,18 @@ const PriceChart: React.FC<PriceChartProps> = ({
 
     seriesRef.current = series
     
-    // For stablecoins, set custom price range to better show small movements
-    if (isStablecoinChart && type !== 'volume') {
-      // Calculate a reasonable range for stablecoin display
-      const centralValue = avgValue;
-      // Use a percentage of central value to create bounds, but also consider actual range
-      const range = Math.max(maxValue - minValue, centralValue * 0.2);
+    // If dealing with a chart where values are all very close to each other,
+    // adjust the Y-axis to make price movements more visible
+    if (type !== 'volume' && range < 0.1 && avgValue > 0) {
+      console.log(`[CHART] Small price range detected (${range.toFixed(6)}), adjusting Y-axis for better visibility`);
       
-      // Create bounds, giving more space below than above
-      const minBound = Math.max(0, centralValue - range * 0.6);
-      const maxBound = centralValue + range * 0.4;
+      // Set reasonable bounds to show small movements
+      const minBound = Math.max(0, avgValue * 0.95); // 5% below average
+      const maxBound = avgValue * 1.05; // 5% above average
       
-      console.log(`Setting stablecoin Y-axis bounds: ${minBound} to ${maxBound}`);
+      console.log(`[CHART] Setting Y-axis bounds: ${minBound.toFixed(6)} to ${maxBound.toFixed(6)}`);
       
-      // Apply custom bounds to better highlight stablecoin price movements
+      // Apply bounds to the series
       series.applyOptions({
         autoscaleInfoProvider: () => ({
           priceRange: {
@@ -306,11 +304,6 @@ const PriceChart: React.FC<PriceChartProps> = ({
             maxValue: maxBound,
           },
         }),
-      });
-      
-      // Disable autoscaling for more stable display
-      chart.priceScale('right').applyOptions({
-        autoScale: false,
       });
     }
 

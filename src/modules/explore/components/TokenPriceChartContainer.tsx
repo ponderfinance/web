@@ -6,8 +6,8 @@ import { graphql, useFragment, useLazyLoadQuery } from 'react-relay'
 import PriceChart from './PriceChart'
 import { TokenPriceChartContainer_token$key } from '@/src/__generated__/TokenPriceChartContainer_token.graphql'
 import { TokenPriceChartContainerQuery } from '@/src/__generated__/TokenPriceChartContainerQuery.graphql'
-import { processPriceHistoryData } from '@/src/lib/utils/tokenPriceUtils'
 import { formatCurrency } from '@/src/utils/numbers'
+import { formatUnits } from 'viem'
 
 // Define the fragment for token chart data
 const TokenChartFragment = graphql`
@@ -157,103 +157,47 @@ function TokenPriceChartContent({
     )
   }
 
-  // Very minimal data detection
-  if (tokenPriceChart.length < 2) {
-    console.log(`[DEBUG] Insufficient price data for ${tokenSymbol} (only ${tokenPriceChart.length} points)`);
-    return (
-      <View height={400} align="center" justify="center">
-        <Text>Insufficient price data for {tokenSymbol}</Text>
-        <Text variant="caption-1" color="neutral-faded">The chart requires at least 2 data points</Text>
-      </View>
-    )
-  }
-
-  // Log the raw data we received from the GraphQL query
-  console.log(`[DEBUG] tokenPriceChart raw data for ${tokenSymbol}:`, tokenPriceChart.slice(0, 5));
-
-  // Process the chart data to ensure proper formatting with more robust error handling
-  const chartData = [...tokenPriceChart]
-    .map((point) => {
-      try {
-        // Make sure both time and value are proper numbers
-        const timeValue = typeof point.time === 'string' ? parseInt(point.time, 10) : Number(point.time);
-        const priceValue = typeof point.value === 'string' ? parseFloat(point.value) : Number(point.value);
-        
-        // Log any issues with data conversion
-        if (isNaN(timeValue) || isNaN(priceValue)) {
-          console.error(`[DEBUG] Invalid chart point:`, point);
-          return null;
-        }
-        
-        return {
-          time: timeValue,
-          value: priceValue
-        };
-      } catch (error) {
-        console.error(`[DEBUG] Error processing chart point:`, error, point);
-        return null;
-      }
-    })
-    .filter((point): point is {time: number, value: number} => 
-      point !== null && 
-      !isNaN(point.time) && 
-      !isNaN(point.value) && 
-      point.value > 0
-    );
-
-  // Check if values are too small to display (e.g. all 0.000001)
-  const allMinimalValues = chartData.length > 0 && 
-    chartData.every(point => point.value <= 0.000001);
-
-  if (allMinimalValues) {
-    console.log(`[DEBUG] All chart values are minimal (0.000001) for ${tokenSymbol}`);
-    return (
-      <View height={400} align="center" justify="center">
-        <Text>Chart data unavailable for {tokenSymbol}</Text>
-        <Text variant="caption-1" color="neutral-faded">The price data appears to be invalid</Text>
-      </View>
-    )
-  }
-  
-  // Check if we still have enough valid points after filtering
-  if (chartData.length < 2) {
-    console.log(`[DEBUG] Insufficient valid price data after filtering for ${tokenSymbol}`);
-    return (
-      <View height={400} align="center" justify="center">
-        <Text>Insufficient valid price data for {tokenSymbol}</Text>
-      </View>
-    )
-  }
-
-  console.log(`[DEBUG] Raw chart data for ${tokenSymbol}:`, chartData.slice(0, 5));
-  
-  // Report min, max, and average values before processing
-  if (chartData.length > 0) {
-    const values = chartData.map(p => p.value);
-    const min = Math.min(...values);
-    const max = Math.max(...values);
-    const avg = values.reduce((sum, val) => sum + val, 0) / values.length;
-    console.log(`[DEBUG] Before processing - Min: ${min}, Max: ${max}, Avg: ${avg}`);
-  }
-
-  // Simplified stablecoin detection based purely on token symbol
-  // This is more reliable than trying to detect based on price
-  const isStablecoin = ['USDT', 'USDC', 'DAI', 'BUSD', 'TUSD', 'USDC.e', 'FRAX', 'USDP'].includes(tokenSymbol);
+  // Detect if this is a stablecoin to apply special handling
+  const isStablecoin = ['USDT', 'USDC', 'DAI', 'BUSD', 'TUSD'].includes(tokenSymbol.toUpperCase());
   console.log(`[DEBUG] Token ${tokenSymbol} is stablecoin: ${isStablecoin}`);
+  
+  // Create a clean copy of the data to avoid readonly issues
+  let processedData = tokenPriceChart.map(point => {
+    // Always normalize values using the token's decimals (or default to 18)
+    const decimals = tokenDecimals || 18;
+    return {
+      time: point.time,
+      // Use viem's formatUnits to convert from wei to token units
+      value: Number(formatUnits(BigInt(Math.round(point.value)), decimals))
+    };
+  });
 
-  // Use our simplified processing function
-  const processedData = processPriceHistoryData(chartData, tokenDecimals, isStablecoin)
-  
-  console.log(`[DEBUG] Processed chart data for ${tokenSymbol}:`, processedData.slice(0, 5));
-  
-  // Report min, max, and average values after processing
+  // Very minimal data detection
+  // If there's only one data point, we can't calculate a meaningful chart
+  // Instead, duplicate the point with a slight time offset to show a flat line
+  if (processedData.length === 1) {
+    console.log(`[DEBUG] Single data point detected for ${tokenSymbol}, creating a flat line`);
+    const existingPoint = processedData[0];
+    const timeOffset = 3600; // 1 hour in seconds
+    
+    // Create a new point with the same value but different timestamp
+    processedData = [
+      existingPoint,
+      { time: existingPoint.time + timeOffset, value: existingPoint.value }
+    ];
+  }
+
+  // Get basic stats about the data for debugging
   if (processedData.length > 0) {
     const values = processedData.map(p => p.value);
     const min = Math.min(...values);
     const max = Math.max(...values);
     const avg = values.reduce((sum, val) => sum + val, 0) / values.length;
-    console.log(`[DEBUG] After processing - Min: ${min}, Max: ${max}, Avg: ${avg}`);
+    console.log(`[DEBUG] Chart data stats - Min: ${min}, Max: ${max}, Avg: ${avg}`);
   }
+
+  // No longer using processPriceHistoryData as it's not needed
+  // The data is already properly formatted by priceChartService
 
   // Add price formatting for tooltip/hover display with enhanced precision for small values
   const formatTooltip = (value: number) => {
