@@ -6,7 +6,6 @@ import { graphql, useFragment, useLazyLoadQuery } from 'react-relay'
 import PriceChart from './PriceChart'
 import { TokenPriceChartContainer_token$key } from '@/src/__generated__/TokenPriceChartContainer_token.graphql'
 import { TokenPriceChartContainerQuery } from '@/src/__generated__/TokenPriceChartContainerQuery.graphql'
-import { formatCurrency } from '@/src/utils/numbers'
 import { formatUnits } from 'viem'
 
 // Define the fragment for token chart data
@@ -128,28 +127,8 @@ function TokenPriceChartContent({
 
   const tokenPriceChart = data.tokenPriceChart
 
-  // Enhanced debugging to see the raw data
-  console.log(`[DEBUG] Raw token data for ${tokenSymbol}:`, { 
-    tokenAddress, 
-    tokenSymbol, 
-    tokenDecimals,
-    hasChartData: !!tokenPriceChart && tokenPriceChart.length > 0,
-    dataPointCount: tokenPriceChart?.length || 0
-  });
-  
-  if (tokenPriceChart && tokenPriceChart.length > 0) {
-    console.log(`[DEBUG] First few data points:`, 
-      tokenPriceChart.slice(0, 3).map(point => ({
-        time: point.time,
-        value: point.value,
-        timeFormatted: new Date(point.time * 1000).toISOString()
-      }))
-    );
-  }
-
   // More robust empty state checking
   if (!tokenPriceChart || tokenPriceChart.length === 0) {
-    console.log(`[DEBUG] No price data available for ${tokenSymbol}`);
     return (
       <View height={400} align="center" justify="center">
         <Text>No price data available for {tokenSymbol}</Text>
@@ -157,10 +136,7 @@ function TokenPriceChartContent({
     )
   }
 
-  // Detect if this is a stablecoin to apply special handling
-  const isStablecoin = ['USDT', 'USDC', 'DAI', 'BUSD', 'TUSD'].includes(tokenSymbol.toUpperCase());
-  console.log(`[DEBUG] Token ${tokenSymbol} is stablecoin: ${isStablecoin}`);
-  
+
   // Create a clean copy of the data to avoid readonly issues
   let processedData = tokenPriceChart.map(point => {
     // Always normalize values using the token's decimals (or default to 18)
@@ -172,32 +148,16 @@ function TokenPriceChartContent({
     };
   });
 
-  // Very minimal data detection
-  // If there's only one data point, we can't calculate a meaningful chart
-  // Instead, duplicate the point with a slight time offset to show a flat line
+  // If there's only one data point, duplicate it to show a flat line
   if (processedData.length === 1) {
-    console.log(`[DEBUG] Single data point detected for ${tokenSymbol}, creating a flat line`);
     const existingPoint = processedData[0];
     const timeOffset = 3600; // 1 hour in seconds
     
-    // Create a new point with the same value but different timestamp
     processedData = [
       existingPoint,
       { time: existingPoint.time + timeOffset, value: existingPoint.value }
     ];
   }
-
-  // Get basic stats about the data for debugging
-  if (processedData.length > 0) {
-    const values = processedData.map(p => p.value);
-    const min = Math.min(...values);
-    const max = Math.max(...values);
-    const avg = values.reduce((sum, val) => sum + val, 0) / values.length;
-    console.log(`[DEBUG] Chart data stats - Min: ${min}, Max: ${max}, Avg: ${avg}`);
-  }
-
-  // No longer using processPriceHistoryData as it's not needed
-  // The data is already properly formatted by priceChartService
 
   // Add price formatting for tooltip/hover display with enhanced precision for small values
   const formatTooltip = (value: number) => {
@@ -215,8 +175,13 @@ function TokenPriceChartContent({
       return `$${value.toFixed(6)}`;
     }
     
-    // For regular values, use the standard formatter
-    return formatCurrency(value) ?? '';
+    // For regular values, use standard formatting
+    return value.toLocaleString('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    });
   }
 
   return (
