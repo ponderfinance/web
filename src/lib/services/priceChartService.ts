@@ -248,10 +248,6 @@ export class PriceChartService {
   /**
    * Find the best trading pair to use for price chart data
    */
-
-  /**
-   * Find the best trading pair to use for price chart data
-   */
   static async findBestPriceDataPair(
     tokenId: string,
     tokenAddress: string,
@@ -277,7 +273,7 @@ export class PriceChartService {
       // Find all pairs where this token is involved
       const pairsAsToken0 = await prisma.pair.findMany({
         where: { token0Id: tokenId },
-        orderBy: { reserve0: 'desc' }, // Use reserve0 for sorting
+        orderBy: [{ createdAt: 'desc' }, { reserve0: 'desc' }], // Sort by creation date and reserve amount
         include: {
           token1: { select: { symbol: true, decimals: true } }
         }
@@ -285,7 +281,7 @@ export class PriceChartService {
       
       const pairsAsToken1 = await prisma.pair.findMany({
         where: { token1Id: tokenId },
-        orderBy: { reserve1: 'desc' }, // Use reserve1 for sorting
+        orderBy: [{ createdAt: 'desc' }, { reserve1: 'desc' }], // Sort by creation date and reserve amount
         include: {
           token0: { select: { symbol: true, decimals: true } }
         }
@@ -293,10 +289,42 @@ export class PriceChartService {
       
       console.log(`[DEBUG] Found ${pairsAsToken0.length} pairs as token0 and ${pairsAsToken1.length} pairs as token1`);
       
-      // SIMPLIFIED APPROACH: Just use the pair with highest liquidity, regardless of token type
-      // Remove all special handling for stablecoins or KKUB
+      // Use simplified approach for stablecoins (USDT, USDC, etc.)
+      const isStablecoin = ['USDT', 'USDC', 'DAI', 'BUSD', 'TUSD'].includes(token.symbol?.toUpperCase() || '');
       
-      // For regular tokens, use the pair with highest liquidity
+      if (isStablecoin) {
+        // For stablecoins, just use highest liquidity pair
+        if (pairsAsToken0.length > 0) {
+          console.log(`[DEBUG] Using highest liquidity pair for stablecoin ${token.symbol} as token0: ${pairsAsToken0[0].id}`);
+          return { pairId: pairsAsToken0[0].id, isToken0: true };
+        }
+        
+        if (pairsAsToken1.length > 0) {
+          console.log(`[DEBUG] Using highest liquidity pair for stablecoin ${token.symbol} as token1: ${pairsAsToken1[0].id}`);
+          return { pairId: pairsAsToken1[0].id, isToken0: false };
+        }
+      }
+      
+      // For other tokens (including KKUB), prefer pairs with stablecoins
+      const stablecoinSymbols = ['USDT', 'USDC', 'DAI', 'BUSD', 'TUSD'];
+      
+      // Look for pairs with stablecoins as token1
+      for (const pair of pairsAsToken0) {
+        if (stablecoinSymbols.includes(pair.token1.symbol?.toUpperCase() || '')) {
+          console.log(`[DEBUG] Found pair with stablecoin ${pair.token1.symbol} for token ${token.symbol}`);
+          return { pairId: pair.id, isToken0: true };
+        }
+      }
+      
+      // Look for pairs with stablecoins as token0
+      for (const pair of pairsAsToken1) {
+        if (stablecoinSymbols.includes(pair.token0.symbol?.toUpperCase() || '')) {
+          console.log(`[DEBUG] Found pair with stablecoin ${pair.token0.symbol} for token ${token.symbol}`);
+          return { pairId: pair.id, isToken0: false };
+        }
+      }
+      
+      // If no stablecoin pairs found, fall back to highest liquidity pair
       if (pairsAsToken0.length > 0) {
         console.log(`[DEBUG] Using highest liquidity pair as token0: ${pairsAsToken0[0].id}`);
         return { pairId: pairsAsToken0[0].id, isToken0: true };
