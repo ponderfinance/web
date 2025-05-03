@@ -1,4 +1,5 @@
 import { startScheduler } from '../services/scheduler'
+import { VolumeMetricsService } from './services/volumeMetricsService'
 
 let isSchedulerStarted = false
 

@@ -143,8 +143,14 @@ type Token {
   imageURI: String
   stablePair: String
   priceUSD: String
+  priceChange1h: Float
   priceChange24h: Float
+  priceChange7d: Float
   volumeUSD24h: String
+  volume1h: String
+  volume7d: String
+  volume30d: String
+  volumeChange24h: Float
   lastPriceUpdate: DateTime
   tvl: String!
   marketCap: String!
@@ -199,6 +205,13 @@ type Pair {
   priceHistory(days: Int!, interval: String): PriceSnapshotConnection!
   tvl: Float!
   reserveUSD: String!
+  poolAPR: Float
+  volume1h: String
+  volume24h: String
+  volume7d: String
+  volume30d: String
+  volumeChange24h: Float
+  volumeTVLRatio: Float
 }
 
 # Pair Connection
@@ -360,6 +373,22 @@ type StakingPosition {
   updatedAt: DateTime!
 }
 
+# Volume Metrics
+type VolumeMetric {
+  id: ID!
+  timestamp: Int!
+  entity: String! # "pair", "token", or "protocol"
+  entityId: String!
+  volume1h: String!
+  volume24h: String!
+  volume7d: String!
+  volume30d: String!
+  volumeChange1h: Float
+  volumeChange24h: Float
+  volumeChange7d: Float
+  createdAt: DateTime!
+}
+
 # Protocol Metrics
 type ProtocolMetric {
   id: ID!
@@ -380,6 +409,10 @@ type ProtocolMetric {
   dailyActiveUsers: Int!
   weeklyActiveUsers: Int!
   monthlyActiveUsers: Int!
+  volume1h: String
+  volume1hChange: Float
+  totalPairs: Int
+  activePoolsCount: Int
 }
 
 # Staking Metrics

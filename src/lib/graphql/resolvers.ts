@@ -1090,7 +1090,32 @@ export const resolvers = {
         console.error('Error resolving token fdv:', error);
         return '0';
       }
-    }
+    },
+    
+    // New volume-related resolvers
+    priceChange1h: async (parent: any, _args: any, { prisma }: Context) => {
+      return parent.priceChange1h || 0
+    },
+    
+    priceChange7d: async (parent: any, _args: any, { prisma }: Context) => {
+      return parent.priceChange7d || 0
+    },
+    
+    volume1h: async (parent: any, _args: any, { prisma }: Context) => {
+      return parent.volume1h || '0'
+    },
+    
+    volume7d: async (parent: any, _args: any, { prisma }: Context) => {
+      return parent.volume7d || '0'
+    },
+    
+    volume30d: async (parent: any, _args: any, { prisma }: Context) => {
+      return parent.volume30d || '0'
+    },
+    
+    volumeChange24h: async (parent: any, _args: any, { prisma }: Context) => {
+      return parent.volumeChange24h || 0
+    },
   },
   
   Pair: {
@@ -1267,7 +1292,36 @@ export const resolvers = {
         console.error(`Error calculating reserveUSD for pair ${parent.id}:`, error);
         return '0';
       }
-    }
+    },
+    
+    // New volume-related resolvers
+    poolAPR: async (parent: any, _args: any, { prisma }: Context) => {
+      return parent.poolAPR || 0
+    },
+    
+    volume1h: async (parent: any, _args: any, { prisma }: Context) => {
+      return parent.volume1h || '0'
+    },
+    
+    volume24h: async (parent: any, _args: any, { prisma }: Context) => {
+      return parent.volume24h || '0'
+    },
+    
+    volume7d: async (parent: any, _args: any, { prisma }: Context) => {
+      return parent.volume7d || '0'
+    },
+    
+    volume30d: async (parent: any, _args: any, { prisma }: Context) => {
+      return parent.volume30d || '0'
+    },
+    
+    volumeChange24h: async (parent: any, _args: any, { prisma }: Context) => {
+      return parent.volumeChange24h || 0
+    },
+    
+    volumeTVLRatio: async (parent: any, _args: any, { prisma }: Context) => {
+      return parent.volumeTVLRatio || 0
+    },
   },
   Query: {
     // Token resolvers
@@ -2533,7 +2587,44 @@ export const resolvers = {
           totalCount: 0
         };
       }
-    }
+    },
+
+    // Add this to the Query object
+    async protocolMetrics(_parent: any, _args: any, { prisma }: Context) {
+      const metric = await prisma.protocolMetric.findFirst({
+        orderBy: { timestamp: 'desc' }
+      })
+      
+      if (!metric) {
+        // Return default values if no metrics exist yet
+        return {
+          id: 'default',
+          timestamp: Math.floor(Date.now() / 1000),
+          totalValueLockedUSD: '0',
+          liquidityPoolsTVL: '0',
+          stakingTVL: '0',
+          farmingTVL: '0',
+          dailyVolumeUSD: '0',
+          weeklyVolumeUSD: '0',
+          monthlyVolumeUSD: '0',
+          totalVolumeUSD: '0',
+          dailyFeesUSD: '0',
+          weeklyFeesUSD: '0',
+          monthlyFeesUSD: '0',
+          totalFeesUSD: '0',
+          totalUsers: 0,
+          dailyActiveUsers: 0,
+          weeklyActiveUsers: 0,
+          monthlyActiveUsers: 0,
+          volume1h: '0',
+          volume1hChange: 0,
+          totalPairs: 0,
+          activePoolsCount: 0
+        }
+      }
+      
+      return metric
+    },
   },
   
   // Add this at the end
