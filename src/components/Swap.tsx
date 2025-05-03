@@ -1143,8 +1143,8 @@ export function SwapInterface({
                   Select Tokens
                 </Button>
               ) : !route || !amountIn ? (
-                <Button fullWidth size="large" disabled>
-                  Enter Amount
+                <Button fullWidth size="large" disabled loading={isRouteLoading}>
+                  {isRouteLoading ? 'Fetching quote' : 'Enter Amount'}
                 </Button>
               ) : !isValidTrade ? (
                 <Button fullWidth size="large" disabled>

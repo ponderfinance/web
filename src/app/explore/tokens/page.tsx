@@ -26,6 +26,18 @@ const LoadingFallback = () => (
         <View.Item columns={2}>
           <Text color="neutral-faded" weight="medium">Price</Text>
         </View.Item>
+        <View.Item columns={1}>
+          <Text color="neutral-faded" weight="medium">1H</Text>
+        </View.Item>
+        <View.Item columns={1}>
+          <Text color="neutral-faded" weight="medium">1D</Text>
+        </View.Item>
+        <View.Item columns={2}>
+          <Text color="neutral-faded" weight="medium">FDV</Text>
+        </View.Item>
+        <View.Item columns={2}>
+          <Text color="neutral-faded" weight="medium">Volume</Text>
+        </View.Item>
       </View>
 
       {/* Skeleton Rows */}
@@ -48,6 +60,18 @@ const LoadingFallback = () => (
                 <Skeleton width="100px" height="20px" />
               </View>
             </View>
+          </View.Item>
+          <View.Item columns={2}>
+            <Skeleton width="80px" height="24px" />
+          </View.Item>
+          <View.Item columns={1}>
+            <Skeleton width="50px" height="24px" />
+          </View.Item>
+          <View.Item columns={1}>
+            <Skeleton width="50px" height="24px" />
+          </View.Item>
+          <View.Item columns={2}>
+            <Skeleton width="80px" height="24px" />
           </View.Item>
           <View.Item columns={2}>
             <Skeleton width="80px" height="24px" />
