@@ -93,29 +93,43 @@ export const TokensDisplay: React.FC<TokensDisplayProps> = ({
           </Actionable>
         </View.Item>
 
-        {/*<View.Item columns={2}>*/}
-        {/*  <Actionable onClick={() => handleSort('priceChange24h')}>*/}
-        {/*    <Text color="neutral-faded" weight="medium">*/}
-        {/*      24h {orderBy === 'priceChange24h' && (orderDirection === 'asc' ? '↑' : '↓')}*/}
-        {/*    </Text>*/}
-        {/*  </Actionable>*/}
-        {/*</View.Item>*/}
+        <View.Item columns={1}>
+          <Actionable onClick={() => handleSort('priceChange1h')}>
+            <Text color="neutral-faded" weight="medium">
+              1H {orderBy === 'priceChange1h' && (orderDirection === 'asc' ? '↑' : '↓')}
+            </Text>
+          </Actionable>
+        </View.Item>
 
-        {/*<View.Item columns={2}>*/}
-        {/*  <Actionable onClick={() => handleSort('volumeUSD24h')}>*/}
-        {/*    <Text color="neutral-faded" weight="medium">*/}
-        {/*      Volume 24h{' '}*/}
-        {/*      {orderBy === 'volumeUSD24h' && (orderDirection === 'asc' ? '↑' : '↓')}*/}
-        {/*    </Text>*/}
-        {/*  </Actionable>*/}
-        {/*</View.Item>*/}
+        <View.Item columns={1}>
+          <Actionable onClick={() => handleSort('priceChange24h')}>
+            <Text color="neutral-faded" weight="medium">
+              1D {orderBy === 'priceChange24h' && (orderDirection === 'asc' ? '↑' : '↓')}
+            </Text>
+          </Actionable>
+        </View.Item>
+
+        <View.Item columns={2}>
+          <Actionable onClick={() => handleSort('fdv')}>
+            <Text color="neutral-faded" weight="medium">
+              FDV {orderBy === 'fdv' && (orderDirection === 'asc' ? '↑' : '↓')}
+            </Text>
+          </Actionable>
+        </View.Item>
+
+        <View.Item columns={2}>
+          <Actionable onClick={() => handleSort('volumeUSD24h')}>
+            <Text color="neutral-faded" weight="medium">
+              Volume {orderBy === 'volumeUSD24h' && (orderDirection === 'asc' ? '↑' : '↓')}
+            </Text>
+          </Actionable>
+        </View.Item>
       </View>
       {/* Table Body */}
       <View direction="column" gap={0}>
         {data.tokens.edges.map(({ node }, index) => (
-          <Link href={`/explore/tokens/${node.address}`}>
+          <Link href={`/explore/tokens/${node.address}`} key={node.id}>
             <View
-              key={node.id}
               direction="row"
               gap={0}
               padding={4}
@@ -150,23 +164,41 @@ export const TokensDisplay: React.FC<TokensDisplayProps> = ({
                 <Text>{formatCurrency(node.priceUSD)}</Text>
               </View.Item>
 
-              {/*<View.Item columns={2}>*/}
-              {/*  <Text*/}
-              {/*    color={*/}
-              {/*      !node.priceChange24h*/}
-              {/*        ? 'neutral'*/}
-              {/*        : node.priceChange24h > 0*/}
-              {/*          ? 'positive'*/}
-              {/*          : 'critical'*/}
-              {/*    }*/}
-              {/*  >*/}
-              {/*    {formatPercent(node.priceChange24h)}*/}
-              {/*  </Text>*/}
-              {/*</View.Item>*/}
+              <View.Item columns={1}>
+                <Text
+                  color={
+                    !node.priceChange1h
+                      ? 'neutral'
+                      : node.priceChange1h > 0
+                        ? 'positive'
+                        : 'critical'
+                  }
+                >
+                  {formatPercent(node.priceChange1h)}
+                </Text>
+              </View.Item>
 
-              {/*<View.Item columns={2}>*/}
-              {/*  <Text>{formatCurrency(node.volumeUSD24h)}</Text>*/}
-              {/*</View.Item>*/}
+              <View.Item columns={1}>
+                <Text
+                  color={
+                    !node.priceChange24h
+                      ? 'neutral'
+                      : node.priceChange24h > 0
+                        ? 'positive'
+                        : 'critical'
+                  }
+                >
+                  {formatPercent(node.priceChange24h)}
+                </Text>
+              </View.Item>
+
+              <View.Item columns={2}>
+                <Text>{formatCurrency(node.fdv)}</Text>
+              </View.Item>
+
+              <View.Item columns={2}>
+                <Text>{formatCurrency(node.volumeUSD24h)}</Text>
+              </View.Item>
             </View>
           </Link>
         ))}

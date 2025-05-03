@@ -1,5 +1,5 @@
 /**
- * @generated SignedSource<<96d1c68447e8c5dcf93c777b9f8dd55c>>
+ * @generated SignedSource<<91684212757e5025709dfb06c9dfd0c9>>
  * @lightSyntaxTransform
  * @nogrep
  */
@@ -22,12 +22,15 @@ export type TokensPageQuery$data = {
     readonly edges: ReadonlyArray<{
       readonly node: {
         readonly address: string;
+        readonly fdv: string;
         readonly id: string;
         readonly imageURI: string | null;
         readonly name: string | null;
+        readonly priceChange1h: number | null;
         readonly priceChange24h: number | null;
         readonly priceUSD: string | null;
         readonly symbol: string | null;
+        readonly volume1h: string | null;
         readonly volumeUSD24h: string | null;
         readonly " $fragmentSpreads": FragmentRefs<"TokenPairFragment">;
       };
@@ -125,17 +128,38 @@ v8 = {
   "alias": null,
   "args": null,
   "kind": "ScalarField",
-  "name": "priceChange24h",
+  "name": "priceChange1h",
   "storageKey": null
 },
 v9 = {
   "alias": null,
   "args": null,
   "kind": "ScalarField",
-  "name": "volumeUSD24h",
+  "name": "priceChange24h",
   "storageKey": null
 },
 v10 = {
+  "alias": null,
+  "args": null,
+  "kind": "ScalarField",
+  "name": "volumeUSD24h",
+  "storageKey": null
+},
+v11 = {
+  "alias": null,
+  "args": null,
+  "kind": "ScalarField",
+  "name": "volume1h",
+  "storageKey": null
+},
+v12 = {
+  "alias": null,
+  "args": null,
+  "kind": "ScalarField",
+  "name": "fdv",
+  "storageKey": null
+},
+v13 = {
   "alias": null,
   "args": null,
   "concreteType": "PageInfo",
@@ -160,7 +184,7 @@ v10 = {
   ],
   "storageKey": null
 },
-v11 = {
+v14 = {
   "alias": null,
   "args": null,
   "kind": "ScalarField",
@@ -206,6 +230,9 @@ return {
                   (v7/*: any*/),
                   (v8/*: any*/),
                   (v9/*: any*/),
+                  (v10/*: any*/),
+                  (v11/*: any*/),
+                  (v12/*: any*/),
                   {
                     "args": null,
                     "kind": "FragmentSpread",
@@ -217,8 +244,8 @@ return {
             ],
             "storageKey": null
           },
-          (v10/*: any*/),
-          (v11/*: any*/)
+          (v13/*: any*/),
+          (v14/*: any*/)
         ],
         "storageKey": null
       }
@@ -264,6 +291,9 @@ return {
                   (v7/*: any*/),
                   (v8/*: any*/),
                   (v9/*: any*/),
+                  (v10/*: any*/),
+                  (v11/*: any*/),
+                  (v12/*: any*/),
                   {
                     "alias": null,
                     "args": null,
@@ -277,24 +307,24 @@ return {
             ],
             "storageKey": null
           },
-          (v10/*: any*/),
-          (v11/*: any*/)
+          (v13/*: any*/),
+          (v14/*: any*/)
         ],
         "storageKey": null
       }
     ]
   },
   "params": {
-    "cacheID": "7cec86eb19c6fa41505e1ec902d33c0c",
+    "cacheID": "e036cd11d82dd1880b8b12c735541713",
     "id": null,
     "metadata": {},
     "name": "TokensPageQuery",
     "operationKind": "query",
-    "text": "query TokensPageQuery(\n  $first: Int!\n  $orderBy: TokenOrderBy!\n  $orderDirection: OrderDirection!\n) {\n  tokens(first: $first, orderBy: $orderBy, orderDirection: $orderDirection) {\n    edges {\n      node {\n        id\n        address\n        imageURI\n        name\n        symbol\n        priceUSD\n        priceChange24h\n        volumeUSD24h\n        ...TokenPairFragment\n      }\n    }\n    pageInfo {\n      hasNextPage\n      endCursor\n    }\n    totalCount\n  }\n}\n\nfragment TokenPairFragment on Token {\n  id\n  address\n  name\n  symbol\n  decimals\n  imageURI\n}\n"
+    "text": "query TokensPageQuery(\n  $first: Int!\n  $orderBy: TokenOrderBy!\n  $orderDirection: OrderDirection!\n) {\n  tokens(first: $first, orderBy: $orderBy, orderDirection: $orderDirection) {\n    edges {\n      node {\n        id\n        address\n        imageURI\n        name\n        symbol\n        priceUSD\n        priceChange1h\n        priceChange24h\n        volumeUSD24h\n        volume1h\n        fdv\n        ...TokenPairFragment\n      }\n    }\n    pageInfo {\n      hasNextPage\n      endCursor\n    }\n    totalCount\n  }\n}\n\nfragment TokenPairFragment on Token {\n  id\n  address\n  name\n  symbol\n  decimals\n  imageURI\n}\n"
   }
 };
 })();
 
-(node as any).hash = "662976e6915428ffc75d1a66c2a32f2b";
+(node as any).hash = "5bb6e5e5637d4ec210930b61ccbbec78";
 
 export default node;

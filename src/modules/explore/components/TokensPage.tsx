@@ -22,8 +22,11 @@ export const tokensPageQuery = graphql`
           name
           symbol
           priceUSD
+          priceChange1h
           priceChange24h
           volumeUSD24h
+          volume1h
+          fdv
           ...TokenPairFragment
         }
       }

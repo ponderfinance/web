@@ -2048,7 +2048,7 @@ export const resolvers = {
           // We'll use token0's price and try to get USD conversion
           chartData = await Promise.all(
             priceSnapshots.map(async (snapshot: Record<string, any>) => {
-              const rawPrice = snapshot.token0Price
+              const rawPrice = snapshot.price0  // Changed from token0Price
               try {
                 // Use viem's formatUnits to properly handle the blockchain value
                 const price = parseFloat(formatUnits(BigInt(Math.round(parseFloat(rawPrice) * Math.pow(10, token1Decimals))), token1Decimals))
