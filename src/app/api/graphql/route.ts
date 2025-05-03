@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { executeGraphQL } from '@/src/lib/graphql/server'
-import { initBackgroundTasks } from '@/src/lib/backgroundTasks'
 import { getRedisClient } from '@/src/lib/redis/client'
 import { preloadCacheFromSnapshots } from '@/src/lib/redis/pairCache'
 import prisma from '@/src/lib/db/prisma'
@@ -10,7 +9,7 @@ const redis = getRedisClient()
 
 // Preload cache when server starts
 if (process.env.NODE_ENV === 'production') {
-  initBackgroundTasks()
+  // Background tasks removed - these should be handled by ponder-indexer
   preloadCacheFromSnapshots(prisma).catch((err) => {
     console.error('Failed to preload cache on startup:', err)
   })
@@ -22,16 +21,12 @@ let hasPreloaded = false
 export async function POST(request: NextRequest) {
   const startTime = performance.now()
   try {
-    if (process.env.NODE_ENV !== 'production') {
-      initBackgroundTasks()
-
-      // Preload cache on first request in development
-      if (!hasPreloaded) {
-        hasPreloaded = true
-        preloadCacheFromSnapshots(prisma).catch((err) => {
-          console.error('Failed to preload cache on first request:', err)
-        })
-      }
+    // In development, preload the cache on first request
+    if (process.env.NODE_ENV !== 'production' && !hasPreloaded) {
+      hasPreloaded = true
+      preloadCacheFromSnapshots(prisma).catch((err) => {
+        console.error('Failed to preload cache on first request:', err)
+      })
     }
 
     const body = await request.json()
@@ -48,31 +43,37 @@ export async function POST(request: NextRequest) {
     const result = await executeGraphQL({
       query,
       variables,
-      contextValue: { prisma, req: request },
+      contextValue: { req: request },
     })
 
-    // Log response time
     const endTime = performance.now()
-    const responseTime = endTime - startTime
-    console.log(`GraphQL query executed in ${responseTime.toFixed(2)}ms`)
+    const duration = endTime - startTime
+    
+    // Log query times over 500ms
+    if (duration > 500) {
+      console.log(`Slow GraphQL query (${Math.round(duration)}ms): ${query.substring(0, 100)}...`)
+    }
 
     // Return the result
     return NextResponse.json(result)
-  } catch (error) {
+  } catch (error: any) {
+    console.error('GraphQL error:', error)
+    
     const endTime = performance.now()
-    const responseTime = endTime - startTime
-    console.error(`GraphQL query failed after ${responseTime.toFixed(2)}ms:`, error)
-
+    console.error(`Failed GraphQL query (${Math.round(endTime - startTime)}ms)`)
+    
+    // Return a JSON response with error details
     return NextResponse.json(
-      {
+      { 
         errors: [
-          {
-            message:
-              error instanceof Error ? error.message : 'An internal error occurred',
-          },
-        ],
+          { 
+            message: error.message || 'Internal Server Error',
+            ...(error.locations ? { locations: error.locations } : {}),
+            ...(error.path ? { path: error.path } : {})
+          }
+        ] 
       },
-      { status: 500 }
+      { status: error.statusCode || 500 }
     )
   }
 }

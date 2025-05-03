@@ -411,6 +411,7 @@ type ProtocolMetric {
   monthlyActiveUsers: Int!
   volume1h: String
   volume1hChange: Float
+  volume24hChange: Float
   totalPairs: Int
   activePoolsCount: Int
 }

@@ -2591,39 +2591,47 @@ export const resolvers = {
 
     // Add this to the Query object
     async protocolMetrics(_parent: any, _args: any, { prisma }: Context) {
-      const metric = await prisma.protocolMetric.findFirst({
-        orderBy: { timestamp: 'desc' }
-      })
-      
-      if (!metric) {
+      try {
+        // Try to get the latest metric from the database first
+        const metric = await prisma.protocolMetric.findFirst({
+          orderBy: { timestamp: 'desc' }
+        });
+        
+        if (metric) {
+          // Type assertion to avoid TypeScript errors
+          // since we know these fields exist in the GraphQL schema
+          const typedMetric = metric as any;
+          
+          // Return the database metric with addition of volume changes if they don't exist
+          return {
+            ...typedMetric,
+            volume1hChange: typedMetric.volume1hChange ?? 0,
+            volume24hChange: typedMetric.volume24hChange ?? 0
+          };
+        }
+        
         // Return default values if no metrics exist yet
+        console.log('No protocol metrics found, using default values');
         return {
           id: 'default',
           timestamp: Math.floor(Date.now() / 1000),
           totalValueLockedUSD: '0',
-          liquidityPoolsTVL: '0',
-          stakingTVL: '0',
-          farmingTVL: '0',
           dailyVolumeUSD: '0',
-          weeklyVolumeUSD: '0',
-          monthlyVolumeUSD: '0',
-          totalVolumeUSD: '0',
-          dailyFeesUSD: '0',
-          weeklyFeesUSD: '0',
-          monthlyFeesUSD: '0',
-          totalFeesUSD: '0',
-          totalUsers: 0,
-          dailyActiveUsers: 0,
-          weeklyActiveUsers: 0,
-          monthlyActiveUsers: 0,
-          volume1h: '0',
           volume1hChange: 0,
-          totalPairs: 0,
-          activePoolsCount: 0
-        }
+          volume24hChange: 0
+        };
+      } catch (error) {
+        console.error('Error retrieving protocol metrics:', error);
+        // Return default values if there was an error
+        return {
+          id: 'default',
+          timestamp: Math.floor(Date.now() / 1000),
+          totalValueLockedUSD: '0',
+          dailyVolumeUSD: '0',
+          volume1hChange: 0,
+          volume24hChange: 0
+        };
       }
-      
-      return metric
     },
   },
   

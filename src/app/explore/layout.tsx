@@ -1,9 +1,10 @@
 'use client'
 
-import React from 'react'
+import React, { Suspense } from 'react'
 import { View, Text } from 'reshaped'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import GlobalProtocolMetrics, { GlobalProtocolMetricsSkeleton } from '@/src/modules/explore/components/GlobalProtocolMetrics'
 
 export default function ExploreLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
@@ -18,6 +19,13 @@ export default function ExploreLayout({ children }: { children: React.ReactNode 
 
   return (
     <View gap={6} padding={4}>
+      {/* Global protocol metrics */}
+      {!isTokenDetailPage && (
+        <Suspense fallback={<GlobalProtocolMetricsSkeleton />}>
+          <GlobalProtocolMetrics />
+        </Suspense>
+      )}
+      
       {/* Only show tabs navigation if not on a token detail page */}
       {!isTokenDetailPage && (
         <View direction="row" gap={{ s: 4, m: 6 }}>

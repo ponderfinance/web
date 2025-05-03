@@ -1,22 +1,15 @@
 // app/api/graphql/route.ts
 import { NextRequest, NextResponse } from 'next/server'
 import { executeGraphQL } from '@/src/lib/graphql/server'
-import { initBackgroundTasks } from '@/src/lib/backgroundTasks'
 import { getRedisClient } from '@/src/lib/redis/client'
 
 // Initialize Redis connection on server start
 const redis = getRedisClient()
 
-if (process.env.NODE_ENV === 'production') {
-  initBackgroundTasks()
-}
+// Background tasks have been removed - all background processing happens in ponder-indexer
 
 export async function POST(request: NextRequest) {
   try {
-    if (process.env.NODE_ENV !== 'production') {
-      initBackgroundTasks()
-    }
-
     const body = await request.json()
     const { query, variables } = body
 
@@ -36,19 +29,21 @@ export async function POST(request: NextRequest) {
 
     // Return the result
     return NextResponse.json(result)
-  } catch (error) {
-    console.error('API route error:', error)
-
+  } catch (error: any) {
+    console.error('GraphQL error:', error)
+    
+    // Return a JSON response with error details
     return NextResponse.json(
-      {
+      { 
         errors: [
-          {
-            message:
-              error instanceof Error ? error.message : 'An internal error occurred',
-          },
-        ],
+          { 
+            message: error.message || 'Internal Server Error',
+            ...(error.locations ? { locations: error.locations } : {}),
+            ...(error.path ? { path: error.path } : {})
+          }
+        ] 
       },
-      { status: 500 }
+      { status: error.statusCode || 500 }
     )
   }
 }

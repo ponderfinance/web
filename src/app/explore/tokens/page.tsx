@@ -1,3 +1,4 @@
+// Force dynamic rendering and disable caching
 export const dynamic = 'force-dynamic'
 
 import React, { Suspense } from 'react'
