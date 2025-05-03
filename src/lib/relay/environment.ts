@@ -2,13 +2,6 @@
 import { Environment, Network, RecordSource, Store, FetchFunction } from 'relay-runtime';
 
 const fetchRelay: FetchFunction = async (params, variables) => {
-  // Log the GraphQL operation for debugging
-  console.log(`[GraphQL Request] ${params.name || 'unnamed operation'}:`, {
-    operationKind: params.operationKind,
-    variables,
-    query: params.text
-  });
-
   // URL for our GraphQL API endpoint
   const response = await fetch('/api/graphql', {
     method: 'POST',
@@ -23,9 +16,6 @@ const fetchRelay: FetchFunction = async (params, variables) => {
 
   // Get the response as JSON
   const json = await response.json();
-
-  // Log the response for debugging
-  console.log(`[GraphQL Response] ${params.name || 'unnamed operation'}:`, json);
 
   // GraphQL errors can be returned in successful responses, check for those
   if (Array.isArray(json.errors) && json.errors.length > 0) {
