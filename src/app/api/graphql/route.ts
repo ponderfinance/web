@@ -7,9 +7,8 @@ import prisma from '@/src/lib/db/prisma'
 // Initialize Redis connection on server start
 const redis = getRedisClient()
 
-// Preload cache when server starts
+// Preload cache when server starts - this is a read-only operation
 if (process.env.NODE_ENV === 'production') {
-  // Background tasks removed - these should be handled by ponder-indexer
   preloadCacheFromSnapshots(prisma).catch((err) => {
     console.error('Failed to preload cache on startup:', err)
   })
@@ -21,7 +20,7 @@ let hasPreloaded = false
 export async function POST(request: NextRequest) {
   const startTime = performance.now()
   try {
-    // In development, preload the cache on first request
+    // In development, preload the cache on first request - this is a read-only operation
     if (process.env.NODE_ENV !== 'production' && !hasPreloaded) {
       hasPreloaded = true
       preloadCacheFromSnapshots(prisma).catch((err) => {
