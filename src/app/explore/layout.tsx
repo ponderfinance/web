@@ -4,7 +4,9 @@ import React, { Suspense } from 'react'
 import { View, Text } from 'reshaped'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import GlobalProtocolMetrics, { GlobalProtocolMetricsSkeleton } from '@/src/modules/explore/components/GlobalProtocolMetrics'
+import GlobalProtocolMetrics, {
+  GlobalProtocolMetricsSkeleton,
+} from '@/src/modules/explore/components/GlobalProtocolMetrics'
 
 export default function ExploreLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
@@ -13,19 +15,19 @@ export default function ExploreLayout({ children }: { children: React.ReactNode 
   const isTokensActive = pathname === '/explore/tokens' || pathname === '/explore'
   const isPoolsActive = pathname === '/explore/pools'
   const isTransactionsActive = pathname === '/explore/transactions'
-  
+
   // Check if we're on a token detail page (matches /explore/tokens/[address])
   const isTokenDetailPage = pathname.match(/^\/explore\/tokens\/0x[a-fA-F0-9]+$/) !== null
 
   return (
-    <View gap={6} padding={4}>
+    <View gap={12} padding={4} width="100%">
       {/* Global protocol metrics */}
       {!isTokenDetailPage && (
         <Suspense fallback={<GlobalProtocolMetricsSkeleton />}>
           <GlobalProtocolMetrics />
         </Suspense>
       )}
-      
+
       {/* Only show tabs navigation if not on a token detail page */}
       {!isTokenDetailPage && (
         <View direction="row" gap={{ s: 4, m: 6 }}>
