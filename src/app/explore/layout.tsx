@@ -17,7 +17,7 @@ export default function ExploreLayout({ children }: { children: React.ReactNode 
   const isTransactionsActive = pathname === '/explore/transactions'
 
   // Check if we're on a token detail page (matches /explore/tokens/[address])
-  const isTokenDetailPage = pathname.match(/^\/explore\/tokens\/0x[a-fA-F0-9]+$/) !== null
+  const isTokenDetailPage = pathname?.match(/^\/explore\/tokens\/0x[a-fA-F0-9]+$/) !== null
 
   return (
     <View gap={12} padding={4} width="100%">

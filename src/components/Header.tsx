@@ -136,7 +136,7 @@ export const Header = () => {
                       <Text
                         variant="body-1"
                         color={
-                          pathname.includes('/positions') ? 'neutral' : 'neutral-faded'
+                          pathname?.includes('/positions') ? 'neutral' : 'neutral-faded'
                         }
                       >
                         <Link href="/positions">Pool </Link>
@@ -184,7 +184,7 @@ export const Header = () => {
                         <Text
                           variant="body-1"
                           color={
-                            pathname.includes('/explore') ? 'neutral' : 'neutral-faded'
+                            pathname?.includes('/explore') ? 'neutral' : 'neutral-faded'
                           }
                         >
                           Explore
