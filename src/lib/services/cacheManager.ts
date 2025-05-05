@@ -15,7 +15,7 @@ import { createHash } from 'crypto';
 // Default TTL values (in seconds)
 const DEFAULT_TTL = {
   // Very short-lived data like prices
-  VOLATILE: 10,
+  VOLATILE: 300, // 5 minutes (aligned with indexer's price change update frequency)
   
   // Standard TTL for most data
   STANDARD: 5 * 60,

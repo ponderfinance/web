@@ -2,7 +2,7 @@ import { getRedisClient } from './client'
 const { PrismaClient } = require('@prisma/client')
 import { USDT_ADDRESS } from '@/src/lib/graphql/oracleUtils'
 
-const TOKEN_CACHE_TTL = 5 // 5 seconds (was 5 minutes)
+const TOKEN_CACHE_TTL = 300 // 5 minutes (aligned with indexer's price change update frequency)
 const TOKEN_PREFIX = 'token:'
 
 /**
