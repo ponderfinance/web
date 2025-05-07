@@ -2365,8 +2365,10 @@ export const resolvers = {
           const typedMetric = metric as any;
           
           // Return the database metric with addition of volume changes if they don't exist
+          // and ensure timestamp is properly formatted as a number
           return {
             ...typedMetric,
+            timestamp: ensureNumberTimestamp(typedMetric.timestamp),
             volume1hChange: typedMetric.volume1hChange ?? 0,
             volume24hChange: typedMetric.volume24hChange ?? 0
           };
