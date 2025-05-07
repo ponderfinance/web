@@ -10,7 +10,8 @@
     "build": "next build",
     "build:themes": "reshaped theming --output src/themes",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "diagnose": "node src/scripts/diagnose-transactions.js"
   },
   "dependencies": {
     "@graphql-tools/schema": "^10.0.21",

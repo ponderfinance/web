@@ -1886,244 +1886,84 @@ export const resolvers = {
 
     pairPriceChart: async (
       _parent: Empty,
-      {
-        pairAddress,
-        timeframe = '1d',
-        limit = 100,
-      }: {
-        pairAddress: string
-        timeframe?: string
-        limit?: number
-      },
-      { prisma: db }: Context
+      { pairAddress, timeframe = '1d', limit = 100 }: { pairAddress: string; timeframe?: string; limit?: number },
+      { prisma }: Context
     ): Promise<ChartDataPoint[]> => {
       try {
-        // Find the pair
-        const pair = await db.pair.findFirst({
+        // Calculate time period
+        const now = Date.now();
+        let startTimeMs: number;
+        
+        switch (timeframe) {
+          case '1h':
+            startTimeMs = now - 60 * 60 * 1000;
+            break;
+          case '4h':
+            startTimeMs = now - 4 * 60 * 60 * 1000;
+            break;
+          case '12h':
+            startTimeMs = now - 12 * 60 * 60 * 1000;
+            break;
+          case '1d':
+            startTimeMs = now - 24 * 60 * 60 * 1000;
+            break;
+          case '1w':
+            startTimeMs = now - 7 * 24 * 60 * 60 * 1000;
+            break;
+          case '1m':
+            startTimeMs = now - 30 * 24 * 60 * 60 * 1000;
+            break;
+          case 'all':
+          default:
+            startTimeMs = 0; // Get all data
+        }
+        
+        // Convert to seconds for database query
+        const startTimeSecs = Math.floor(startTimeMs / 1000);
+        
+        // Get price snapshots for this pair
+        const snapshots = await prisma.priceSnapshot.findMany({
+          where: {
+            pairId: pairAddress.toLowerCase(),
+            timestamp: { gte: startTimeSecs }, // Use number instead of string
+          },
+          orderBy: { timestamp: 'asc' },
+          distinct: ['timestamp'],
+          take: limit,
+        });
+        
+        if (snapshots.length === 0) {
+          return [];
+        }
+        
+        // Determine which price to use based on ordering of tokens
+        const pair = await prisma.pair.findUnique({
           where: { address: pairAddress.toLowerCase() },
           include: {
             token0: true,
             token1: true,
           },
-        })
-
-        if (!pair) {
-          throw new Error(`Pair not found: ${pairAddress}`)
-        }
-
-        // Get token decimals
-        const token0Decimals = pair.token0.decimals || 18
-        const token1Decimals = pair.token1.decimals || 18
-
-        // Check if either token is a stablecoin
-        const stablecoinAddresses = TokenPriceService.getStablecoinAddresses()
-        const isToken0Stablecoin = stablecoinAddresses.includes(
-          pair.token0.address.toLowerCase()
-        )
-        const isToken1Stablecoin = stablecoinAddresses.includes(
-          pair.token1.address.toLowerCase()
-        )
-
-        // Determine time window based on timeframe
-        // Use a fixed reference time (April 2025) instead of the current system time
-        // This ensures we can find snapshots with 2025 timestamps
-        const referenceTime = 1744062332; // April 7, 2025, 21:45:32 UTC
-        const now = referenceTime;
-        let timeWindow: number
-
-        switch (timeframe) {
-          case '1h':
-            timeWindow = 60 * 60 * limit // 1 hour × limit
-            break
-          case '4h':
-            timeWindow = 4 * 60 * 60 * limit // 4 hours × limit
-            break
-          case '1w':
-            timeWindow = 7 * 24 * 60 * 60 * limit // 1 week × limit
-            break
-          case '1m':
-            timeWindow = 30 * 24 * 60 * 60 * limit // ~1 month × limit
-            break
-          case '1d':
-          default:
-            timeWindow = 24 * 60 * 60 * limit // 1 day × limit
-            break
-        }
-
-        const startTime = now - timeWindow
-
-        // Get price snapshots from the specified time range
-        const priceSnapshots = await db.priceSnapshot.findMany({
-          where: {
-            pairId: pair.id,
-            timestamp: { gte: startTime },
-            price0: { not: '' },  // Check for non-empty values
-            price1: { not: '' }   // Check for non-empty values
-          },
-          orderBy: { timestamp: 'asc' },
-          distinct: ['timestamp'],
-        })
-
-        console.log(`Found ${priceSnapshots.length} price snapshots for pair ${pairAddress}`)
-        console.log(`Time range: ${new Date(startTime * 1000).toISOString()} to ${new Date(now * 1000).toISOString()}`)
-        
-        // Log a sample of the snapshots to verify data
-        if (priceSnapshots.length > 0) {
-          console.log('Sample snapshots:')
-          console.log(JSON.stringify(priceSnapshots.slice(0, 3), null, 2))
-        }
-
-        // Process the price snapshots to get properly formatted chart data
-        let chartData: ChartDataPoint[] = []
-
-        // Choose the correct display strategy based on the pair composition
-        if (isToken1Stablecoin) {
-          // If token1 is a stablecoin, we want to show token0's price in USD
-          chartData = priceSnapshots.map((snapshot: Record<string, any>) => {
-            const rawPrice = snapshot.price0  // Changed from token0Price
-            try {
-              // Use viem's formatUnits to properly handle the blockchain value
-              const price = parseFloat(formatUnits(BigInt(Math.round(parseFloat(rawPrice) * Math.pow(10, token1Decimals))), token1Decimals))
-              
-              return {
-                time: Math.floor(Number(snapshot.timestamp)),
-                value: price,
-              }
-            } catch (error) {
-              console.error('Error processing price:', error)
-              // Fallback to traditional calculation
-              try {
-                const price = parseFloat(rawPrice)
-                const decimalAdjustment = Math.pow(10, token1Decimals - token0Decimals)
-                const adjustedPrice = price * decimalAdjustment
-                
-                return {
-                  time: Math.floor(Number(snapshot.timestamp)),
-                  value: adjustedPrice,
-                }
-              } catch (fallbackError) {
-                console.error('Error in fallback calculation:', fallbackError)
-                return {
-                  time: Math.floor(Number(snapshot.timestamp)),
-                  value: 0,
-                }
-              }
-            }
-          })
-        } else if (isToken0Stablecoin) {
-          // If token0 is a stablecoin, we want to show token1's price in USD
-          chartData = priceSnapshots.map((snapshot: Record<string, any>) => {
-            const rawPrice = snapshot.price1  // Changed from token1Price
-            try {
-              // Use viem's formatUnits to properly handle the blockchain value
-              const price = parseFloat(formatUnits(BigInt(Math.round(parseFloat(rawPrice) * Math.pow(10, token0Decimals))), token0Decimals))
-              
-              return {
-                time: Math.floor(Number(snapshot.timestamp)),
-                value: price,
-              }
-            } catch (error) {
-              console.error('Error processing price:', error)
-              // Fallback to traditional calculation
-              try {
-                const price = parseFloat(rawPrice)
-                const decimalAdjustment = Math.pow(10, token0Decimals - token1Decimals)
-                const adjustedPrice = price * decimalAdjustment
-                
-                return {
-                  time: Math.floor(Number(snapshot.timestamp)),
-                  value: adjustedPrice,
-                }
-              } catch (fallbackError) {
-                console.error('Error in fallback calculation:', fallbackError)
-                return {
-                  time: Math.floor(Number(snapshot.timestamp)),
-                  value: 0,
-                }
-              }
-            }
-          })
-        } else {
-          // If neither token is a stablecoin, we need to handle differently
-          // We'll use token0's price and try to get USD conversion
-          chartData = await Promise.all(
-            priceSnapshots.map(async (snapshot: Record<string, any>) => {
-              const rawPrice = snapshot.price0  // Changed from token0Price
-              try {
-                // Use viem's formatUnits to properly handle the blockchain value
-                const price = parseFloat(formatUnits(BigInt(Math.round(parseFloat(rawPrice) * Math.pow(10, token1Decimals))), token1Decimals))
-                
-                // Get token1's USD price from the database
-                const token1PriceUSD = parseFloat(pair.token1.priceUSD || '0')
-                if (token1PriceUSD <= 0) {
-                  console.error(`Invalid USD price for token1: ${pair.token1.address}`)
-                  return {
-                    time: Math.floor(Number(snapshot.timestamp)),
-                    value: 0,
-                  }
-                }
-
-                // Calculate the USD price
-                const usdPrice = price * token1PriceUSD
-
-                return {
-                  time: Math.floor(Number(snapshot.timestamp)),
-                  value: usdPrice,
-                }
-              } catch (error) {
-                console.error('Error processing price:', error)
-                return {
-                  time: Math.floor(Number(snapshot.timestamp)),
-                  value: 0,
-                }
-              }
-            })
-          )
-        }
-
-        // Final pass to check for and fix any abnormal values
-        const values = chartData.map((point) => point.value)
-        // Use the relevant token's decimals based on which price we're showing
-        const relevantDecimals = (isToken0Stablecoin || isToken1Stablecoin) ? token1Decimals : token0Decimals;
-
-        // Apply consistent scaling based on token decimals
-        // This ensures the chart y-axis values match the token prices shown elsewhere
-        const normalizedChartData = chartData.map((point) => {
-          // Calculate normalized value
-          let normalizedValue = point.value;
-          
-          // Apply normalization if needed
-          if (point.value !== 0 && (point.value < 0.000001 || point.value > 1000000)) {
-            normalizedValue = point.value / Math.pow(10, relevantDecimals);
-          }
-          
-          // Prevent exponential notation by using toFixed and converting back to number
-          // This ensures small numbers are displayed normally
-          if (normalizedValue < 0.000001 && normalizedValue > 0) {
-            normalizedValue = parseFloat(normalizedValue.toFixed(18));
-            // If the value is still too small after formatting, use a minimum value
-            if (normalizedValue === 0) {
-              normalizedValue = 0.000001; // Minimum displayable value
-            }
-          }
-          
-          return {
-            time: point.time,
-            value: normalizedValue
-          };
         });
         
-        // Log the final chart data to verify
-        console.log(`Final chart data points: ${normalizedChartData.length}`);
-        if (normalizedChartData.length > 0) {
-          console.log('Sample chart data:');
-          console.log(JSON.stringify(normalizedChartData.slice(0, 3), null, 2));
+        if (!pair) {
+          throw new Error(`Pair with address ${pairAddress} not found`);
         }
-
-        return normalizedChartData
+        
+        // Prioritize the base token price - usually against stable or major tokens
+        const isToken0 = isBaseToken(pair.token0, pair.token1);
+        
+        // Map snapshots to chart data points
+        const data = snapshots.map((snapshot) => ({
+          time: ensureNumberTimestamp(snapshot.timestamp),
+          value: isToken0 
+            ? parseFloat(snapshot.price0 || '0') 
+            : parseFloat(snapshot.price1 || '0'),
+        }));
+        
+        return data;
       } catch (error) {
-        console.error('Error in pairPriceChart:', error)
-        return []
+        console.error('Error fetching price chart data:', error);
+        return [];
       }
     },
 
@@ -2446,145 +2286,67 @@ export const resolvers = {
     recentTransactions: async (
       _parent: Empty,
       { first = 20, after }: { first?: number; after?: string },
-      { prisma, loaders }: Context
+      { prisma }: Context
     ) => {
       try {
-        // Create a query object to avoid typing issues
-        const query: any = {
-          take: first + 1, // Take one more to check for next page
-          orderBy: { timestamp: 'desc' }, // Most recent first
+        // Query swaps ordered by timestamp (newest first)
+        const swaps = await prisma.swap.findMany({
+          take: first + 1, // Take one extra to check for next page
+          ...(after && { cursor: { id: after }, skip: 1 }),
+          orderBy: { timestamp: 'desc' },
           include: {
             pair: {
               include: {
-                token0: {
-                  select: {
-                    id: true,
-                    address: true,
-                    symbol: true,
-                    name: true,
-                    decimals: true,
-                    imageURI: true
-                  }
-                },
-                token1: {
-                  select: {
-                    id: true,
-                    address: true,
-                    symbol: true,
-                    name: true,
-                    decimals: true,
-                    imageURI: true
-                  }
-                }
-              }
-            }
-          }
-        };
-        
-        // Add pagination if cursor is provided
-        if (after) {
-          query.cursor = { id: after };
-          query.skip = 1; // Skip the cursor itself
-        }
-
-        // Query swaps ordered by timestamp (newest first)
-        const swaps = await prisma.swap.findMany(query);
-
-        // Determine if there are more results
-        const hasNextPage = swaps.length > first;
-        const limitedSwaps = hasNextPage ? swaps.slice(0, first) : swaps;
-
-        // Process swaps to add valueUSD and extract token fields
-        const processedSwaps = await Promise.all(limitedSwaps.map(async swap => {
-          // Use type assertion to help TypeScript
-          const swapObj = swap as any;
-          
-          // Calculate valueUSD if not already set
-          let valueUSD = '0';
-          
-          try {
-            // Get token prices at transaction time if possible
-            const token0 = swapObj.pair.token0;
-            const token1 = swapObj.pair.token1;
-            const token0Decimals = token0.decimals || 18;
-            const token1Decimals = token1.decimals || 18;
-            
-            // Get current token prices if historical not available
-            let token0PriceUSD = '0';
-            let token1PriceUSD = '0';
-            
-            try {
-              // Use price service directly
-              token0PriceUSD = (await TokenPriceService.getTokenPriceUSD(token0.id)).toString();
-              token1PriceUSD = (await TokenPriceService.getTokenPriceUSD(token1.id)).toString();
-            } catch (error) {
-              console.error('Error loading token prices:', error);
-            }
-            
-            // Calculate value based on the token with higher price accuracy
-            // Format token amounts properly
-            const amount0In = Number(formatUnits(BigInt(swapObj.amountIn0 || '0'), token0Decimals));
-            const amount0Out = Number(formatUnits(BigInt(swapObj.amountOut0 || '0'), token0Decimals));
-            const amount1In = Number(formatUnits(BigInt(swapObj.amountIn1 || '0'), token1Decimals));
-            const amount1Out = Number(formatUnits(BigInt(swapObj.amountOut1 || '0'), token1Decimals));
-            
-            // Calculate USD values
-            const value0USD = (amount0In + amount0Out) * parseFloat(token0PriceUSD);
-            const value1USD = (amount1In + amount1Out) * parseFloat(token1PriceUSD);
-            
-            // Use the higher value for better accuracy
-            valueUSD = Math.max(value0USD, value1USD).toString();
-          } catch (error) {
-            console.error('Error calculating swap valueUSD:', error);
-          }
-          
-          // Return object with GraphQL schema properties
-          return {
-            id: swapObj.id,
-            txHash: swapObj.txHash || 'unknown',
-            userAddress: swapObj.userAddress || swapObj.sender || 'unknown',
-            timestamp: Number(swapObj.timestamp),
-            token0: swapObj.pair.token0,
-            token1: swapObj.pair.token1,
-            amountIn0: swapObj.amountIn0 || '0',
-            amountIn1: swapObj.amountIn1 || '0',
-            amountOut0: swapObj.amountOut0 || '0',
-            amountOut1: swapObj.amountOut1 || '0',
-            valueUSD
-          };
-        }));
-
-        // Get total count
-        const totalCountResult = await prisma.$runCommandRaw({
-          count: "Swap",
-          query: {}
-        }) as any;
-        
-        return {
-          edges: processedSwaps.map(swap => ({
-            node: swap,
-            cursor: swap.id
-          })),
-          pageInfo: {
-            hasNextPage,
-            hasPreviousPage: false,
-            startCursor: processedSwaps[0]?.id,
-            endCursor: processedSwaps[processedSwaps.length - 1]?.id
+                token0: true,
+                token1: true,
+              },
+            },
           },
-          totalCount: totalCountResult?.n || 0
+        });
+
+        // Process the swaps into the format expected by GraphQL
+        const edges = swaps.slice(0, first).map((swapObj) => {
+          // Ensure we handle timestamp as a number here
+          return {
+            cursor: swapObj.id,
+            node: {
+              id: swapObj.id,
+              txHash: swapObj.txHash,
+              pair: swapObj.pair,
+              userAddress: swapObj.userAddress,
+              timestamp: ensureNumberTimestamp(swapObj.timestamp),
+              amountIn0: swapObj.amountIn0,
+              amountIn1: swapObj.amountIn1,
+              amountOut0: swapObj.amountOut0,
+              amountOut1: swapObj.amountOut1,
+              valueUSD: calculateSwapValueUSD(swapObj),
+              token0: swapObj.pair.token0,
+              token1: swapObj.pair.token1,
+            },
+          };
+        });
+
+        return {
+          edges,
+          pageInfo: {
+            hasNextPage: swaps.length > first,
+            hasPreviousPage: !!after,
+            startCursor: edges.length > 0 ? edges[0].cursor : null,
+            endCursor: edges.length > 0 ? edges[edges.length - 1].cursor : null,
+          },
+          totalCount: await prisma.swap.count(),
         };
       } catch (error) {
         console.error('Error fetching recent transactions:', error);
-        // Return empty result rather than null
         return {
           edges: [],
           pageInfo: {
             hasNextPage: false,
             hasPreviousPage: false,
             startCursor: null,
-            endCursor: null
+            endCursor: null,
           },
-          totalCount: 0
+          totalCount: 0,
         };
       }
     },
@@ -2637,7 +2399,89 @@ export const resolvers = {
   
   // Add this at the end
   Swap: {
-    timestamp: (parent: any) => Number(parent.timestamp),
+    timestamp: (parent: any) => ensureNumberTimestamp(parent.timestamp),
     blockNumber: (parent: any) => Number(parent.blockNumber)
   }
 };
+
+// Add this function to ensure timestamp conversion in consistent places
+// This should be added near the top of the file in a utility section
+function ensureNumberTimestamp(timestamp: string | number | bigint | null | undefined): number {
+  if (timestamp === null || timestamp === undefined) {
+    return 0;
+  }
+  
+  if (typeof timestamp === 'number') {
+    return timestamp;
+  }
+  
+  if (typeof timestamp === 'bigint') {
+    return Number(timestamp);
+  }
+  
+  // Handle string timestamps
+  if (typeof timestamp === 'string') {
+    return parseInt(timestamp, 10);
+  }
+  
+  return 0;
+}
+
+// Add this function above the resolvers object to calculate swap values
+function calculateSwapValueUSD(swap: any): string {
+  try {
+    // Get token decimals with safe defaults
+    const token0Decimals = swap.pair.token0.decimals || 18;
+    const token1Decimals = swap.pair.token1.decimals || 18;
+    
+    // Get token prices from token objects if available
+    let token0Price = swap.pair.token0.priceUSD ? parseFloat(swap.pair.token0.priceUSD) : 0;
+    let token1Price = swap.pair.token1.priceUSD ? parseFloat(swap.pair.token1.priceUSD) : 0;
+    
+    // Format token amounts properly using viem's formatUnits
+    const amount0In = Number(formatUnits(BigInt(swap.amountIn0 || '0'), token0Decimals));
+    const amount0Out = Number(formatUnits(BigInt(swap.amountOut0 || '0'), token0Decimals));
+    const amount1In = Number(formatUnits(BigInt(swap.amountIn1 || '0'), token1Decimals));
+    const amount1Out = Number(formatUnits(BigInt(swap.amountOut1 || '0'), token1Decimals));
+    
+    // Calculate USD values for both token sides
+    const value0USD = (amount0In + amount0Out) * token0Price;
+    const value1USD = (amount1In + amount1Out) * token1Price;
+    
+    // Use the higher value for better accuracy (sometimes one token has better price info)
+    const valueUSD = Math.max(value0USD, value1USD);
+    
+    // Handle cases where both prices might be zero
+    if (valueUSD <= 0) {
+      return '0';
+    }
+    
+    return valueUSD.toString();
+  } catch (error) {
+    console.error('Error calculating swap value:', error);
+    return '0';
+  }
+}
+
+// Add the isBaseToken helper function near the top with other helper functions
+function isBaseToken(token0: any, token1: any): boolean {
+  // List of known stable tokens
+  const stableTokens = ['USDT', 'USDC', 'DAI', 'BUSD'];
+  
+  // Check if either token is a stable token
+  const isToken0Stable = token0.symbol && stableTokens.includes(token0.symbol.toUpperCase());
+  const isToken1Stable = token1.symbol && stableTokens.includes(token1.symbol.toUpperCase());
+  
+  // If token1 is stable, then token0 is the base token
+  if (isToken1Stable) {
+    return true;
+  }
+  
+  // If token0 is stable, then token1 is the base token
+  if (isToken0Stable) {
+    return false;
+  }
+  
+  // If neither is stable, default to token0 as base
+  return true;
+}
