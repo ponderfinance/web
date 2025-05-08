@@ -81,32 +81,94 @@ const createSubscription: SubscribeFunction = (
 
     // Handle incoming messages
     eventSource.onmessage = event => {
-      const data = JSON.parse(event.data);
-      console.log(`Subscription event received for ${operationName}:`, data);
+      try {
+        const data = JSON.parse(event.data);
+        console.log(`Subscription event received for ${operationName}:`, data);
 
-      if (data.type === 'connection_ack') {
-        console.log(`Subscription connection acknowledged for ${operationName}`);
-      } else if (data.type === 'next') {
-        // When we receive data, we need to fetch the complete data with a standard query
-        Promise.resolve(fetchQuery(request, variables, {}, null))
-          .then((response: any) => {
-            sink.next(response as GraphQLResponse);
-          })
-          .catch((error: any) => {
-            console.error('Error fetching data after subscription event:', error);
-            sink.error(error instanceof Error ? error : new Error(String(error)));
-          });
-      } else if (data.type === 'error') {
-        sink.error(new Error(data.payload.message));
-      } else if (data.type === 'complete') {
-        sink.complete();
+        if (data.type === 'connected') {
+          console.log(`SSE connection established for ${operationName}`);
+        }
+        // Handle metrics updates
+        else if (data.type === 'metrics:updated') {
+          console.log(`Received metrics update for ${operationName}:`, data.payload);
+          
+          // For GraphQL subscriptions, we need to trigger a query to fetch the latest data
+          // This is simpler than trying to reconstruct the subscription payload
+          Observable.from(fetchQuery(request, variables, {}))
+            .subscribe({
+              next: (response) => {
+                console.log(`Fetched updated data for ${operationName}:`, response);
+                sink.next(response);
+              },
+              error: (error: any) => {
+                console.error(`Error fetching updated data for ${operationName}:`, error);
+                sink.error(error instanceof Error ? error : new Error(String(error)));
+              }
+            });
+        }
+        // Handle pair updates
+        else if (data.type === 'pair:updated' && 
+                 operationName?.toLowerCase().includes('pair') && 
+                 variables?.pairId === data.payload?.entityId) {
+          console.log(`Received pair update for ${operationName}:`, data.payload);
+          Observable.from(fetchQuery(request, variables, {}))
+            .subscribe({
+              next: (response) => {
+                sink.next(response);
+              },
+              error: (error: any) => {
+                sink.error(error instanceof Error ? error : new Error(String(error)));
+              }
+            });
+        }
+        // Handle token updates
+        else if (data.type === 'token:updated' && 
+                 operationName?.toLowerCase().includes('token') && 
+                 variables?.tokenId === data.payload?.entityId) {
+          console.log(`Received token update for ${operationName}:`, data.payload);
+          Observable.from(fetchQuery(request, variables, {}))
+            .subscribe({
+              next: (response) => {
+                sink.next(response);
+              },
+              error: (error: any) => {
+                sink.error(error instanceof Error ? error : new Error(String(error)));
+              }
+            });
+        }
+        // Legacy handling for older style messages
+        else if (data.type === 'next') {
+          Observable.from(fetchQuery(request, variables, {}))
+            .subscribe({
+              next: (response) => {
+                sink.next(response);
+              },
+              error: (error: any) => {
+                sink.error(error instanceof Error ? error : new Error(String(error)));
+              }
+            });
+        }
+        else if (data.type === 'error') {
+          sink.error(new Error(data.payload?.message || 'Unknown subscription error'));
+        }
+        else if (data.type === 'complete') {
+          sink.complete();
+        }
+      } catch (error) {
+        console.error(`Error processing subscription message for ${operationName}:`, error);
+        // Don't terminate the subscription on a single message error
       }
     };
 
     // Handle errors
     eventSource.onerror = (error: Event) => {
       console.error(`Subscription error for ${operationName}:`, error);
-      sink.error(new Error('EventSource error'));
+      
+      // Don't terminate the subscription on connection error
+      // The browser will automatically try to reconnect
+      
+      // Only report the error, don't close the stream
+      console.error('EventSource error, will try to reconnect automatically');
     };
 
     // Return cleanup function

@@ -20,6 +20,7 @@ import { PriceChartService } from '@/src/lib/services/priceChartService'
 import { formatCurrency } from '@/src/lib/utils/tokenPriceUtils'
 import { TokenPriceService } from '@/src/lib/services/tokenPriceService'
 import Redis from 'ioredis'
+import { EventEmitter } from 'events'
 
 // Define constants for USDT and Oracle addresses
 const USDT_ADDRESS = '0x55d398326f99059fF775485246999027B3197955'
@@ -2574,6 +2575,253 @@ export const resolvers = {
   Swap: {
     timestamp: (parent: any) => ensureNumberTimestamp(parent.timestamp),
     blockNumber: (parent: any) => Number(parent.blockNumber)
+  },
+
+  // Add Subscription resolvers
+  Subscription: {
+    // Protocol metrics subscription resolver
+    protocolMetricsUpdated: {
+      subscribe: (_parent: any, _args: any, { prisma }: Context) => {
+        console.log('Setting up protocolMetricsUpdated subscription');
+        
+        // Create an AsyncIterator that the GraphQL server can use
+        return {
+          [Symbol.asyncIterator]: () => {
+            // Create a channel for this subscription
+            const channel = new EventEmitter();
+            
+            // Set up the event listener that will push updates to this subscription
+            const listener = async () => {
+              try {
+                console.log('Received protocol metrics update event');
+                // Get the latest protocol metrics
+                let protocolMetrics;
+                
+                try {
+                  // Try EntityMetrics first
+                  const prismaExtended = prisma as any;
+                  protocolMetrics = await prismaExtended.entityMetrics?.findFirst({
+                    where: {
+                      entity: 'protocol',
+                      entityId: 'protocol'
+                    },
+                    orderBy: { lastUpdated: 'desc' }
+                  });
+                  
+                  // If not found with 'protocol', try with 'global'
+                  if (!protocolMetrics) {
+                    protocolMetrics = await prismaExtended.entityMetrics?.findFirst({
+                      where: {
+                        entity: 'protocol',
+                        entityId: 'global'
+                      },
+                      orderBy: { lastUpdated: 'desc' }
+                    });
+                  }
+                } catch (error) {
+                  console.log('EntityMetrics not available:', error);
+                }
+                
+                // If no EntityMetrics, try ProtocolMetric table
+                if (!protocolMetrics) {
+                  protocolMetrics = await prisma.protocolMetric.findFirst({
+                    orderBy: { timestamp: 'desc' }
+                  });
+                }
+                
+                if (protocolMetrics) {
+                  console.log('Publishing updated metrics to subscription:', protocolMetrics);
+                  
+                  // Format data based on which table it came from
+                  let formattedMetrics;
+                  if ('volume24h' in protocolMetrics) {
+                    // EntityMetrics format
+                    formattedMetrics = {
+                      id: protocolMetrics.id,
+                      timestamp: typeof protocolMetrics.lastUpdated === 'number' ? protocolMetrics.lastUpdated : Math.floor(new Date(protocolMetrics.lastUpdated).getTime() / 1000),
+                      totalValueLockedUSD: protocolMetrics.tvl || '0',
+                      dailyVolumeUSD: protocolMetrics.volume24h || '0',
+                      weeklyVolumeUSD: protocolMetrics.volume7d || '0',
+                      monthlyVolumeUSD: protocolMetrics.volume30d || '0',
+                      volume1hChange: protocolMetrics.volumeChange1h !== undefined ? parseFloat(protocolMetrics.volumeChange1h.toString()) : 0,
+                      volume24hChange: protocolMetrics.volumeChange24h !== undefined ? parseFloat(protocolMetrics.volumeChange24h.toString()) : 0
+                    };
+                  } else {
+                    // ProtocolMetric format
+                    formattedMetrics = {
+                      id: protocolMetrics.id,
+                      timestamp: protocolMetrics.timestamp,
+                      totalValueLockedUSD: protocolMetrics.totalValueLockedUSD || '0',
+                      dailyVolumeUSD: protocolMetrics.dailyVolumeUSD || '0',
+                      weeklyVolumeUSD: protocolMetrics.weeklyVolumeUSD || '0',
+                      monthlyVolumeUSD: protocolMetrics.monthlyVolumeUSD || '0',
+                      volume1hChange: protocolMetrics.volume1hChange || 0,
+                      volume24hChange: protocolMetrics.volume24hChange || 0
+                    };
+                  }
+                  
+                  // Emit the event with the latest metrics data
+                  channel.emit('metrics', { protocolMetricsUpdated: formattedMetrics });
+                }
+              } catch (error) {
+                console.error('Error processing protocol metrics update:', error);
+              }
+            };
+            
+            // Register the listener with the global subscription handler
+            const { subscribeToProtocolMetrics } = require('../subscriptions/subscription-server');
+            const unsubscribe = subscribeToProtocolMetrics(listener);
+            
+            // Set up async iterator handlers
+            return {
+              next: () => {
+                return new Promise((resolve) => {
+                  channel.once('metrics', (payload) => {
+                    resolve({ value: payload, done: false });
+                  });
+                });
+              },
+              return: () => {
+                // Clean up when subscription is cancelled
+                unsubscribe();
+                channel.removeAllListeners();
+                return Promise.resolve({ value: undefined, done: true });
+              },
+              throw: (error: Error) => {
+                return Promise.reject(error);
+              },
+              [Symbol.asyncIterator]() {
+                return this;
+              }
+            };
+          }
+        };
+      }
+    },
+    
+    // Pair updates subscription resolver
+    pairUpdated: {
+      subscribe: (_parent: any, { pairId }: { pairId: string }, { prisma }: Context) => {
+        console.log(`Setting up pairUpdated subscription for pair: ${pairId}`);
+        
+        // Create an AsyncIterator that the GraphQL server can use
+        return {
+          [Symbol.asyncIterator]: () => {
+            // Create a channel for this subscription
+            const channel = new EventEmitter();
+            
+            // Set up the event listener that will push updates to this subscription
+            const listener = async () => {
+              try {
+                console.log(`Received pair update event for ${pairId}`);
+                // Get the latest pair data
+                const pair = await prisma.pair.findUnique({
+                  where: { id: pairId },
+                  include: {
+                    token0: true,
+                    token1: true
+                  }
+                });
+                
+                if (pair) {
+                  // Emit the event with the latest pair data
+                  channel.emit('pair', { pairUpdated: pair });
+                }
+              } catch (error) {
+                console.error(`Error processing pair update for ${pairId}:`, error);
+              }
+            };
+            
+            // Register the listener with the global subscription handler
+            const { subscribeToPairUpdates } = require('../subscriptions/subscription-server');
+            const unsubscribe = subscribeToPairUpdates(pairId, listener);
+            
+            // Set up async iterator handlers
+            return {
+              next: () => {
+                return new Promise((resolve) => {
+                  channel.once('pair', (payload) => {
+                    resolve({ value: payload, done: false });
+                  });
+                });
+              },
+              return: () => {
+                // Clean up when subscription is cancelled
+                unsubscribe();
+                channel.removeAllListeners();
+                return Promise.resolve({ value: undefined, done: true });
+              },
+              throw: (error: Error) => {
+                return Promise.reject(error);
+              },
+              [Symbol.asyncIterator]() {
+                return this;
+              }
+            };
+          }
+        };
+      }
+    },
+    
+    // Token updates subscription resolver
+    tokenUpdated: {
+      subscribe: (_parent: any, { tokenId }: { tokenId: string }, { prisma }: Context) => {
+        console.log(`Setting up tokenUpdated subscription for token: ${tokenId}`);
+        
+        // Create an AsyncIterator that the GraphQL server can use
+        return {
+          [Symbol.asyncIterator]: () => {
+            // Create a channel for this subscription
+            const channel = new EventEmitter();
+            
+            // Set up the event listener that will push updates to this subscription
+            const listener = async () => {
+              try {
+                console.log(`Received token update event for ${tokenId}`);
+                // Get the latest token data
+                const token = await prisma.token.findUnique({
+                  where: { id: tokenId }
+                });
+                
+                if (token) {
+                  // Emit the event with the latest token data
+                  channel.emit('token', { tokenUpdated: token });
+                }
+              } catch (error) {
+                console.error(`Error processing token update for ${tokenId}:`, error);
+              }
+            };
+            
+            // Register the listener with the global subscription handler
+            const { subscribeToTokenUpdates } = require('../subscriptions/subscription-server');
+            const unsubscribe = subscribeToTokenUpdates(tokenId, listener);
+            
+            // Set up async iterator handlers
+            return {
+              next: () => {
+                return new Promise((resolve) => {
+                  channel.once('token', (payload) => {
+                    resolve({ value: payload, done: false });
+                  });
+                });
+              },
+              return: () => {
+                // Clean up when subscription is cancelled
+                unsubscribe();
+                channel.removeAllListeners();
+                return Promise.resolve({ value: undefined, done: true });
+              },
+              throw: (error: Error) => {
+                return Promise.reject(error);
+              },
+              [Symbol.asyncIterator]() {
+                return this;
+              }
+            };
+          }
+        };
+      }
+    }
   }
 };
 
