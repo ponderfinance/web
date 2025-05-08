@@ -1,7 +1,7 @@
 import DataLoader from 'dataloader'
 import { PrismaClient, Token, Pair } from '@prisma/client'
 import { getCachedPairReserveUSDBulk } from '@/src/lib/redis/pairCache'
-import { getCachedTokenPricesBulk, cacheTokenPrice } from '@/src/lib/redis/tokenCache'
+import { getCachedTokenPricesBulk } from '@/src/lib/redis/tokenCache'
 import { calculateTokenPriceUSD } from '@/src/lib/graphql/tokenUtils'
 
 export function createLoaders(prisma: PrismaClient) {
@@ -68,11 +68,7 @@ export function createLoaders(prisma: PrismaClient) {
             // Use our production-ready price calculation function
             const price = await calculateTokenPriceUSD(id, address, prisma)
 
-            // Cache the price for future use
-            if (price !== '0') {
-              await cacheTokenPrice(id, price)
-            }
-
+            // The price will be cached by the indexer, no need to duplicate caching here
             return { id, price }
           } catch (error) {
             console.error(`Error calculating price for token ${id}:`, error)

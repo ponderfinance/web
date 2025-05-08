@@ -1,33 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { executeGraphQL } from '@/src/lib/graphql/server'
 import { getRedisClient } from '@/src/lib/redis/client'
-import { preloadCacheFromSnapshots } from '@/src/lib/redis/pairCache'
 import prisma from '@/src/lib/db/prisma'
 
 // Initialize Redis connection on server start
 const redis = getRedisClient()
 
-// Preload cache when server starts - this is a read-only operation
-if (process.env.NODE_ENV === 'production') {
-  preloadCacheFromSnapshots(prisma).catch((err) => {
-    console.error('Failed to preload cache on startup:', err)
-  })
-}
-
-// In development, track if we've preloaded cache
-let hasPreloaded = false
-
 export async function POST(request: NextRequest) {
   const startTime = performance.now()
   try {
-    // In development, preload the cache on first request - this is a read-only operation
-    if (process.env.NODE_ENV !== 'production' && !hasPreloaded) {
-      hasPreloaded = true
-      preloadCacheFromSnapshots(prisma).catch((err) => {
-        console.error('Failed to preload cache on first request:', err)
-      })
-    }
-
     const body = await request.json()
     const { query, variables } = body
 

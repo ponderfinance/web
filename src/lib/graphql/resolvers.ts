@@ -6,7 +6,6 @@ import { KKUB_ADDRESS } from '@/src/constants/addresses'
 import { calculatePairTVL } from '@/src/lib/graphql/priceUtils'
 import type { Context, Empty, PrismaToken, PrismaPair, PrismaTokenSupply, PrismaLaunch } from './types'
 import {
-  cachePairReserveUSDBulk,
   getCachedPairReserveUSD,
   getCachedPairReserveUSDBulk
 } from '@/src/lib/redis/pairCache'
@@ -1868,18 +1867,7 @@ export const resolvers = {
               
               reserveUSD = tvl.toString();
               
-              // Cache the newly calculated value
-              if (parseFloat(reserveUSD) > 0) {
-                try {
-                  // Use the expected format for the caching function
-                  cachePairReserveUSDBulk([{
-                    id: pair.id,
-                    reserveUSD
-                  }]);
-                } catch (error) {
-                  console.error('Error caching reserveUSD:', error);
-                }
-              }
+              // No longer need to cache in the frontend - the indexer handles this
             } catch (error) {
               console.error('Error calculating reserveUSD:', error);
               reserveUSD = '0';

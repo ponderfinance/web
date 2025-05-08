@@ -5,7 +5,6 @@ import {
   USDT_ADDRESS,
   KKUB_ADDRESS,
 } from './oracleUtils'
-import { cacheTokenPrice } from '@/src/lib/redis/tokenCache'
 import { isStablecoin, MAIN_TOKEN_SYMBOL } from '@/src/lib/utils/tokenPriceUtils'
 
 /**
@@ -38,7 +37,7 @@ export async function calculateTokenPriceUSD(
           
           // If we got a valid price, use it
           if (marketPrice > 0) {
-            await cacheTokenPrice(tokenId, marketPrice.toString());
+            // Price caching is now handled by the indexer
             return marketPrice.toString();
           }
         }
@@ -55,7 +54,7 @@ export async function calculateTokenPriceUSD(
         
         // If we got a valid price, use it
         if (marketPrice > 0) {
-          await cacheTokenPrice(tokenId, marketPrice.toString());
+          // Price caching is now handled by the indexer
           return marketPrice.toString();
         }
       }
@@ -63,7 +62,6 @@ export async function calculateTokenPriceUSD(
       // Only as a fallback for stablecoins if we can't get market data
       // This fallback should be rare in production with active markets
       console.warn(`Using fallback price for stablecoin ${tokenAddress} - no market data available`);
-      await cacheTokenPrice(tokenId, '1.0');
       return '1.0';
     }
 
@@ -76,8 +74,7 @@ export async function calculateTokenPriceUSD(
       })
 
       if (priceInUSDT > 0) {
-        // Cache the result before returning
-        await cacheTokenPrice(tokenId, priceInUSDT.toString())
+        // Price caching is now handled by the indexer
         return priceInUSDT.toString()
       }
     }
@@ -101,8 +98,7 @@ export async function calculateTokenPriceUSD(
         if (priceInKKUB > 0 && kkubPriceInUSDT > 0) {
           const priceInUSDT = priceInKKUB * kkubPriceInUSDT
 
-          // Cache the result before returning
-          await cacheTokenPrice(tokenId, priceInUSDT.toString())
+          // Price caching is now handled by the indexer
           return priceInUSDT.toString()
         }
       }
@@ -132,8 +128,7 @@ export async function calculateTokenPriceUSD(
         // Get the appropriate price based on token position
         const priceStr = isToken0 ? snapshot.price0 : snapshot.price1
 
-        // Cache the result
-        await cacheTokenPrice(tokenId, priceStr)
+        // Price caching is now handled by the indexer
         return priceStr
       }
     }
