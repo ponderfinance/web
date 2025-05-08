@@ -1,6 +1,6 @@
 'use client'
 
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 import { View, Text, Card, Skeleton } from 'reshaped'
 import { graphql, useLazyLoadQuery } from 'react-relay'
 import { ArrowUp, ArrowDown } from '@phosphor-icons/react'
@@ -17,38 +17,25 @@ export const protocolMetricsQuery = graphql`
   }
 `
 
-// Format currency values
-const formatCurrency = (value: string): string => {
-  const num = parseFloat(value)
-  if (isNaN(num)) return '$0'
-  
-  if (num >= 1e9) return `$${(num / 1e9).toFixed(2)}B`
-  if (num >= 1e6) return `$${(num / 1e6).toFixed(2)}M`
-  if (num >= 1e3) return `$${(num / 1e3).toFixed(2)}K`
-  
-  return `$${num.toFixed(2)}`
-}
-
-// Loading skeleton for metrics
-export const ProtocolMetricsSkeleton = () => {
+// Protocol metrics loading skeleton
+export const ProtocolMetricsLoading = () => {
   return (
     <View direction="row" gap={6} justify="start">
       <Card className="w-[200px] sm:w-full">
         <View padding={6} gap={2}>
-          <Text variant="body-2" color="neutral-faded">1D volume</Text>
+          <Skeleton width={80} height={16} />
           <View direction="row" align="baseline" gap={2}>
-            <Skeleton width="120px" height="30px" />
-            <Skeleton width="60px" height="20px" />
+            <Skeleton width={100} height={24} />
+            <Skeleton width={60} height={16} />
           </View>
         </View>
       </Card>
       
       <Card className="w-[200px] sm:w-full">
         <View padding={6} gap={2}>
-          <Text variant="body-2" color="neutral-faded">Total Ponder TVL</Text>
+          <Skeleton width={80} height={16} />
           <View direction="row" align="baseline" gap={2}>
-            <Skeleton width="120px" height="30px" />
-            <Skeleton width="60px" height="20px" />
+            <Skeleton width={100} height={24} />
           </View>
         </View>
       </Card>
@@ -56,13 +43,42 @@ export const ProtocolMetricsSkeleton = () => {
   )
 }
 
+// Helper to format currency
+const formatCurrency = (value: string | null | undefined) => {
+  if (!value) return '$0'
+  const num = parseFloat(value)
+  
+  if (num >= 1e9) {
+    return `$${(num / 1e9).toFixed(2)}B`
+  } else if (num >= 1e6) {
+    return `$${(num / 1e6).toFixed(2)}M`
+  } else if (num >= 1e3) {
+    return `$${(num / 1e3).toFixed(2)}K`
+  }
+  
+  return `$${num.toFixed(2)}`
+}
+
 // ProtocolMetrics component
 const ProtocolMetrics = () => {
+  // Add a refresh key state to force re-fetching
+  const [refreshKey, setRefreshKey] = useState(0)
+  
+  // Set up automatic refresh every 30 seconds
+  useEffect(() => {
+    const intervalId = setInterval(() => {
+      setRefreshKey(prev => prev + 1)
+    }, 30000) // 30 seconds
+    
+    return () => clearInterval(intervalId)
+  }, [])
+  
   const data = useLazyLoadQuery<ProtocolMetricsQuery>(
     protocolMetricsQuery,
     {},
     {
-      fetchPolicy: 'store-or-network',
+      fetchPolicy: 'network-only', // Always fetch from network
+      fetchKey: refreshKey, // Use the refresh key to force new fetches
     }
   )
   

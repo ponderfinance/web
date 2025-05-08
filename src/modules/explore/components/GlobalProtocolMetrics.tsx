@@ -1,6 +1,6 @@
 'use client'
 
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 import { View, Text, Card, Skeleton } from 'reshaped'
 import { graphql, useLazyLoadQuery } from 'react-relay'
 import { ArrowUp, ArrowDown } from '@phosphor-icons/react'
@@ -56,11 +56,24 @@ export const GlobalProtocolMetricsSkeleton = () => {
 
 // GlobalProtocolMetrics component
 const GlobalProtocolMetrics = () => {
+  // Add a refresh key state to force re-fetching
+  const [refreshKey, setRefreshKey] = useState(0)
+  
+  // Set up automatic refresh every 30 seconds
+  useEffect(() => {
+    const intervalId = setInterval(() => {
+      setRefreshKey(prev => prev + 1)
+    }, 30000) // 30 seconds
+    
+    return () => clearInterval(intervalId)
+  }, [])
+  
   const data = useLazyLoadQuery<GlobalProtocolMetricsQuery>(
     globalProtocolMetricsQuery,
     {},
     {
-      fetchPolicy: 'store-or-network',
+      fetchPolicy: 'network-only', // Always fetch from network
+      fetchKey: refreshKey, // Use the refresh key to force new fetches
     }
   )
 
