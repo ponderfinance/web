@@ -3,7 +3,6 @@
 import React, { useEffect, useState, useCallback } from 'react'
 import { View, Text, Card, Skeleton } from 'reshaped'
 import { graphql, useLazyLoadQuery, useQueryLoader, PreloadedQuery, usePreloadedQuery } from 'react-relay'
-import { ArrowUp, ArrowDown } from '@phosphor-icons/react'
 import { GlobalProtocolMetricsQuery } from '@/src/__generated__/GlobalProtocolMetricsQuery.graphql'
 import { useRedisSubscriber } from '@/src/providers/RedisSubscriberProvider'
 
@@ -153,41 +152,33 @@ export default function GlobalProtocolMetrics({ queryRef }: GlobalProtocolMetric
   
   // Render metrics with clean styling
   return (
-    <View direction="row" gap={6} justify="start">
-      {/* Volume Card */}
-      <Card className="w-[200px] sm:w-full">
-        <View padding={6} gap={2}>
-          <Text variant="body-2" color="neutral-faded">1D volume</Text>
-          <View direction="row" align="baseline" gap={2}>
-            <Text variant="featured-3">{formatCurrency(metrics.dailyVolumeUSD)}</Text>
-            <View direction="row" align="center" gap={1}>
-              {(metrics.volume24hChange || 0) > 0 ? (
-                <>
-                  <ArrowUp size={16} color="var(--rs-color-positive)" weight="bold" />
-                  <Text variant="body-3" color="positive">{Math.abs(metrics.volume24hChange || 0).toFixed(2)}%</Text>
-                </>
-              ) : (metrics.volume24hChange || 0) < 0 ? (
-                <>
-                  <ArrowDown size={16} color="var(--rs-color-critical)" weight="bold" />
-                  <Text variant="body-3" color="critical">{Math.abs(metrics.volume24hChange || 0).toFixed(2)}%</Text>
-                </>
-              ) : (
-                <Text variant="body-3" color="neutral">0.00%</Text>
-              )}
-            </View>
+    <View direction="row" align="center" gap={6} wrap className="justify-between">
+      <View gap={2}>
+        <Text variant="body-2" color="neutral-faded">
+          24h Volume
+        </Text>
+        <View direction="row" align="baseline" gap={2}>
+          <Text variant="featured-3">{formatCurrency(metrics.dailyVolumeUSD)}</Text>
+          <View direction="row" align="center" gap={1}>
+            {(metrics.volume24hChange || 0) > 0 ? (
+              <Text variant="body-3" color="positive">+{Math.abs(metrics.volume24hChange || 0).toFixed(2)}%</Text>
+            ) : (metrics.volume24hChange || 0) < 0 ? (
+              <Text variant="body-3" color="critical">-{Math.abs(metrics.volume24hChange || 0).toFixed(2)}%</Text>
+            ) : (
+              <Text variant="body-3" color="neutral">0.00%</Text>
+            )}
           </View>
         </View>
-      </Card>
+      </View>
       
-      {/* TVL Card */}
-      <Card className="w-[200px] sm:w-full">
-        <View padding={6} gap={2}>
-          <Text variant="body-2" color="neutral-faded">Total TVL</Text>
-          <View direction="row" align="baseline" gap={2}>
-            <Text variant="featured-3">{formatCurrency(metrics.totalValueLockedUSD)}</Text>
-          </View>
+      <View gap={2}>
+        <Text variant="body-2" color="neutral-faded">
+          Total TVL
+        </Text>
+        <View direction="row" align="baseline" gap={2}>
+          <Text variant="featured-3">{formatCurrency(metrics.totalValueLockedUSD)}</Text>
         </View>
-      </Card>
+      </View>
     </View>
   )
 }
