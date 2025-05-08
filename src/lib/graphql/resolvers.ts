@@ -2217,8 +2217,17 @@ export const resolvers = {
           console.log(`[CHART] ${token.symbol} value range: min=${min}, max=${max}, avg=${avg}`);
         }
         
+        // Sort data by timestamp numerically before returning to the client
+        // This ensures data is always ordered correctly regardless of data type conversion
+        const sortedData = chartData.sort((a, b) => {
+          // Explicitly convert both times to numbers for consistent comparison
+          return Number(a.time) - Number(b.time);
+        });
+        
+        console.log(`[CHART] Sorted chart data, first timestamp: ${new Date(Number(sortedData[0].time) * 1000).toISOString()}, last timestamp: ${new Date(Number(sortedData[sortedData.length-1].time) * 1000).toISOString()}`);
+        
         // Ensure all values are proper numbers before returning to client
-        return chartData.map(point => ({
+        return sortedData.map(point => ({
           time: typeof point.time === 'string' ? parseInt(point.time, 10) : Number(point.time),
           value: typeof point.value === 'string' ? parseFloat(point.value) : Number(point.value)
         }));

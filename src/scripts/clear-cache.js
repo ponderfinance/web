@@ -1,55 +1,105 @@
-require('dotenv').config();
-const Redis = require('ioredis');
+import { Redis } from 'ioredis';
+import dotenv from 'dotenv';
+
+dotenv.config();
+
+// Cache key prefixes (copied from CacheManager)
+const CACHE_PREFIXES = {
+  METRICS: 'metrics:',
+  TVL: 'tvl:',
+  PROTOCOL: 'protocol:'
+};
 
 async function clearCache() {
-  console.log('Connecting to Redis...');
+  console.log('Starting cache clearing process...');
+  
+  // Get Redis connection info from environment
+  const redisUrl = process.env.REDIS_URL;
+  if (!redisUrl) {
+    console.error('REDIS_URL not found in environment variables');
+    process.exit(1);
+  }
+  
+  console.log(`Connecting to Redis at ${redisUrl.split('@').pop()}`); // Safe logging without credentials
   
   // Create Redis client
-  const redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
+  const redis = new Redis(redisUrl);
   
   try {
-    console.log('Clearing token price cache...');
+    // Test connection
+    const pingResponse = await redis.ping();
+    console.log(`Redis connection test: ${pingResponse}`);
     
-    // Clear all token price keys
-    const tokenPriceKeys = await redis.keys('token:*:priceUSD');
-    if (tokenPriceKeys.length > 0) {
-      await redis.del(...tokenPriceKeys);
-      console.log(`✅ Deleted ${tokenPriceKeys.length} token price cache entries`);
-    } else {
-      console.log('No token price cache entries found');
+    // Clear metrics cache
+    let deletedKeys = 0;
+    
+    // Clear metrics: prefix
+    deletedKeys += await clearKeysByPrefix(redis, CACHE_PREFIXES.METRICS);
+    console.log(`Cleared keys with prefix ${CACHE_PREFIXES.METRICS}`);
+    
+    // Clear tvl: prefix
+    deletedKeys += await clearKeysByPrefix(redis, CACHE_PREFIXES.TVL);
+    console.log(`Cleared keys with prefix ${CACHE_PREFIXES.TVL}`);
+    
+    // Clear protocol: prefix
+    deletedKeys += await clearKeysByPrefix(redis, CACHE_PREFIXES.PROTOCOL);
+    console.log(`Cleared keys with prefix ${CACHE_PREFIXES.PROTOCOL}`);
+    
+    console.log(`Total deleted keys: ${deletedKeys}`);
+    
+    // Also clear any Relay cache in Redis (if exists)
+    const relayKeys = await redis.keys('relay:*');
+    if (relayKeys.length > 0) {
+      await redis.del(...relayKeys);
+      console.log(`Cleared ${relayKeys.length} Relay cache keys`);
     }
     
-    // Clear pair reserve cache
-    const pairReserveKeys = await redis.keys('pair:*:reserveUSD');
-    if (pairReserveKeys.length > 0) {
-      await redis.del(...pairReserveKeys);
-      console.log(`✅ Deleted ${pairReserveKeys.length} pair reserve cache entries`);
-    } else {
-      console.log('No pair reserve cache entries found');
-    }
+    // Check if there are any protocol metrics keys left
+    const remainingMetricsKeys = await redis.keys(`${CACHE_PREFIXES.METRICS}*`);
+    const remainingTvlKeys = await redis.keys(`${CACHE_PREFIXES.TVL}*`);
+    const remainingProtocolKeys = await redis.keys(`${CACHE_PREFIXES.PROTOCOL}*`);
     
-    // Clear any other cache that might contain price data
-    const otherPriceKeys = await redis.keys('*price*');
-    if (otherPriceKeys.length > 0) {
-      await redis.del(...otherPriceKeys);
-      console.log(`✅ Deleted ${otherPriceKeys.length} other price-related cache entries`);
-    } else {
-      console.log('No other price-related cache entries found');
-    }
+    console.log(`Remaining metrics keys: ${remainingMetricsKeys.length}`);
+    console.log(`Remaining TVL keys: ${remainingTvlKeys.length}`);
+    console.log(`Remaining protocol keys: ${remainingProtocolKeys.length}`);
     
-    console.log('🎉 Cache clearing completed successfully');
+    console.log('Cache clearing completed successfully!');
+    
   } catch (error) {
-    console.error('❌ Error clearing cache:', error);
+    console.error('Error clearing cache:', error);
   } finally {
-    // Close Redis connection
-    redis.disconnect();
+    // Close the Redis connection
+    redis.quit();
+    console.log('Redis connection closed');
   }
 }
 
+// Helper function to clear keys by prefix using SCAN
+async function clearKeysByPrefix(redis, prefix) {
+  let cursor = '0';
+  let deletedCount = 0;
+  
+  do {
+    // SCAN through Redis keys with the prefix
+    const [nextCursor, keys] = await redis.scan(
+      cursor,
+      'MATCH',
+      `${prefix}*`,
+      'COUNT',
+      1000
+    );
+    
+    cursor = nextCursor;
+    
+    if (keys.length > 0) {
+      console.log(`Found ${keys.length} keys with prefix ${prefix}`);
+      await redis.del(...keys);
+      deletedCount += keys.length;
+    }
+  } while (cursor !== '0');
+  
+  return deletedCount;
+}
+
 // Run the script
-clearCache()
-  .then(() => process.exit(0))
-  .catch((error) => {
-    console.error('Failed to clear cache:', error);
-    process.exit(1);
-  }); 
+clearCache().catch(console.error); 

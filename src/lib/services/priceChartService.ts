@@ -120,10 +120,12 @@ export class PriceChartService {
           return [];
         }
 
-        // Get ALL snapshots for this pair regardless of time (we'll filter later)
-        // This ensures we don't miss historical data
+        // Now that timestamps are stored as numbers, explicitly query by number comparison
         const snapshots = await prisma.priceSnapshot.findMany({
-          where: { pairId },
+          where: { 
+            pairId,
+            timestamp: { gte: fromTimestamp } // Using numeric comparison since timestamp is stored as number
+          },
           orderBy: { timestamp: 'asc' },
           select: {
             id: true,
@@ -136,17 +138,15 @@ export class PriceChartService {
         
         console.log(`[DEBUG] Found ${snapshots.length} total price snapshots for pair ${pairId}`);
         
-        // Filter by timeframe and non-null prices
+        // Filter by non-null prices
         const filteredSnapshots = snapshots.filter(snapshot => {
-          const timestamp = Number(snapshot.timestamp);
           const relevantPrice = isToken0 ? snapshot.price0 : snapshot.price1;
-          return timestamp >= fromTimestamp && 
-                 relevantPrice !== null && 
+          return relevantPrice !== null && 
                  relevantPrice !== undefined &&
                  relevantPrice !== '';
         });
         
-        console.log(`[DEBUG] After filtering by timeframe and non-null prices: ${filteredSnapshots.length} snapshots remain`);
+        console.log(`[DEBUG] After filtering by non-null prices: ${filteredSnapshots.length} snapshots remain`);
         
         if (filteredSnapshots.length === 0) {
           console.log('[DEBUG] No valid snapshots remain after filtering.');
@@ -158,7 +158,7 @@ export class PriceChartService {
         console.log(`[DEBUG] Using token decimals: ${tokenDecimals}`);
         
         // Parse and clean price values
-        console.log(`[CHART] Processing ${filteredSnapshots.length} price snapshots from Redis...`);
+        console.log(`[CHART] Processing ${filteredSnapshots.length} price snapshots...`);
         const dataPoints = filteredSnapshots.map((snapshot) => {
           try {
             // Get the exchange rate from the snapshot - this is NOT a USD price!
@@ -171,23 +171,15 @@ export class PriceChartService {
               return null;
             }
 
-            // Process timestamp
-            let time: number;
-            if (typeof snapshot.timestamp === 'bigint') {
-              time = Number(snapshot.timestamp);
-            } else if (typeof snapshot.timestamp === 'string') {
-              time = parseInt(snapshot.timestamp, 10);
-            } else {
-              time = Number(snapshot.timestamp);
-            }
+            // Ensure timestamp is treated as a number
+            // This is crucial for correct sorting after conversion from string to number
+            const time = typeof snapshot.timestamp === 'number' 
+              ? snapshot.timestamp 
+              : typeof snapshot.timestamp === 'string'
+                ? parseInt(snapshot.timestamp, 10) 
+                : Number(snapshot.timestamp);
 
             // Convert exchange rate to USD price
-            // If token is token0: 
-            //    price1 shows how much of token1 you get for 1 token0
-            //    BUT we need to MULTIPLY by counterpart price  
-            // If token is token1:
-            //    price0 shows how much of token0 you get for 1 token1
-            //    BUT we need to MULTIPLY by counterpart price
             let usdPrice: number;
             
             if (isToken0) {
@@ -199,8 +191,6 @@ export class PriceChartService {
               // So we multiply by the USD price of token0  
               usdPrice = exchangeRate * counterpartTokenPrice;
             }
-            
-            console.log(`[CHART] Raw exchange rate: ${exchangeRate}, Converted to USD: ${usdPrice}`);
 
             return {
               time,
@@ -219,8 +209,13 @@ export class PriceChartService {
           return [];
         }
         
-        // Sort by timestamp (ascending)
-        const sortedData = dataPoints.sort((a, b) => a.time - b.time);
+        // Explicitly sort by timestamp (ascending) to ensure proper order
+        // This is important now that timestamps are stored as numbers instead of strings
+        console.log('[DEBUG] Sorting chart data points by timestamp (numerical sort)');
+        const sortedData = dataPoints.sort((a, b) => {
+          // Ensure numeric comparison
+          return Number(a.time) - Number(b.time);
+        });
         
         // Apply a limit if specified
         const limitedData = limit > 0 ? sortedData.slice(0, limit) : sortedData;

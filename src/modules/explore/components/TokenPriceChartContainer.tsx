@@ -148,6 +148,18 @@ function TokenPriceChartContent({
     };
   });
 
+  // Explicitly sort the data by timestamp to ensure it's in correct order
+  // This is crucial when timestamps have been converted from strings to numbers
+  processedData = processedData.sort((a, b) => Number(a.time) - Number(b.time));
+  
+  // Log the timestamps to help with debugging
+  console.log(`[CHART] Sorted ${processedData.length} price points for ${tokenSymbol}`);
+  if (processedData.length > 0) {
+    const firstPoint = processedData[0];
+    const lastPoint = processedData[processedData.length - 1];
+    console.log(`[CHART] Time range: ${new Date(firstPoint.time * 1000).toISOString()} to ${new Date(lastPoint.time * 1000).toISOString()}`);
+  }
+
   // If there's only one data point, duplicate it to show a flat line
   if (processedData.length === 1) {
     const existingPoint = processedData[0];
