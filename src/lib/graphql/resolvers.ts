@@ -9,7 +9,7 @@ import {
   getCachedPairReserveUSD,
   getCachedPairReserveUSDBulk
 } from '@/src/lib/redis/pairCache'
-import { getRedisClient } from '@/src/lib/redis/client'
+import { getRedisClient, getProtocolMetricsFromRedis, CACHE_PREFIXES } from '@/src/lib/redis/client'
 import { createCursorPagination, decodeCursor } from './utils'
 import DataLoader from 'dataloader'
 import { ObjectId } from 'mongodb'
@@ -786,58 +786,6 @@ const calculateTokenTVL = async (
     return '0';
   }
 };
-
-// Define Redis cache prefixes
-const CACHE_PREFIXES = {
-  PROTOCOL: 'protocol:'
-};
-
-// Add this helper function to read protocol metrics from Redis
-async function getProtocolMetricsFromRedis(): Promise<any | null> {
-  try {
-    const redis = getRedisClient();
-    
-    // Get all needed metrics from Redis at once
-    const [
-      tvl,
-      volume24h,
-      volume7d,
-      volume1h,
-      volume24hChange,
-      volume1hChange,
-      timestamp
-    ] = await redis.mget([
-      `${CACHE_PREFIXES.PROTOCOL}tvl`,
-      `${CACHE_PREFIXES.PROTOCOL}volume24h`,
-      `${CACHE_PREFIXES.PROTOCOL}volume7d`,
-      `${CACHE_PREFIXES.PROTOCOL}volume1h`,
-      `${CACHE_PREFIXES.PROTOCOL}volume24hChange`,
-      `${CACHE_PREFIXES.PROTOCOL}volume1hChange`,
-      `${CACHE_PREFIXES.PROTOCOL}timestamp`
-    ]);
-    
-    // If essential data is missing, return null
-    if (!tvl && !volume24h) {
-      return null;
-    }
-    
-    // Return metrics object with values from Redis
-    return {
-      id: 'redis-metrics',
-      timestamp: timestamp ? parseInt(timestamp, 10) : Math.floor(Date.now() / 1000),
-      totalValueLockedUSD: tvl || '0',
-      dailyVolumeUSD: volume24h || '0',
-      weeklyVolumeUSD: volume7d || '0',
-      monthlyVolumeUSD: '0', // Not cached in Redis currently
-      volume1h: volume1h || '0',
-      volume1hChange: volume1hChange ? parseFloat(volume1hChange) : 0,
-      volume24hChange: volume24hChange ? parseFloat(volume24hChange) : 0
-    };
-  } catch (error) {
-    console.error('Error reading protocol metrics from Redis:', error);
-    return null;
-  }
-}
 
 export const resolvers = {
   // Add this resolver before any existing resolvers
@@ -2513,42 +2461,13 @@ export const resolvers = {
     async protocolMetrics(_parent: any, _args: any, { prisma }: Context) {
       try {
         // Always try to get metrics from Redis first for better performance
-        const redis = getRedisClient();
         try {
-          console.log('Attempting to get protocol metrics directly from Redis');
-          // Get all needed metrics from Redis at once
-          const [
-            tvl,
-            volume24h,
-            volume7d,
-            volume1h,
-            volume24hChange,
-            volume1hChange,
-            timestamp
-          ] = await redis.mget([
-            `${CACHE_PREFIXES.PROTOCOL}tvl`,
-            `${CACHE_PREFIXES.PROTOCOL}volume24h`,
-            `${CACHE_PREFIXES.PROTOCOL}volume7d`,
-            `${CACHE_PREFIXES.PROTOCOL}volume1h`,
-            `${CACHE_PREFIXES.PROTOCOL}volume24hChange`,
-            `${CACHE_PREFIXES.PROTOCOL}volume1hChange`,
-            `${CACHE_PREFIXES.PROTOCOL}timestamp`
-          ]);
-
-          // If we have Redis data, use it directly
-          if (tvl || volume24h) {
-            console.log(`Found Redis metrics - volume24h: ${volume24h}, tvl: ${tvl}`);
-            return {
-              id: 'redis-metrics',
-              timestamp: timestamp ? parseInt(timestamp, 10) : Math.floor(Date.now() / 1000),
-              totalValueLockedUSD: tvl || '0',
-              dailyVolumeUSD: volume24h || '0',
-              weeklyVolumeUSD: volume7d || '0',
-              monthlyVolumeUSD: '0', // Not cached in Redis currently
-              volume1h: volume1h || '0',
-              volume1hChange: volume1hChange ? parseFloat(volume1hChange) : 0,
-              volume24hChange: volume24hChange ? parseFloat(volume24hChange) : 0
-            };
+          console.log('Attempting to get protocol metrics from Redis');
+          const metricsFromRedis = await getProtocolMetricsFromRedis();
+          
+          if (metricsFromRedis) {
+            console.log(`Found Redis metrics - volume24h: ${metricsFromRedis.dailyVolumeUSD}, tvl: ${metricsFromRedis.totalValueLockedUSD}`);
+            return metricsFromRedis;
           }
         } catch (redisError) {
           console.error('Error reading protocol metrics from Redis:', redisError);
