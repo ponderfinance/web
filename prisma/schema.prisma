@@ -531,3 +531,77 @@ model VolumeMetric {
   @@index([entity, entityId])
   @@index([timestamp])
 }
+
+// Entity Metrics - single source of truth for all metrics
+model EntityMetrics {
+  id              String    @id @default(auto()) @map("_id") @db.ObjectId
+  entity          String    // 'token', 'pair', or 'protocol'
+  entityId        String    // ID of the entity this metric belongs to
+  
+  // Volume metrics
+  volume1h        String    // 1h volume
+  volume24h       String    // 24h volume
+  volume7d        String    // 7d volume
+  volume30d       String    // 30d volume
+  volumeAll       String?   // All-time volume
+  volumeChange24h Float?    // 24h volume change percentage
+  volumeChange1h  Float?    // 1h volume change percentage
+  volumeLastUpdated Int     // Timestamp of last volume update
+  
+  // TVL metrics
+  tvl             String    // Current TVL
+  tvlChange24h    Float?    // 24h TVL change percentage
+  tvlLastUpdated  Int       // Timestamp of last TVL update
+  
+  // Fee metrics
+  fees24h         String?   // 24h fees
+  fees7d          String?   // 7d fees
+  fees30d         String?   // 30d fees
+  feesAll         String?   // All-time fees
+  
+  // Token-specific metrics
+  priceUSD        String?   // Current price in USD
+  priceChange24h  String?   // 24h price change percentage
+  priceChange7d   String?   // 7d price change percentage
+  marketCap       String?   // Market cap
+  fdv             String?   // Fully diluted valuation
+  
+  // Pair-specific metrics
+  reserve0        String?   // Current reserve0
+  reserve1        String?   // Current reserve1
+  reserveUSD      String?   // Current reserveUSD (for backwards compatibility)
+  fee             String?   // Fee tier (e.g. "3" for 0.3%)
+  poolAPR         Float?    // Pool APR
+  volumeTVLRatio  Float?    // Volume/TVL ratio
+  
+  // Protocol-specific metrics
+  totalPairs      Int?      // Total number of pairs
+  totalTokens     Int?      // Total number of tokens
+  
+  // Timestamps
+  lastUpdated     Int       // Timestamp of last update
+  lastActivity    Int       // Timestamp of last activity
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  // Compound index for faster lookups
+  @@unique([entity, entityId])
+}
+
+// Metric snapshots for historical data
+model MetricSnapshot {
+  id              String    @id @default(auto()) @map("_id") @db.ObjectId
+  entity          String    // 'token', 'pair', or 'protocol'
+  entityId        String    // ID of the entity this snapshot belongs to
+  metricType      String    // 'volume', 'tvl', 'price', etc.
+  timeframe       String    // '1h', '24h', '7d', '30d', 'all'
+  value           String    // Value of the metric
+  timestamp       Int       // Timestamp when this snapshot was created
+  lastCalculated  Int       // Timestamp when this value was last calculated
+  hasActivity     Boolean   // Whether there was activity in this period
+  confidence      Float     // How confident we are in this calculation (0-1)
+  createdAt       DateTime  @default(now())
+
+  // Index for faster lookups
+  @@index([entity, entityId, metricType, timeframe])
+}

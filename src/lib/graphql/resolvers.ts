@@ -2363,33 +2363,44 @@ export const resolvers = {
     // Add this to the Query object
     async protocolMetrics(_parent: any, _args: any, { prisma }: Context) {
       try {
-        // Try to get the latest metric from the database first
-        const metric = await prisma.protocolMetric.findFirst({
-          orderBy: { timestamp: 'desc' }
-        });
+        // Try to get metrics from the EntityMetrics table if it exists
+        let protocolMetrics = null;
+        try {
+          // @ts-ignore - We're checking for the EntityMetrics model at runtime
+          protocolMetrics = await prisma.entityMetrics.findFirst({
+            where: {
+              entity: 'protocol',
+              entityId: 'global'
+            },
+            orderBy: { lastUpdated: 'desc' }
+          });
+        } catch (error) {
+          console.log('EntityMetrics table likely not available yet:', error);
+        }
         
-        if (metric) {
-          // Type assertion to avoid TypeScript errors
-          // since we know these fields exist in the GraphQL schema
-          const typedMetric = metric as any;
-          
-          // Return the database metric with addition of volume changes if they don't exist
-          // and ensure timestamp is properly formatted as a number
+        if (protocolMetrics) {
+          // Convert metrics to the expected format
           return {
-            ...typedMetric,
-            timestamp: ensureNumberTimestamp(typedMetric.timestamp),
-            volume1hChange: typedMetric.volume1hChange ?? 0,
-            volume24hChange: typedMetric.volume24hChange ?? 0
+            id: protocolMetrics.id,
+            timestamp: ensureNumberTimestamp(protocolMetrics.lastUpdated),
+            totalValueLockedUSD: protocolMetrics.tvl || '0',
+            dailyVolumeUSD: protocolMetrics.volume24h || '0',
+            weeklyVolumeUSD: protocolMetrics.volume7d || '0',
+            monthlyVolumeUSD: protocolMetrics.volume30d || '0',
+            volume1hChange: protocolMetrics.volumeChange1h ? parseFloat(protocolMetrics.volumeChange1h.toString()) : 0,
+            volume24hChange: protocolMetrics.volumeChange24h ? parseFloat(protocolMetrics.volumeChange24h.toString()) : 0
           };
         }
         
-        // Return default values if no metrics exist yet
-        console.log('No protocol metrics found, using default values');
+        // If we reach here, return default values
+        console.log('No protocol metrics found in EntityMetrics, using default values');
         return {
           id: 'default',
           timestamp: Math.floor(Date.now() / 1000),
           totalValueLockedUSD: '0',
           dailyVolumeUSD: '0',
+          weeklyVolumeUSD: '0',
+          monthlyVolumeUSD: '0',
           volume1hChange: 0,
           volume24hChange: 0
         };
@@ -2401,6 +2412,8 @@ export const resolvers = {
           timestamp: Math.floor(Date.now() / 1000),
           totalValueLockedUSD: '0',
           dailyVolumeUSD: '0',
+          weeklyVolumeUSD: '0',
+          monthlyVolumeUSD: '0',
           volume1hChange: 0,
           volume24hChange: 0
         };
