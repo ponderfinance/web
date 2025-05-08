@@ -1,12 +1,13 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { Text, View, Select } from 'reshaped'
-import { graphql, useFragment, useLazyLoadQuery } from 'react-relay'
+import { graphql, useFragment, useLazyLoadQuery, useQueryLoader } from 'react-relay'
 import PriceChart from './PriceChart'
 import { TokenPriceChartContainer_token$key } from '@/src/__generated__/TokenPriceChartContainer_token.graphql'
 import { TokenPriceChartContainerQuery } from '@/src/__generated__/TokenPriceChartContainerQuery.graphql'
 import { formatUnits } from 'viem'
+import { useRedisSubscriber } from '@/src/providers/RedisSubscriberProvider'
 
 // Define the fragment for token chart data
 const TokenChartFragment = graphql`
@@ -72,6 +73,7 @@ export default function TokenPriceChartContainer({
   // Extract token data from the fragment
   const token = useFragment(TokenChartFragment, tokenRef)
   const tokenAddress = token?.address
+  const tokenId = token?.id
 
   // Return empty state if token data is missing
   if (!token || !tokenAddress) {
@@ -81,13 +83,14 @@ export default function TokenPriceChartContainer({
   // Memoize the chart content to prevent unnecessary rerenders
   const chartContent = React.useMemo(() => (
     <TokenPriceChartContent
+      tokenId={tokenId}
       tokenAddress={tokenAddress}
       tokenSymbol={token.symbol || 'Token'}
       tokenDecimals={token.decimals ?? undefined}
       timeframe={timeframe}
       displayType={initialDisplayType as 'line' | 'area' | 'candle'}
     />
-  ), [tokenAddress, token.symbol, token.decimals, timeframe, initialDisplayType]);
+  ), [tokenId, tokenAddress, token.symbol, token.decimals, timeframe, initialDisplayType]);
 
   return (
     <View direction="column" gap={16}>
@@ -98,12 +101,14 @@ export default function TokenPriceChartContainer({
 
 // Separate component for chart content to handle data loading
 function TokenPriceChartContent({
+  tokenId,
   tokenAddress,
   tokenSymbol,
   tokenDecimals,
   timeframe,
   displayType,
 }: {
+  tokenId: string
   tokenAddress: string
   tokenSymbol: string
   tokenDecimals?: number
@@ -111,17 +116,118 @@ function TokenPriceChartContent({
   displayType: 'line' | 'area' | 'candle'
 }) {
   const chartTitle = `${tokenSymbol} Price (USD)`
+  // Get Redis subscriber context for real-time updates
+  const { tokenLastUpdated } = useRedisSubscriber();
+  
+  // Set up query loader for refreshing data
+  const [queryRef, loadQuery] = useQueryLoader<TokenPriceChartContainerQuery>(
+    TokenPriceChartQuery
+  );
+  
+  // Enhanced validation for parameters
+  const areParamsValid = React.useMemo(() => {
+    // Check for null, undefined, empty strings or invalid strings
+    if (!tokenAddress || tokenAddress === 'null' || tokenAddress === 'undefined' || tokenAddress === '') {
+      console.error(`[CHART] Invalid token address: ${tokenAddress}`);
+      return false;
+    }
+    
+    if (!timeframe || timeframe === 'null' || timeframe === 'undefined' || timeframe === '') {
+      console.error(`[CHART] Invalid timeframe: ${timeframe}`);
+      return false;
+    }
+    
+    // Check if token address is a valid Ethereum address format (0x followed by 40 hex chars)
+    if (!/^0x[a-fA-F0-9]{40}$/.test(tokenAddress)) {
+      console.error(`[CHART] Token address is not in valid Ethereum format: ${tokenAddress}`);
+      return false;
+    }
+    
+    return true;
+  }, [tokenAddress, timeframe]);
+  
+  // Load initial data - add extra validation for parameters
+  useEffect(() => {
+    if (areParamsValid) {
+      console.log(`[CHART] Loading initial data for ${tokenSymbol} with address ${tokenAddress}, timeframe ${timeframe}`);
+      try {
+        loadQuery({
+          tokenAddress,
+          timeframe,
+          limit: 100,
+        });
+      } catch (error) {
+        console.error(`[CHART] Error loading chart data:`, error);
+      }
+    }
+  }, [loadQuery, tokenAddress, timeframe, tokenSymbol, areParamsValid]);
+  
+  // Set up subscription to token updates for real-time chart updates
+  useEffect(() => {
+    // Check if we have an update for this token
+    if (areParamsValid && tokenId && tokenLastUpdated[tokenId]) {
+      console.log(`[CHART] Token ${tokenSymbol} updated, refreshing chart data...`);
+      // Reload query when token data is updated
+      try {
+        loadQuery({
+          tokenAddress,
+          timeframe,
+          limit: 100,
+        }, { fetchPolicy: 'network-only' });
+      } catch (error) {
+        console.error(`[CHART] Error refreshing chart data:`, error);
+      }
+    }
+  }, [tokenId, tokenLastUpdated, tokenSymbol, tokenAddress, timeframe, loadQuery, areParamsValid]);
+  
+  // If parameters are invalid, show error state
+  if (!areParamsValid) {
+    return (
+      <View height={400} align="center" justify="center">
+        <Text>Cannot display price chart: invalid parameters</Text>
+      </View>
+    );
+  }
+  
+  // If query reference is not ready, show loading state
+  if (!queryRef) {
+    return (
+      <View height={400} align="center" justify="center">
+        <Text>Loading price data for {tokenSymbol}...</Text>
+      </View>
+    );
+  }
+  
+  return (
+    <TokenPriceChartRenderer
+      queryRef={queryRef}
+      tokenSymbol={tokenSymbol}
+      tokenDecimals={tokenDecimals}
+      displayType={displayType}
+    />
+  );
+}
 
-  // Fetch token price chart data
+// Renderer component to handle the data display
+function TokenPriceChartRenderer({
+  queryRef,
+  tokenSymbol,
+  tokenDecimals,
+  displayType,
+}: {
+  queryRef: any
+  tokenSymbol: string
+  tokenDecimals?: number
+  displayType: 'line' | 'area' | 'candle'
+}) {
+  const chartTitle = `${tokenSymbol} Price (USD)`
+
+  // Use the query reference to fetch data
   const data = useLazyLoadQuery<TokenPriceChartContainerQuery>(
     TokenPriceChartQuery,
+    queryRef,
     {
-      tokenAddress,
-      timeframe,
-      limit: 100,
-    },
-    {
-      fetchPolicy: 'network-only', // Always fetch fresh data
+      fetchPolicy: 'store-and-network', // Use cache first, then network for updates
     }
   )
 
@@ -135,7 +241,6 @@ function TokenPriceChartContent({
       </View>
     )
   }
-
 
   // Create a clean copy of the data to avoid readonly issues
   let processedData = tokenPriceChart.map(point => {

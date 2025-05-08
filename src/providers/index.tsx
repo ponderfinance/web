@@ -12,6 +12,7 @@ import { useAccount } from 'wagmi'
 import { Reshaped } from 'reshaped'
 import { RelayEnvironmentProvider } from 'react-relay'
 import { getClientEnvironment } from '@/src/lib/relay/environment'
+import { RedisSubscriberProvider } from './RedisSubscriberProvider'
 
 // RelayProvider component
 function RelayProvider({ children }: { children: React.ReactNode }) {
@@ -110,7 +111,11 @@ export default function Providers({ children }: { children: React.ReactNode }) {
         <Reshaped theme="ponder">
           <WagmiProvider config={wagmiConfig}>
             <WalletProvider queryClient={queryClient}>
-              <RelayProvider>{children}</RelayProvider>
+              <RelayProvider>
+                <RedisSubscriberProvider>
+                  {children}
+                </RedisSubscriberProvider>
+              </RelayProvider>
             </WalletProvider>
           </WagmiProvider>
         </Reshaped>

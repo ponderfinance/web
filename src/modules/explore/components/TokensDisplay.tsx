@@ -1,12 +1,15 @@
 'use client'
 
-import React from 'react'
+import React, { useEffect } from 'react'
 import { View, Text, Actionable, Image } from 'reshaped'
 import { TokensPageQuery } from '@/src/__generated__/TokensPageQuery.graphql'
 import { getIpfsGateway } from '@/src/utils/ipfs'
 import { roundDecimal } from '@/src/utils/numbers'
 import Link from 'next/link'
 import { TokenPair } from '@/src/components/TokenPair'
+import { useRedisSubscriber } from '@/src/providers/RedisSubscriberProvider'
+import { useQueryLoader } from 'react-relay'
+import { tokensPageQuery } from './TokensPage'
 
 // Helper to format currency values
 const formatCurrency = (value: string | null | undefined): string => {
@@ -52,6 +55,24 @@ export const TokensDisplay: React.FC<TokensDisplayProps> = ({
   setOrderBy,
   setOrderDirection,
 }) => {
+  // Get Redis subscriber context
+  const { tokenLastUpdated } = useRedisSubscriber();
+  
+  // Get query loader
+  const [queryRef, loadQuery] = useQueryLoader<TokensPageQuery>(tokensPageQuery);
+  
+  // Handle token updates from Redis
+  useEffect(() => {
+    if (Object.keys(tokenLastUpdated).length > 0) {
+      console.log('Tokens updated, refreshing tokens list');
+      loadQuery({
+        first: 20,
+        orderBy: orderBy as any,
+        orderDirection: orderDirection as any,
+      }, { fetchPolicy: 'network-only' });
+    }
+  }, [tokenLastUpdated, orderBy, orderDirection, loadQuery]);
+  
   // Handle sorting
   const handleSort = (column: string) => {
     if (orderBy === column) {

@@ -9,7 +9,7 @@ import {
   getCachedPairReserveUSD,
   getCachedPairReserveUSDBulk
 } from '@/src/lib/redis/pairCache'
-import { getRedisClient, getProtocolMetricsFromRedis, CACHE_PREFIXES } from '@/src/lib/redis/client'
+import { getRedisClient, getProtocolMetricsFromRedis, CACHE_PREFIXES } from '@/src/lib/redis/exports'
 import { createCursorPagination, decodeCursor } from './utils'
 import DataLoader from 'dataloader'
 import { ObjectId } from 'mongodb'
@@ -2463,10 +2463,12 @@ export const resolvers = {
         // Always try to get metrics from Redis first for better performance
         try {
           console.log('Attempting to get protocol metrics from Redis');
+          // Add a timestamp to the logs to track when this is called
+          console.log(`Query timestamp: ${new Date().toISOString()}`);
           const metricsFromRedis = await getProtocolMetricsFromRedis();
           
           if (metricsFromRedis) {
-            console.log(`Found Redis metrics - volume24h: ${metricsFromRedis.dailyVolumeUSD}, tvl: ${metricsFromRedis.totalValueLockedUSD}`);
+            console.log(`Found Redis metrics - volume24h: ${metricsFromRedis.dailyVolumeUSD}, tvl: ${metricsFromRedis.totalValueLockedUSD}, volume24hChange: ${metricsFromRedis.volume24hChange}%`);
             return metricsFromRedis;
           }
         } catch (redisError) {

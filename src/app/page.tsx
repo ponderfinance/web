@@ -17,8 +17,8 @@ export default function Home() {
         </View>
 
         <SwapInterface
-          defaultTokenIn={KOI_ADDRESS[CURRENT_CHAIN.id]}
-          defaultTokenOut={KKUB_ADDRESS[CURRENT_CHAIN.id]}
+          defaultTokenIn={KKUB_ADDRESS[CURRENT_CHAIN.id]}
+          defaultTokenOut={KOI_ADDRESS[CURRENT_CHAIN.id]}
         />
         <View
           direction="row"

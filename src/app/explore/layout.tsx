@@ -4,9 +4,10 @@ import React, { Suspense } from 'react'
 import { View, Text } from 'reshaped'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import GlobalProtocolMetrics, {
+import { 
   GlobalProtocolMetricsSkeleton,
 } from '@/src/modules/explore/components/GlobalProtocolMetrics'
+import GlobalProtocolMetricsWithSubscription from '@/src/modules/explore/components/GlobalProtocolMetricsSubscription'
 
 export default function ExploreLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
@@ -21,10 +22,10 @@ export default function ExploreLayout({ children }: { children: React.ReactNode 
 
   return (
     <View gap={12} padding={4} width="100%">
-      {/* Global protocol metrics */}
+      {/* Global protocol metrics with subscription support */}
       {!isTokenDetailPage && (
         <Suspense fallback={<GlobalProtocolMetricsSkeleton />}>
-          <GlobalProtocolMetrics />
+          <GlobalProtocolMetricsWithSubscription />
         </Suspense>
       )}
 

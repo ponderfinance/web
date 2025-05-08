@@ -529,3 +529,15 @@ type LaunchLimits {
   remainingKub: String!
   remainingPonder: String!
 }
+
+# Subscription type for real-time updates
+type Subscription {
+  # Get real-time updates to protocol metrics
+  protocolMetricsUpdated: ProtocolMetric!
+  
+  # Get real-time updates to a specific pair
+  pairUpdated(pairId: ID!): Pair
+  
+  # Get real-time updates to a specific token
+  tokenUpdated(tokenId: ID!): Token
+}
