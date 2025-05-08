@@ -1092,15 +1092,123 @@ export const resolvers = {
       }
     },
     
-    // New volume-related resolvers
+    // Update price change resolvers to use EntityMetrics data first
     priceChange1h: async (parent: any, _args: any, { prisma }: Context) => {
-      return parent.priceChange1h || 0
+      try {
+        // Check if we already have the value from parent
+        if (parent.priceChange1h !== undefined && parent.priceChange1h !== null) {
+          return parent.priceChange1h;
+        }
+        
+        // Try to get from EntityMetrics
+        // Need to use type assertion since prisma might not have EntityMetrics in type definition
+        const prismaWithMetrics = prisma as PrismaClient & {
+          entityMetrics: {
+            findUnique: (args: any) => Promise<any>;
+          };
+        };
+        
+        const metrics = await prismaWithMetrics.entityMetrics.findUnique({
+          where: {
+            entity_entityId: {
+              entity: 'token',
+              entityId: parent.id
+            }
+          },
+          select: {
+            priceChange1h: true
+          }
+        });
+        
+        if (metrics && metrics.priceChange1h !== null && metrics.priceChange1h !== undefined) {
+          return metrics.priceChange1h;
+        }
+        
+        // If not found in either, return zero as default
+        return 0;
+      } catch (error) {
+        console.error(`Error getting priceChange1h for ${parent.symbol || parent.id}:`, error);
+        return 0;
+      }
+    },
+    
+    priceChange24h: async (parent: any, _args: any, { prisma }: Context) => {
+      try {
+        // Check if we already have the value from parent
+        if (parent.priceChange24h !== undefined && parent.priceChange24h !== null) {
+          return parent.priceChange24h;
+        }
+        
+        // Try to get from EntityMetrics
+        const prismaWithMetrics = prisma as PrismaClient & {
+          entityMetrics: {
+            findUnique: (args: any) => Promise<any>;
+          };
+        };
+        
+        const metrics = await prismaWithMetrics.entityMetrics.findUnique({
+          where: {
+            entity_entityId: {
+              entity: 'token',
+              entityId: parent.id
+            }
+          },
+          select: {
+            priceChange24h: true
+          }
+        });
+        
+        if (metrics && metrics.priceChange24h !== null && metrics.priceChange24h !== undefined) {
+          return metrics.priceChange24h;
+        }
+        
+        // If not found in either, return zero as default
+        return 0;
+      } catch (error) {
+        console.error(`Error getting priceChange24h for ${parent.symbol || parent.id}:`, error);
+        return 0;
+      }
     },
     
     priceChange7d: async (parent: any, _args: any, { prisma }: Context) => {
-      return parent.priceChange7d || 0
+      try {
+        // Check if we already have the value from parent
+        if (parent.priceChange7d !== undefined && parent.priceChange7d !== null) {
+          return parent.priceChange7d;
+        }
+        
+        // Try to get from EntityMetrics
+        const prismaWithMetrics = prisma as PrismaClient & {
+          entityMetrics: {
+            findUnique: (args: any) => Promise<any>;
+          };
+        };
+        
+        const metrics = await prismaWithMetrics.entityMetrics.findUnique({
+          where: {
+            entity_entityId: {
+              entity: 'token',
+              entityId: parent.id
+            }
+          },
+          select: {
+            priceChange7d: true
+          }
+        });
+        
+        if (metrics && metrics.priceChange7d !== null && metrics.priceChange7d !== undefined) {
+          return metrics.priceChange7d;
+        }
+        
+        // If not found in either, return zero as default
+        return 0;
+      } catch (error) {
+        console.error(`Error getting priceChange7d for ${parent.symbol || parent.id}:`, error);
+        return 0;
+      }
     },
     
+    // New volume-related resolvers
     volume1h: async (parent: any, _args: any, { prisma }: Context) => {
       return parent.volume1h || '0'
     },
@@ -2509,3 +2617,4 @@ function isBaseToken(token0: any, token1: any): boolean {
   // If neither is stable, default to token0 as base
   return true;
 }
+

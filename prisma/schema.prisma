@@ -561,8 +561,9 @@ model EntityMetrics {
   
   // Token-specific metrics
   priceUSD        String?   // Current price in USD
-  priceChange24h  String?   // 24h price change percentage
-  priceChange7d   String?   // 7d price change percentage
+  priceChange24h  Float?    // 24h price change percentage
+  priceChange1h   Float?    // 1h price change percentage
+  priceChange7d   Float?    // 7d price change percentage
   marketCap       String?   // Market cap
   fdv             String?   // Fully diluted valuation
   

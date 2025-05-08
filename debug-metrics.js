@@ -1,122 +1,96 @@
-import { PrismaClient } from '@prisma/client';
+const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 
 async function debugMetrics() {
+  console.log('🔍 Debugging metrics inconsistencies...');
+  
   try {
-    // Check protocol metrics
-    console.log('---- Checking Protocol Metrics ----');
-    const protocolMetrics = await prisma.entityMetrics.findFirst({
+    // Get protocol metrics
+    console.log('\n1. Checking protocol metrics...');
+    
+    // Check EntityMetrics
+    const protocolMetrics = await prisma.entityMetrics.findUnique({
       where: {
-        entity: 'protocol',
-        entityId: 'global'
-      },
-      orderBy: { lastUpdated: 'desc' }
+        entity_entityId: {
+          entity: 'protocol',
+          entityId: 'global'
+        }
+      }
     });
     
+    console.log('Protocol metrics from EntityMetrics:');
     if (protocolMetrics) {
-      console.log('Protocol metrics found:', protocolMetrics);
-      console.log('Formatted for frontend:');
-      console.log({
-        id: protocolMetrics.id,
-        timestamp: protocolMetrics.lastUpdated,
-        totalValueLockedUSD: protocolMetrics.tvl || '0',
-        dailyVolumeUSD: protocolMetrics.volume24h || '0',
-        weeklyVolumeUSD: protocolMetrics.volume7d || '0',
-        monthlyVolumeUSD: protocolMetrics.volume30d || '0',
-        volume1hChange: protocolMetrics.volumeChange1h ? parseFloat(protocolMetrics.volumeChange1h.toString()) : 0,
-        volume24hChange: protocolMetrics.volumeChange24h ? parseFloat(protocolMetrics.volumeChange24h.toString()) : 0
-      });
+      console.log(`  - TVL: ${protocolMetrics.tvl}`);
+      console.log(`  - Volume (24h): ${protocolMetrics.volume24h}`);
+      console.log(`  - Last updated: ${new Date(protocolMetrics.lastUpdated * 1000).toISOString()}`);
     } else {
-      console.log('No protocol metrics found');
+      console.log('  - No protocol metrics found in EntityMetrics!');
     }
     
-    // Check one token's price change data
-    console.log('\n---- Checking Token Price Change Data ----');
-    const token = await prisma.token.findFirst({
+    // Get token metrics
+    console.log('\n2. Checking token metrics for top tokens...');
+    const tokens = await prisma.token.findMany({
       where: {
-        symbol: { not: null }
+        priceUSD: {
+          not: null
+        }
       },
       select: {
         id: true,
         symbol: true,
+        priceUSD: true,
         priceChange1h: true,
         priceChange24h: true
-      }
+      },
+      take: 5
     });
     
-    if (token) {
-      console.log(`Token ${token.symbol} price changes from Token table:`, {
-        priceChange1h: token.priceChange1h,
-        priceChange24h: token.priceChange24h
-      });
+    console.log(`Found ${tokens.length} tokens with price data`);
+    
+    for (const token of tokens) {
+      console.log(`\nToken: ${token.symbol}`);
+      console.log(`  - Price: ${token.priceUSD}`);
+      console.log(`  - Price Change (1h): ${token.priceChange1h !== null ? token.priceChange1h + '%' : 'null'}`);
+      console.log(`  - Price Change (24h): ${token.priceChange24h !== null ? token.priceChange24h + '%' : 'null'}`);
       
-      // Check if there's corresponding data in EntityMetrics
-      const tokenMetrics = await prisma.entityMetrics.findFirst({
+      // Get EntityMetrics for comparison
+      const tokenMetrics = await prisma.entityMetrics.findUnique({
         where: {
-          entity: 'token',
-          entityId: token.id
+          entity_entityId: {
+            entity: 'token',
+            entityId: token.id
+          }
         }
       });
       
       if (tokenMetrics) {
-        console.log(`Token ${token.symbol} price changes from EntityMetrics:`, {
-          priceChange24h: tokenMetrics.priceChange24h,
-          priceUSD: tokenMetrics.priceUSD
-        });
+        console.log('  EntityMetrics data:');
+        console.log(`  - Price: ${tokenMetrics.priceUSD}`);
+        console.log(`  - Price Change (1h): ${tokenMetrics.priceChange1h !== null ? tokenMetrics.priceChange1h + '%' : 'null'}`);
+        console.log(`  - Price Change (24h): ${tokenMetrics.priceChange24h !== null ? tokenMetrics.priceChange24h + '%' : 'null'}`);
+        console.log(`  - TVL: ${tokenMetrics.tvl}`);
+        console.log(`  - Volume (24h): ${tokenMetrics.volume24h}`);
       } else {
-        console.log(`No EntityMetrics found for token ${token.symbol}`);
+        console.log('  - No matching EntityMetrics record!');
       }
     }
     
-    // Check pair data
-    console.log('\n---- Checking Pair Data ----');
-    const pair = await prisma.pair.findFirst({
-      orderBy: { createdAt: 'desc' },
-      select: {
-        id: true,
-        address: true,
-        token0: { select: { symbol: true } },
-        token1: { select: { symbol: true } },
-        reserve0: true,
-        reserve1: true,
-        volume24h: true,
-        poolAPR: true
-      }
-    });
+    // Check resolvers for tokens page data source
+    console.log('\n3. Checking GraphQL resolver reference in code...');
+    console.log('  [This would require code analysis in resolvers.ts]');
+    console.log('  - Token price changes should be coming from EntityMetrics');
+    console.log('  - TVL should be coming from EntityMetrics');
+    console.log('  - Volume should be coming from EntityMetrics');
     
-    if (pair) {
-      console.log(`Pair ${pair.token0.symbol}/${pair.token1.symbol} data from Pair table:`, {
-        reserve0: pair.reserve0,
-        reserve1: pair.reserve1,
-        volume24h: pair.volume24h,
-        poolAPR: pair.poolAPR
-      });
-      
-      // Check if there's corresponding data in EntityMetrics
-      const pairMetrics = await prisma.entityMetrics.findFirst({
-        where: {
-          entity: 'pair',
-          entityId: pair.id
-        }
-      });
-      
-      if (pairMetrics) {
-        console.log(`Pair ${pair.token0.symbol}/${pair.token1.symbol} data from EntityMetrics:`, {
-          tvl: pairMetrics.tvl,
-          volume24h: pairMetrics.volume24h,
-          reserveUSD: pairMetrics.reserveUSD,
-          poolAPR: pairMetrics.poolAPR
-        });
-      } else {
-        console.log(`No EntityMetrics found for pair ${pair.token0.symbol}/${pair.token1.symbol}`);
-      }
-    }
-    
-  } catch (e) {
-    console.error('Error debugging metrics:', e);
+  } catch (error) {
+    console.error('Error debugging metrics:', error);
   } finally {
     await prisma.$disconnect();
   }
 }
 
-debugMetrics(); 
+debugMetrics()
+  .catch(error => {
+    console.error('Fatal error:', error);
+    process.exit(1);
+  }); 
