@@ -1,9 +1,10 @@
+import React from 'react'
 import { View, Text, Card, Image } from 'reshaped'
 import { useLazyLoadQuery, useFragment } from 'react-relay'
 import { graphql } from 'relay-runtime'
 import Link from 'next/link'
-import type { LaunchListViewQuery } from '../../__generated__/LaunchListViewQuery.graphql'
-import type { LaunchListView_launch$key } from '../../__generated__/LaunchListView_launch.graphql'
+import type { LaunchListViewQuery } from '@/src/__generated__/LaunchListViewQuery.graphql'
+import type { LaunchListView_launch$key } from '@/src/__generated__/LaunchListView_launch.graphql'
 import { getIpfsGateway } from '@/src/utils/ipfs'
 
 const LaunchListFragment = graphql`

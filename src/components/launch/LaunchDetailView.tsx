@@ -1,10 +1,11 @@
+import React from 'react'
 import { View } from 'reshaped'
 import { useLazyLoadQuery, useFragment } from 'react-relay'
 import { graphql } from 'relay-runtime'
 import LaunchToken from './LaunchToken'
 import LaunchContributionCard from './LaunchContributionCard'
-import type { LaunchDetailViewQuery } from '../../__generated__/LaunchDetailViewQuery.graphql'
-import type { LaunchDetailView_launch$key } from '../../__generated__/LaunchDetailView_launch.graphql'
+import type { LaunchDetailViewQuery } from '@/src/__generated__/LaunchDetailViewQuery.graphql'
+import type { LaunchDetailView_launch$key } from '@/src/__generated__/LaunchDetailView_launch.graphql'
 
 const LaunchDetailFragment = graphql`
   fragment LaunchDetailView_launch on Launch {

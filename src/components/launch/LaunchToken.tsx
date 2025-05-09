@@ -1,7 +1,8 @@
+import React from 'react'
 import { View, Text, Card, Image } from 'reshaped'
 import { useFragment } from 'react-relay'
 import { graphql } from 'relay-runtime'
-import type { LaunchToken_launch$key } from '../../__generated__/LaunchToken_launch.graphql'
+import type { LaunchToken_launch$key } from '@/src/__generated__/LaunchToken_launch.graphql'
 import { getIpfsGateway } from '@/src/utils/ipfs'
 
 const LaunchTokenFragment = graphql`

@@ -4,8 +4,8 @@ import { useSwap, useContribute, usePonderSDK, useRemainingToRaise } from '@pond
 import { formatEther, parseEther, type Address } from 'viem'
 import { useFragment, useLazyLoadQuery } from 'react-relay'
 import { graphql } from 'relay-runtime'
-import type { LaunchContributionCard_launch$key } from '../../__generated__/LaunchContributionCard_launch.graphql'
-import type { LaunchContributionCardQuery } from '../../__generated__/LaunchContributionCardQuery.graphql'
+import type { LaunchContributionCard_launch$key } from '@/src/__generated__/LaunchContributionCard_launch.graphql'
+import type { LaunchContributionCardQuery } from '@/src/__generated__/LaunchContributionCardQuery.graphql'
 import { getIpfsGateway } from '@/src/utils/ipfs'
 
 interface LaunchContributionCardProps {
