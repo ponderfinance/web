@@ -111,9 +111,6 @@ export class PriceChartService {
         
         if (metricSnapshots.length === 0) {
           console.log(`[DEBUG] No price metric snapshots found for token ${token.symbol}`);
-          
-          // Don't fall back to the old method using PriceSnapshots
-          console.error(`[DEBUG] No price metrics available in MongoDB. Please run the backfill script.`);
           return [];
         }
         
@@ -146,9 +143,6 @@ export class PriceChartService {
         
         if (dataPoints.length === 0) {
           console.log(`[DEBUG] No valid chart points from metric snapshots`);
-          
-          // Don't fall back to the old method using PriceSnapshots
-          console.error(`[DEBUG] No valid chart data could be created from metrics. Please run the backfill script.`);
           return [];
         }
         
@@ -166,9 +160,6 @@ export class PriceChartService {
         return sortedData;
       } catch (error) {
         console.error('[DEBUG] Error getting chart data from MongoDB:', error);
-        
-        // Don't fall back to using PriceSnapshots
-        console.error(`[DEBUG] Failed to fetch data from MongoDB. Please ensure the metrics data exists.`);
         return [];
       } finally {
         // Close MongoDB connection

@@ -331,14 +331,24 @@ export default function TokenDetailClient({ tokenAddress }: TokenDetailClientPro
   };
   
   // Handle loading state
-  if (!environment || isLoading) {
-    return <LoadingView />;
+  if (!environment) {
+    return (
+      <View direction="column" gap={6}>
+        <View height={400} align="center" justify="center">
+          <Text>Loading...</Text>
+        </View>
+      </View>
+    );
   }
   
-  // Handle error state
-  if (error || !token) {
-    return <ErrorView message={error || 'Token data unavailable'} />;
-  }
+  // Set default values for token if missing
+  const tokenData = token || { 
+    symbol: tokenAddress.slice(0, 6),
+    address: tokenAddress,
+    priceUSD: '0',
+    priceChange24h: 0,
+    imageURI: '/tokens/coin.svg'
+  };
   
   // Helper functions for formatting
   const formatLargeNumber = (value: string | null | undefined): string => {
@@ -364,17 +374,17 @@ export default function TokenDetailClient({ tokenAddress }: TokenDetailClientPro
   };
   
   // Parse and format token data
-  const priceUSD = parseFloat(token.priceUSD || '0');
-  const priceChangeColor = (token.priceChange24h || 0) >= 0 ? 'positive' : 'critical';
-  const priceChangePrefix = (token.priceChange24h || 0) >= 0 ? '+' : '';
-  const priceChangeDisplay = `${priceChangePrefix}${(token.priceChange24h || 0).toFixed(2)}%`;
+  const priceUSD = parseFloat(tokenData.priceUSD || '0');
+  const priceChangeColor = (tokenData.priceChange24h || 0) >= 0 ? 'positive' : 'critical';
+  const priceChangePrefix = (tokenData.priceChange24h || 0) >= 0 ? '+' : '';
+  const priceChangeDisplay = `${priceChangePrefix}${(tokenData.priceChange24h || 0).toFixed(2)}%`;
   
   // Format metrics
   const metrics = {
-    tvl: formatLargeNumber(token.tvl),
-    marketCap: formatLargeNumber(token.marketCap),
-    fdv: formatLargeNumber(token.fdv),
-    dayVolume: formatLargeNumber(token.volumeUSD24h)
+    tvl: formatLargeNumber(tokenData.tvl),
+    marketCap: formatLargeNumber(tokenData.marketCap),
+    fdv: formatLargeNumber(tokenData.fdv),
+    dayVolume: formatLargeNumber(tokenData.volumeUSD24h)
   };
 
   // Format tooltip for price chart
@@ -420,7 +430,7 @@ export default function TokenDetailClient({ tokenAddress }: TokenDetailClientPro
         </Link>
         <Text color="neutral-faded">›</Text>
         <Text variant="body-2" color="neutral">
-          {token.symbol || token.address.slice(0, 8)}
+          {tokenData.symbol || tokenData.address.slice(0, 8)}
         </Text>
       </View>
 
@@ -428,16 +438,16 @@ export default function TokenDetailClient({ tokenAddress }: TokenDetailClientPro
       <View direction="row" justify="space-between" align="center">
         <View direction="row" gap={3} align="center">
           <Image
-            src={getIpfsGateway(token.imageURI ?? '/tokens/coin.svg')}
+            src={getIpfsGateway(tokenData.imageURI ?? '/tokens/coin.svg')}
             height={8}
             width={8}
-            alt={`${token.name || token.address.slice(0, 10)} Token Image`}
+            alt={`${tokenData.name || tokenData.address.slice(0, 10)} Token Image`}
           />
           <Text variant="featured-2" weight="medium" color="neutral">
-            {token.name ? `${token.name}` : token.address.slice(0, 8)}
+            {tokenData.name ? `${tokenData.name}` : tokenData.address.slice(0, 8)}
           </Text>
           <Text variant="featured-2" weight="medium" color="neutral-faded">
-            {token.symbol}
+            {tokenData.symbol}
           </Text>
         </View>
       </View>
@@ -475,7 +485,7 @@ export default function TokenDetailClient({ tokenAddress }: TokenDetailClientPro
               <PriceChart
                 data={priceData}
                 type="area"
-                title={`${token.symbol} Price (USD)`}
+                title={`${tokenData.symbol} Price (USD)`}
                 height={400}
                 autoSize={true}
                 yAxisLabel="Price (USD)"
