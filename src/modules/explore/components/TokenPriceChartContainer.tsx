@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
-import { Text, View, Select } from 'reshaped'
+import { Text, View, Select, Skeleton } from 'reshaped'
 import { graphql, useFragment, useLazyLoadQuery, useQueryLoader } from 'react-relay'
 import PriceChart from './PriceChart'
 import { TokenPriceChartContainer_token$key } from '@/src/__generated__/TokenPriceChartContainer_token.graphql'
@@ -77,7 +77,7 @@ export default function TokenPriceChartContainer({
 
   // Return empty state if token data is missing
   if (!token || !tokenAddress) {
-    return <Text>No token data available</Text>
+    return <TokenChartSkeleton />
   }
 
   // Memoize the chart content to prevent unnecessary rerenders
@@ -97,6 +97,46 @@ export default function TokenPriceChartContainer({
       {chartContent}
     </View>
   )
+}
+
+// Chart skeleton component for loading states
+function TokenChartSkeleton() {
+  return (
+    <View direction="column" gap={16} height={400}>
+      {/* Chart title skeleton */}
+      <View direction="row" justify="space-between" align="center">
+        <Skeleton width={150} height={24} borderRadius="full" />
+        <Skeleton width={100} height={24} borderRadius="full" />
+      </View>
+      
+      {/* Chart area skeleton */}
+      <View flexGrow={1} position="relative">
+        <View position="absolute" width="100%" height="100%">
+          <View height="100%" width="100%" direction="column" justify="space-between">
+            {/* Y-axis labels */}
+            <View direction="row" width="100%" justify="space-between">
+              <Skeleton width={60} height={16} borderRadius="full" />
+              <Skeleton width={40} height={16} borderRadius="full" />
+            </View>
+            
+            {/* Chart lines */}
+            <View height={1} width="100%" backgroundColor="neutral-faded" />
+            <View height={1} width="100%" backgroundColor="neutral-faded" />
+            <View height={1} width="100%" backgroundColor="neutral-faded" />
+            <View height={1} width="100%" backgroundColor="neutral-faded" />
+            
+            {/* X-axis labels */}
+            <View direction="row" width="100%" justify="space-between">
+              <Skeleton width={50} height={16} borderRadius="full" />
+              <Skeleton width={50} height={16} borderRadius="full" />
+              <Skeleton width={50} height={16} borderRadius="full" />
+              <Skeleton width={50} height={16} borderRadius="full" />
+            </View>
+          </View>
+        </View>
+      </View>
+    </View>
+  );
 }
 
 // Separate component for chart content to handle data loading
@@ -184,18 +224,14 @@ function TokenPriceChartContent({
   if (!areParamsValid) {
     return (
       <View height={400} align="center" justify="center">
-        <Text>Cannot display price chart: invalid parameters</Text>
+        <Text align="center">Cannot display chart for {tokenSymbol}:<br />Invalid parameters</Text>
       </View>
     );
   }
   
   // If query reference is not ready, show loading state
   if (!queryRef) {
-    return (
-      <View height={400} align="center" justify="center">
-        <Text>Loading price data for {tokenSymbol}...</Text>
-      </View>
-    );
+    return <TokenChartSkeleton />;
   }
   
   return (
@@ -249,7 +285,7 @@ function TokenPriceChartRenderer({
     return {
       time: point.time,
       // Use viem's formatUnits to convert from wei to token units
-      value: Number(formatUnits(BigInt(Math.round(point.value)), decimals))
+      value: Number(point.value)
     };
   });
 

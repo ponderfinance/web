@@ -11,11 +11,11 @@ export interface ChartDataPoint {
 }
 
 // MongoDB connection URL
-const MONGODB_URI = process.env.MONGO_URI || "mongodb://localhost:27017/ponder";
+const MONGODB_URI = process.env.MONGO_URI || process.env.MONGODB_URI || "mongodb://localhost:27017/ponder";
 
 // Get MongoDB client
 const getMongoClient = async () => {
-  console.log(`[DEBUG] Connecting to MongoDB with URI: ${process.env.MONGO_URI ? 'exists' : 'missing'}`);
+  console.log(`[DEBUG] Connecting to MongoDB with URI: ${process.env.MONGO_URI ? 'MONGO_URI exists' : process.env.MONGODB_URI ? 'MONGODB_URI exists' : 'missing'}`);
   const client = new MongoClient(MONGODB_URI);
   await client.connect();
   return client;
@@ -66,25 +66,32 @@ export class PriceChartService {
       // Calculate time range based on timeframe
       const now = Math.floor(Date.now() / 1000);
       let fromTimestamp;
+      let maxDataPoints; // Number of data points to sample for this timeframe
       
       switch (timeframe) {
         case '1h':
           fromTimestamp = now - 3600;
+          maxDataPoints = 60; // One point per minute
           break;
         case '1d':
           fromTimestamp = now - 86400;
+          maxDataPoints = 96; // One point per 15 minutes
           break;
         case '1w':
           fromTimestamp = now - 604800;
+          maxDataPoints = 168; // One point per hour
           break;
         case '1m':
           fromTimestamp = now - 2592000;
+          maxDataPoints = 120; // One point per ~6 hours
           break;
         case '1y':
           fromTimestamp = now - 31536000;
+          maxDataPoints = 365; // One point per day
           break;
         default:
           fromTimestamp = 0; // Start from the first available snapshot
+          maxDataPoints = limit || 100;
       }
       
       console.log(`[DEBUG] Time range: from ${new Date(fromTimestamp * 1000).toISOString()} to ${new Date(now * 1000).toISOString()}`);
@@ -104,7 +111,6 @@ export class PriceChartService {
           timestamp: { $gte: fromTimestamp },
         })
         .sort({ timestamp: 1 })
-        .limit(limit)
         .toArray();
         
         console.log(`[DEBUG] Found ${metricSnapshots.length} price metric snapshots for token ${token.symbol}`);
@@ -149,15 +155,31 @@ export class PriceChartService {
         // Explicitly sort by timestamp (ascending) to ensure proper order
         const sortedData = dataPoints.sort((a, b) => Number(a.time) - Number(b.time));
         
+        // Determine whether to sample data to avoid overwhelming the chart
+        let processedData = sortedData;
+        
+        if (sortedData.length > maxDataPoints && maxDataPoints > 0) {
+          // Sample data based on timeframe
+          processedData = this.sampleDataPoints(sortedData, maxDataPoints, timeframe);
+          console.log(`[DEBUG] Sampled ${processedData.length} points from ${sortedData.length} for ${timeframe} timeframe`);
+        }
+        
+        // Filter out consecutive data points with the same price to avoid flat lines
+        // But only for timeframes longer than a day
+        if (['1w', '1m', '1y'].includes(timeframe)) {
+          processedData = this.removeRedundantPricePoints(processedData);
+          console.log(`[DEBUG] After removing redundant prices: ${processedData.length} points`);
+        }
+        
         // Log the data range for debugging
-        if (sortedData.length > 0) {
-          const firstPoint = sortedData[0];
-          const lastPoint = sortedData[sortedData.length - 1];
+        if (processedData.length > 0) {
+          const firstPoint = processedData[0];
+          const lastPoint = processedData[processedData.length - 1];
           console.log(`[DEBUG] First point: ${new Date(firstPoint.time * 1000).toISOString()} - $${firstPoint.value}`);
           console.log(`[DEBUG] Last point: ${new Date(lastPoint.time * 1000).toISOString()} - $${lastPoint.value}`);
         }
         
-        return sortedData;
+        return processedData;
       } catch (error) {
         console.error('[DEBUG] Error getting chart data from MongoDB:', error);
         return [];
@@ -171,6 +193,114 @@ export class PriceChartService {
       console.error('[DEBUG] Error in getTokenPriceChartData:', error);
       return [];
     }
+  }
+  
+  /**
+   * Sample data points to get a representative subset for the chart
+   * This is especially important for longer timeframes
+   */
+  private static sampleDataPoints(
+    dataPoints: ChartDataPoint[], 
+    maxPoints: number,
+    timeframe: string
+  ): ChartDataPoint[] {
+    if (dataPoints.length <= maxPoints) {
+      return dataPoints;
+    }
+    
+    // For shorter timeframes, prioritize recent data
+    if (['1h', '1d', '1w'].includes(timeframe)) {
+      // Take all points from the last 25% of the timeframe
+      const cutoffIndex = Math.floor(dataPoints.length * 0.75);
+      const recentPoints = dataPoints.slice(cutoffIndex);
+      
+      // If we have fewer recent points than max, add some earlier points
+      if (recentPoints.length < maxPoints) {
+        const remainingPoints = maxPoints - recentPoints.length;
+        const samplingInterval = cutoffIndex / remainingPoints;
+        
+        const earlierPoints = [];
+        for (let i = 0; i < remainingPoints; i++) {
+          const index = Math.floor(i * samplingInterval);
+          if (index < cutoffIndex) {
+            earlierPoints.push(dataPoints[index]);
+          }
+        }
+        
+        return [...earlierPoints, ...recentPoints];
+      }
+      
+      // Sample the recent points if there are too many
+      if (recentPoints.length > maxPoints) {
+        const samplingInterval = recentPoints.length / maxPoints;
+        const sampledPoints = [];
+        
+        for (let i = 0; i < maxPoints; i++) {
+          const index = Math.floor(i * samplingInterval);
+          if (index < recentPoints.length) {
+            sampledPoints.push(recentPoints[index]);
+          }
+        }
+        
+        // Always include the most recent point
+        if (sampledPoints.length > 0 && 
+            recentPoints[recentPoints.length - 1].time !== 
+            sampledPoints[sampledPoints.length - 1].time) {
+          sampledPoints.push(recentPoints[recentPoints.length - 1]);
+        }
+        
+        return sampledPoints;
+      }
+      
+      return recentPoints;
+    }
+    
+    // For longer timeframes, evenly sample across the entire range
+    const samplingInterval = dataPoints.length / maxPoints;
+    const sampledPoints = [];
+    
+    for (let i = 0; i < maxPoints; i++) {
+      const index = Math.floor(i * samplingInterval);
+      if (index < dataPoints.length) {
+        sampledPoints.push(dataPoints[index]);
+      }
+    }
+    
+    // Always include the most recent point
+    if (sampledPoints.length > 0 && 
+        dataPoints[dataPoints.length - 1].time !== 
+        sampledPoints[sampledPoints.length - 1].time) {
+      sampledPoints.push(dataPoints[dataPoints.length - 1]);
+    }
+    
+    return sampledPoints;
+  }
+  
+  /**
+   * Remove redundant price points to avoid flat lines
+   * This keeps points where the price changes and removes in-between points with the same price
+   */
+  private static removeRedundantPricePoints(dataPoints: ChartDataPoint[]): ChartDataPoint[] {
+    if (dataPoints.length <= 2) return dataPoints;
+    
+    const result: ChartDataPoint[] = [dataPoints[0]]; // Always keep the first point
+    
+    for (let i = 1; i < dataPoints.length - 1; i++) {
+      const prevValue = result[result.length - 1].value;
+      const currValue = dataPoints[i].value;
+      const nextValue = dataPoints[i + 1].value;
+      
+      // Keep this point if it's different from previous OR next is different
+      if (Math.abs(prevValue - currValue) > 0.000001 || 
+          Math.abs(currValue - nextValue) > 0.000001) {
+        result.push(dataPoints[i]);
+      }
+    }
+    
+    // Always keep the last point
+    result.push(dataPoints[dataPoints.length - 1]);
+    
+    return result;
   }
   
   /**
@@ -479,5 +609,23 @@ export class PriceChartService {
       console.error('[DEBUG] Error finding best price data pair:', error);
       return null;
     }
+  }
+
+  /**
+   * Get a list of stablecoin addresses
+   */
+  static getStablecoinAddresses(): string[] {
+    // Hardcoded list of known stablecoin addresses
+    return [
+      '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48'.toLowerCase(), // USDC
+      '0xdac17f958d2ee523a2206206994597c13d831ec7'.toLowerCase(), // USDT
+      '0x6b175474e89094c44da98b954eedeac495271d0f'.toLowerCase(), // DAI
+      '0x4fabb145d64652a948d72533023f6e7a623c7c53'.toLowerCase(), // BUSD
+      '0x0000000000085d4780b73119b644ae5ecd22b376'.toLowerCase(), // TUSD
+      '0x8e870d67f660d95d5be530380d0ec0bd388289e1'.toLowerCase(), // PAX
+      '0x57ab1ec28d129707052df4df418d58a2d46d5f51'.toLowerCase(), // sUSD
+      '0x056fd409e1d7a124bd7017459dfea2f387b6d5cd'.toLowerCase(), // GUSD
+      // Add any Kuji-specific stablecoins
+    ];
   }
 } 
