@@ -477,22 +477,23 @@ interface MongoResponse {
 }
 
 // Add MongoDB connection setup
-const mongoUri = process.env.MONGO_URI || process.env.MONGO_URI_TESTNET;
+const mongoUri = process.env.MONGO_URI || "mongodb://localhost:27017/ponder";
 if (!mongoUri) {
   console.error('MongoDB URI is not defined. Please check your environment variables.');
 }
-const mongoClient = new MongoClient(mongoUri || '');
+const mongoClient = new MongoClient(mongoUri);
 let db: any;
 
 // Initialize MongoDB connection
 async function initMongoDB() {
-  if (!db && mongoUri) {
+  if (!db) {
     try {
       await mongoClient.connect();
-      db = mongoClient.db('ponder_indexer');
+      db = mongoClient.db();
       console.log('Connected to MongoDB for direct queries');
     } catch (error) {
       console.error('Failed to connect to MongoDB:', error);
+      // Don't throw here, just return null and let the caller handle it
     }
   }
   return db;

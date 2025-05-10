@@ -11,14 +11,18 @@ export interface ChartDataPoint {
 }
 
 // MongoDB connection URL
-const MONGODB_URI = process.env.MONGO_URI || process.env.MONGODB_URI || "mongodb://localhost:27017/ponder";
+const MONGODB_URI = process.env.MONGO_URI || "mongodb://localhost:27017/ponder";
 
 // Get MongoDB client
 const getMongoClient = async () => {
-  console.log(`[DEBUG] Connecting to MongoDB with URI: ${process.env.MONGO_URI ? 'MONGO_URI exists' : process.env.MONGODB_URI ? 'MONGODB_URI exists' : 'missing'}`);
-  const client = new MongoClient(MONGODB_URI);
-  await client.connect();
-  return client;
+  try {
+    const client = new MongoClient(MONGODB_URI);
+    await client.connect();
+    return client;
+  } catch (error) {
+    console.error(`[ERROR] Failed to connect to MongoDB: ${error}`);
+    throw error;
+  }
 };
 
 /**

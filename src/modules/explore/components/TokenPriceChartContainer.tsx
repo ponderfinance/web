@@ -105,18 +105,18 @@ function TokenChartSkeleton() {
     <View direction="column" gap={16} height={400}>
       {/* Chart title skeleton */}
       <View direction="row" justify="space-between" align="center">
-        <Skeleton width={150} height={24} borderRadius="full" />
-        <Skeleton width={100} height={24} borderRadius="full" />
+        <Skeleton width={150} height={24} borderRadius="circular" />
+        <Skeleton width={100} height={24} borderRadius="circular" />
       </View>
       
       {/* Chart area skeleton */}
-      <View flexGrow={1} position="relative">
+      <View grow={true} position="relative">
         <View position="absolute" width="100%" height="100%">
           <View height="100%" width="100%" direction="column" justify="space-between">
             {/* Y-axis labels */}
             <View direction="row" width="100%" justify="space-between">
-              <Skeleton width={60} height={16} borderRadius="full" />
-              <Skeleton width={40} height={16} borderRadius="full" />
+              <Skeleton width={60} height={16} borderRadius="circular" />
+              <Skeleton width={40} height={16} borderRadius="circular" />
             </View>
             
             {/* Chart lines */}
@@ -127,10 +127,10 @@ function TokenChartSkeleton() {
             
             {/* X-axis labels */}
             <View direction="row" width="100%" justify="space-between">
-              <Skeleton width={50} height={16} borderRadius="full" />
-              <Skeleton width={50} height={16} borderRadius="full" />
-              <Skeleton width={50} height={16} borderRadius="full" />
-              <Skeleton width={50} height={16} borderRadius="full" />
+              <Skeleton width={50} height={16} borderRadius="circular" />
+              <Skeleton width={50} height={16} borderRadius="circular" />
+              <Skeleton width={50} height={16} borderRadius="circular" />
+              <Skeleton width={50} height={16} borderRadius="circular" />
             </View>
           </View>
         </View>
@@ -222,11 +222,7 @@ function TokenPriceChartContent({
   
   // If parameters are invalid, show error state
   if (!areParamsValid) {
-    return (
-      <View height={400} align="center" justify="center">
-        <Text align="center">Cannot display chart for {tokenSymbol}:<br />Invalid parameters</Text>
-      </View>
-    );
+    return <TokenChartSkeleton />;
   }
   
   // If query reference is not ready, show loading state
@@ -271,11 +267,7 @@ function TokenPriceChartRenderer({
 
   // More robust empty state checking
   if (!tokenPriceChart || tokenPriceChart.length === 0) {
-    return (
-      <View height={400} align="center" justify="center">
-        <Text>No price data available for {tokenSymbol}</Text>
-      </View>
-    )
+    return <TokenChartSkeleton />;
   }
 
   // Create a clean copy of the data to avoid readonly issues
