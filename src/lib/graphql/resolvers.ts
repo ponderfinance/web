@@ -1507,16 +1507,15 @@ export const resolvers = {
         }
       }
 
-      // Get latest price data
-      const priceData = await TokenPriceService.getTokenPricesUSDBulk([token.id]);
-      let currentPrice = priceData[token.id] || token.priceUSD || '0';
-      console.log(`[TOKEN] Current price: ${currentPrice} for ${token.symbol}`);
-      
-      // Removed hardcoded stablecoin price handling - prices derived from pairs
-      
       // Always calculate TVL fresh using our utility function
       const tvl = await calculateTokenTVL(token, ctx.prisma);
       console.log(`[TOKEN] Final calculated TVL: ${tvl} for ${token.symbol}`);
+
+      // Get the latest price data from the price service
+      // This ensures both token list and token detail pages use the same price data source
+      const priceData = await TokenPriceService.getTokenPricesUSDBulk([token.id]);
+      const currentPrice = priceData[token.id] || token.priceUSD || '0';
+      console.log(`[TOKEN] Final price from service: ${currentPrice} for ${token.symbol}`);
 
       // Ensure all fields are explicitly returned, especially id, imageURI, and symbol
       return {
@@ -1651,6 +1650,26 @@ export const resolvers = {
                 .catch(err => {
                   console.error(`[TOKENS] Error updating stablecoin price:`, err);
                 });
+            }
+          }
+        }
+        
+        // Ensure all tokens have the latest price data - including in list view
+        const tokenIds = edges.map(edge => edge.node.id);
+        if (tokenIds.length > 0) {
+          console.log(`[TOKENS] Getting latest prices for ${tokenIds.length} tokens in list view`);
+          
+          // Get prices in bulk for better performance
+          const priceData = await TokenPriceService.getTokenPricesUSDBulk(tokenIds);
+          
+          // Update tokens with latest prices
+          for (const edge of edges) {
+            const token = edge.node;
+            const latestPrice = priceData[token.id];
+            
+            if (latestPrice && (!token.priceUSD || latestPrice !== token.priceUSD)) {
+              console.log(`[TOKENS] Updated ${token.symbol || token.id} price from ${token.priceUSD} to ${latestPrice}`);
+              token.priceUSD = latestPrice;
             }
           }
         }

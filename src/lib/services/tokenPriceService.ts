@@ -1132,9 +1132,9 @@ export const TokenPriceService = {
    */
   async getTokenPriceFromAPI(tokenId: string): Promise<number> {
     try {
-      // This is where we would make an API call to the indexer's price service
-      // For now we just pass through to the GraphQL resolver which will get the price
-      return parseFloat(await getTokenPriceFromAPI(tokenId) || '0');
+      // Use our existing reliable method to get the token price from the database
+      // This ensures consistency across all token price data sources
+      return await this.getTokenPriceUSD(tokenId);
     } catch (error) {
       console.error(`Error fetching price for token ${tokenId}:`, error);
       return 0;
@@ -1186,13 +1186,21 @@ export const TokenPriceService = {
 }
 
 /**
- * Helper function to get token price from API
- * This is just a placeholder - in a real app this would call an API endpoint
+ * Helper function to get token price directly from database
  */
 async function getTokenPriceFromAPI(tokenId: string): Promise<string | null> {
-  // In a real app, this would be an API call
-  // For now, just simulate by returning the token data
-  return Promise.resolve('0');
+  try {
+    // Get price directly from database for consistency
+    const token = await prismaClient.token.findUnique({
+      where: { id: tokenId },
+      select: { priceUSD: true }
+    });
+    
+    return token?.priceUSD || null;
+  } catch (error) {
+    console.error(`Error getting token price from database for ${tokenId}:`, error);
+    return null;
+  }
 }
 
 export default TokenPriceService;
