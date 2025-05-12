@@ -1,7 +1,14 @@
 'use client'
 
 import React, { createContext, useContext, useEffect, useState } from 'react'
-import { initRedisSubscriber, onMetricsUpdated, onPairUpdated, onTokenUpdated } from '@/src/lib/redis/subscriber'
+import { 
+  initRedisSubscriber, 
+  onMetricsUpdated, 
+  onTokenUpdated, 
+  onPairUpdated, 
+  closeRedisSubscriber,
+  getEventEmitter
+} from '@/src/lib/redis/subscriber'
 
 // Define the context type
 type RedisSubscriberContextType = {
@@ -39,39 +46,60 @@ export function RedisSubscriberProvider({ children }: { children: React.ReactNod
     if (typeof window === 'undefined' || isInitialized) return
     
     console.log('Initializing Redis subscriber...')
+    
+    // Define our handler functions first so we can reference them in cleanup
+    const metricsHandler = (data: any) => {
+      console.log('RedisSubscriber: received metrics update', data)
+      setMetricsLastUpdated(data.timestamp || Date.now())
+    }
+    
+    const pairHandler = (data: any) => {
+      console.log('RedisSubscriber: received pair update', data)
+      if (data.entityId) {
+        setPairLastUpdated(prev => ({
+          ...prev,
+          [data.entityId]: data.timestamp || Date.now()
+        }))
+      }
+    }
+    
+    const tokenHandler = (data: any) => {
+      console.log('RedisSubscriber: received token update', data)
+      if (data.entityId) {
+        setTokenLastUpdated(prev => ({
+          ...prev,
+          [data.entityId]: data.timestamp || Date.now()
+        }))
+      }
+    }
+    
     try {
       // Initialize Redis subscriber
       initRedisSubscriber()
       
       // Set up event handlers
-      onMetricsUpdated((data) => {
-        console.log('RedisSubscriber: received metrics update', data)
-        setMetricsLastUpdated(data.timestamp || Date.now())
-      })
-      
-      onPairUpdated((data) => {
-        console.log('RedisSubscriber: received pair update', data)
-        if (data.entityId) {
-          setPairLastUpdated(prev => ({
-            ...prev,
-            [data.entityId]: data.timestamp || Date.now()
-          }))
-        }
-      })
-      
-      onTokenUpdated((data) => {
-        console.log('RedisSubscriber: received token update', data)
-        if (data.entityId) {
-          setTokenLastUpdated(prev => ({
-            ...prev,
-            [data.entityId]: data.timestamp || Date.now()
-          }))
-        }
-      })
+      onMetricsUpdated(metricsHandler)
+      onPairUpdated(pairHandler)
+      onTokenUpdated(tokenHandler)
       
       setIsInitialized(true)
     } catch (error) {
       console.error('Error initializing Redis subscriber:', error)
+    }
+    
+    // Return cleanup function to properly remove listeners when component unmounts
+    return () => {
+      console.log('Cleaning up Redis subscriber event listeners')
+      const emitter = getEventEmitter()
+      
+      // Remove our specific event listeners
+      emitter.removeListener('metrics:updated', metricsHandler)
+      emitter.removeListener('pair:updated', pairHandler)
+      emitter.removeListener('token:updated', tokenHandler)
+      
+      // If this is the only component using the subscriber, we can close the connection
+      // Consider using a ref counter pattern if multiple components might use this
+      closeRedisSubscriber()
     }
   }, [isInitialized, refreshCounter])
   
