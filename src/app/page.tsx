@@ -12,7 +12,7 @@ export default function Home() {
       <View paddingBottom={16} textAlign="center" align="center" grow={true}>
         <View paddingBottom={{ s: 2, m: 8 }} maxWidth={{ s: '240px', m: '380px' }}>
           <Text variant={{ s: 'title-6', m: 'title-3' }} align="center" weight="regular">
-            trade, pool, <em>and launch.</em>
+            trade, pool, <em>and lend.</em>
           </Text>
         </View>
 
