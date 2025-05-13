@@ -147,8 +147,8 @@ async function checkDatabaseHealth(): Promise<{
   const startTime = performance.now();
   
   try {
-    // Simple query to check if database is responsive
-    await prisma.$queryRaw`SELECT 1`;
+    // Use a simple findFirst query instead of $queryRaw
+    await prisma.pair.findFirst({ take: 1 });
     
     return {
       status: 'ok',

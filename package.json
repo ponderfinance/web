@@ -19,7 +19,7 @@
     "@pinata/sdk": "^2.1.0",
     "@ponderfinance/dex": "^1.0.16",
     "@ponderfinance/sdk": "^1.0.38",
-    "@prisma/client": "^6.4.1",
+    "@prisma/client": "^4.16.2",
     "@privy-io/react-auth": "2.6.1",
     "@tanstack/react-query": "^5.62.2",
     "@types/mongodb": "^4.0.7",
@@ -68,7 +68,7 @@
     "postcss": "^8.4.49",
     "prettier": "^3.3.3",
     "prettier-plugin-tailwindcss": "^0.6.8",
-    "prisma": "^6.4.1",
+    "prisma": "^4.16.2",
     "relay-compiler": "^14.1.0",
     "tailwindcss": "^3.4.1",
     "typescript": "^5"

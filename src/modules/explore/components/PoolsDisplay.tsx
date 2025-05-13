@@ -1,6 +1,6 @@
 'use client'
 
-import React from 'react'
+import React, { useEffect } from 'react'
 import { View, Text, Actionable } from 'reshaped'
 import { PoolsPageQuery } from '@/src/__generated__/PoolsPageQuery.graphql'
 import { TokenPair } from '@/src/components/TokenPair'
@@ -19,6 +19,17 @@ const formatCurrency = (value: number | string | null | undefined): string => {
   if (numValue >= 1e3) return `$${(numValue / 1e3).toFixed(1)}K`
 
   return `$${numValue.toFixed(2)}`
+}
+
+// Helper to format percentage values
+const formatPercentage = (value: number | string | null | undefined): string => {
+  if (value === null || value === undefined) return '0%'
+
+  const numValue = typeof value === 'string' ? parseFloat(value) : value
+
+  if (numValue === 0) return '0%'
+  
+  return `${numValue.toFixed(2)}%`
 }
 
 // Define the component props
@@ -47,14 +58,12 @@ export const PoolsDisplay: React.FC<PoolsDisplayProps> = ({
     }
   }
 
-  // Debug: Log the token data to see what's available
-  React.useEffect(() => {
+  useEffect(() => {
     if (data?.pairs?.edges?.length > 0) {
-      const firstPair = data.pairs.edges[0].node;
-      console.log('DEBUG - Pool token0 data:', firstPair.token0);
-      console.log('DEBUG - Pool token1 data:', firstPair.token1);
-      console.log('DEBUG - Pool token0 fragmentRefs:', (firstPair.token0 as any)['$fragmentSpreads']);
-      console.log('DEBUG - Pool token1 fragmentRefs:', (firstPair.token1 as any)['$fragmentSpreads']);
+      // Log detailed data about the first few pairs for debugging
+      data.pairs.edges.slice(0, 3).forEach((edge, index) => {
+        const pair = edge.node;
+      });
     }
   }, [data]);
 
@@ -88,6 +97,30 @@ export const PoolsDisplay: React.FC<PoolsDisplayProps> = ({
             </View>
           </Actionable>
         </View.Item>
+        
+        <View.Item columns={1}>
+          <Text color="neutral-faded" weight="medium">
+            Pool APR
+          </Text>
+        </View.Item>
+        
+        <View.Item columns={1}>
+          <Text color="neutral-faded" weight="medium">
+            Reward APR
+          </Text>
+        </View.Item>
+        
+        <View.Item columns={2}>
+          <Text color="neutral-faded" weight="medium">
+            1D vol
+          </Text>
+        </View.Item>
+        
+        <View.Item columns={2}>
+          <Text color="neutral-faded" weight="medium">
+            30D vol
+          </Text>
+        </View.Item>
       </View>
 
       {/* Table Body */}
@@ -107,13 +140,34 @@ export const PoolsDisplay: React.FC<PoolsDisplayProps> = ({
 
             <View.Item columns={3}>
               <View direction="row" align="center" gap={2}>
-                {/*<Link href={`/explore/pools/${node.address}`}>*/}
-                <TokenPair tokenA={node.token0} tokenB={node.token1} size="small" />
-                {/*</Link>*/}
+                <Link href={`/explore/pools/${node.address}`}>
+                  <TokenPair tokenA={node.token0} tokenB={node.token1} size="small" />
+                </Link>
               </View>
             </View.Item>
+            
             <View.Item columns={2}>
               <Text variant="body-2">{formatCurrency(node.tvl || node.reserveUSD)}</Text>
+            </View.Item>
+            
+            <View.Item columns={1}>
+              <Text variant="body-2" color={node.poolAPR && node.poolAPR > 0 ? "positive" : "neutral"}>
+                {formatPercentage(node.poolAPR)}
+              </Text>
+            </View.Item>
+            
+            <View.Item columns={1}>
+              <Text variant="body-2" color={node.rewardAPR && node.rewardAPR > 0 ? "positive" : "neutral"}>
+                {formatPercentage(node.rewardAPR)}
+              </Text>
+            </View.Item>
+            
+            <View.Item columns={2}>
+              <Text variant="body-2">{formatCurrency(node.volume24h)}</Text>
+            </View.Item>
+            
+            <View.Item columns={2}>
+              <Text variant="body-2">{formatCurrency(node.volume30d)}</Text>
             </View.Item>
           </View>
         ))}

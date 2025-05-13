@@ -1,5 +1,5 @@
 /**
- * @generated SignedSource<<1147290c0403badbe4383362f5208b05>>
+ * @generated SignedSource<<018a9fa68135c8f1284fc15f3246c549>>
  * @lightSyntaxTransform
  * @nogrep
  */
@@ -23,7 +23,9 @@ export type PoolsPageQuery$data = {
       readonly node: {
         readonly address: string;
         readonly id: string;
+        readonly poolAPR: number | null;
         readonly reserveUSD: string;
+        readonly rewardAPR: number | null;
         readonly token0: {
           readonly address: string;
           readonly decimals: number | null;
@@ -39,6 +41,8 @@ export type PoolsPageQuery$data = {
           readonly " $fragmentSpreads": FragmentRefs<"TokenPairFragment">;
         };
         readonly tvl: number;
+        readonly volume24h: string | null;
+        readonly volume30d: string | null;
       };
     }>;
     readonly pageInfo: {
@@ -144,6 +148,34 @@ v8 = {
 v9 = {
   "alias": null,
   "args": null,
+  "kind": "ScalarField",
+  "name": "poolAPR",
+  "storageKey": null
+},
+v10 = {
+  "alias": null,
+  "args": null,
+  "kind": "ScalarField",
+  "name": "rewardAPR",
+  "storageKey": null
+},
+v11 = {
+  "alias": null,
+  "args": null,
+  "kind": "ScalarField",
+  "name": "volume24h",
+  "storageKey": null
+},
+v12 = {
+  "alias": null,
+  "args": null,
+  "kind": "ScalarField",
+  "name": "volume30d",
+  "storageKey": null
+},
+v13 = {
+  "alias": null,
+  "args": null,
   "concreteType": "PageInfo",
   "kind": "LinkedField",
   "name": "pageInfo",
@@ -166,14 +198,14 @@ v9 = {
   ],
   "storageKey": null
 },
-v10 = {
+v14 = {
   "alias": null,
   "args": null,
   "kind": "ScalarField",
   "name": "totalCount",
   "storageKey": null
 },
-v11 = [
+v15 = [
   (v2/*: any*/),
   (v3/*: any*/),
   (v4/*: any*/),
@@ -247,15 +279,19 @@ return {
                     "storageKey": null
                   },
                   (v7/*: any*/),
-                  (v8/*: any*/)
+                  (v8/*: any*/),
+                  (v9/*: any*/),
+                  (v10/*: any*/),
+                  (v11/*: any*/),
+                  (v12/*: any*/)
                 ],
                 "storageKey": null
               }
             ],
             "storageKey": null
           },
-          (v9/*: any*/),
-          (v10/*: any*/)
+          (v13/*: any*/),
+          (v14/*: any*/)
         ],
         "storageKey": null
       }
@@ -302,7 +338,7 @@ return {
                     "kind": "LinkedField",
                     "name": "token0",
                     "plural": false,
-                    "selections": (v11/*: any*/),
+                    "selections": (v15/*: any*/),
                     "storageKey": null
                   },
                   {
@@ -312,35 +348,39 @@ return {
                     "kind": "LinkedField",
                     "name": "token1",
                     "plural": false,
-                    "selections": (v11/*: any*/),
+                    "selections": (v15/*: any*/),
                     "storageKey": null
                   },
                   (v7/*: any*/),
-                  (v8/*: any*/)
+                  (v8/*: any*/),
+                  (v9/*: any*/),
+                  (v10/*: any*/),
+                  (v11/*: any*/),
+                  (v12/*: any*/)
                 ],
                 "storageKey": null
               }
             ],
             "storageKey": null
           },
-          (v9/*: any*/),
-          (v10/*: any*/)
+          (v13/*: any*/),
+          (v14/*: any*/)
         ],
         "storageKey": null
       }
     ]
   },
   "params": {
-    "cacheID": "97f23a911f8715e4e939c003e82863f3",
+    "cacheID": "7fb97308bf8988af4e29bd94ca0e97ea",
     "id": null,
     "metadata": {},
     "name": "PoolsPageQuery",
     "operationKind": "query",
-    "text": "query PoolsPageQuery(\n  $first: Int!\n  $orderBy: PairOrderBy!\n  $orderDirection: OrderDirection!\n) {\n  pairs(first: $first, orderBy: $orderBy, orderDirection: $orderDirection) {\n    edges {\n      node {\n        id\n        address\n        token0 {\n          id\n          address\n          symbol\n          decimals\n          ...TokenPairFragment\n        }\n        token1 {\n          id\n          address\n          symbol\n          decimals\n          ...TokenPairFragment\n        }\n        tvl\n        reserveUSD\n      }\n    }\n    pageInfo {\n      hasNextPage\n      endCursor\n    }\n    totalCount\n  }\n}\n\nfragment TokenPairFragment on Token {\n  id\n  address\n  name\n  symbol\n  decimals\n  imageURI\n}\n"
+    "text": "query PoolsPageQuery(\n  $first: Int!\n  $orderBy: PairOrderBy!\n  $orderDirection: OrderDirection!\n) {\n  pairs(first: $first, orderBy: $orderBy, orderDirection: $orderDirection) {\n    edges {\n      node {\n        id\n        address\n        token0 {\n          id\n          address\n          symbol\n          decimals\n          ...TokenPairFragment\n        }\n        token1 {\n          id\n          address\n          symbol\n          decimals\n          ...TokenPairFragment\n        }\n        tvl\n        reserveUSD\n        poolAPR\n        rewardAPR\n        volume24h\n        volume30d\n      }\n    }\n    pageInfo {\n      hasNextPage\n      endCursor\n    }\n    totalCount\n  }\n}\n\nfragment TokenPairFragment on Token {\n  id\n  address\n  name\n  symbol\n  decimals\n  imageURI\n}\n"
   }
 };
 })();
 
-(node as any).hash = "a55610057d8f8c78cd105f67fef1bf89";
+(node as any).hash = "e2c1304874ecc7eb37bc5efef3073385";
 
 export default node;

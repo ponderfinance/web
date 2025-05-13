@@ -206,6 +206,7 @@ type Pair {
   tvl: Float!
   reserveUSD: String!
   poolAPR: Float
+  rewardAPR: Float
   volume1h: String
   volume24h: String
   volume7d: String

@@ -7,7 +7,8 @@ import Redis from 'ioredis';
 export const CACHE_PREFIXES = {
   PAIR: 'pair:',
   TOKEN: 'token:',
-  PROTOCOL: 'protocol:'
+  PROTOCOL: 'protocol:',
+  PAIR_METRICS: 'pair_metrics:'
 };
 
 export const CACHE_TTLS = {

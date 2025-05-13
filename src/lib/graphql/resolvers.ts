@@ -1216,7 +1216,46 @@ export const resolvers = {
     },
     
     volume7d: async (parent: any, _args: any, { prisma }: Context) => {
-      return parent.volume7d || '0'
+      console.log(`volume7d for pair ${parent.address}: ${parent.volume7d}`);
+      
+      try {
+        // Using Prisma directly to query the pair
+        const pairFromDB = await prisma.pair.findUnique({
+          where: { address: parent.address.toLowerCase() }
+        });
+        
+        console.log(`Pair from Prisma volume7d: ${pairFromDB?.volume7d}`);
+        
+        // Try direct MongoDB query if possible
+        try {
+          const prismaAny = prisma as any;
+          if (prismaAny._client?.db) {
+            const collection = prismaAny._client.db().collection('Pair');
+            const pairFromMongo = await collection.findOne({ address: parent.address.toLowerCase() });
+            console.log(`MongoDB pair volume7d: ${pairFromMongo?.volume7d}`);
+            
+            // If MongoDB has it but parent doesn't, use MongoDB's value
+            if (pairFromMongo?.volume7d && (!parent.volume7d || parent.volume7d === '0')) {
+              console.log(`Using MongoDB volume7d value: ${pairFromMongo.volume7d}`);
+              return pairFromMongo.volume7d;
+            }
+          }
+        } catch (error) {
+          console.log(`Direct MongoDB query failed: ${error instanceof Error ? error.message : String(error)}`);
+        }
+        
+        // Return the value from parent if it exists
+        if (parent.volume7d) {
+          return parent.volume7d;
+        } else if (pairFromDB?.volume7d) {
+          return pairFromDB.volume7d;
+        }
+        
+        return '0';
+      } catch (error) {
+        console.error('Error in volume7d resolver:', error);
+        return parent.volume7d || '0';
+      }
     },
     
     volume30d: async (parent: any, _args: any, { prisma }: Context) => {
@@ -1406,7 +1445,76 @@ export const resolvers = {
     
     // New volume-related resolvers
     poolAPR: async (parent: any, _args: any, { prisma }: Context) => {
-      return parent.poolAPR || 0
+      try {
+        console.log(`Resolving poolAPR for pair ${parent.address}`);
+        
+        // Try to get from Redis first (highest priority)
+        const redis = getRedisClient();
+        const cacheKey = `${CACHE_PREFIXES.PAIR_METRICS}${parent.address.toLowerCase()}`;
+        
+        try {
+          const cachedData = await redis.get(cacheKey);
+          if (cachedData) {
+            const metrics = JSON.parse(cachedData);
+            if (metrics.poolAPR != null && !isNaN(metrics.poolAPR)) {
+              console.log(`Using Redis poolAPR for pair ${parent.address}: ${metrics.poolAPR}`);
+              return metrics.poolAPR;
+            }
+          }
+        } catch (redisError) {
+          console.error(`Redis error fetching poolAPR for ${parent.address}:`, redisError);
+        }
+        
+        // Fallback to parent data
+        console.log(`Falling back to database poolAPR for pair ${parent.address}: ${parent.poolAPR}`);
+        return parent.poolAPR || 0;
+      } catch (error) {
+        console.error(`Error resolving poolAPR for ${parent.address}:`, error);
+        return 0;
+      }
+    },
+    
+    rewardAPR: async (parent: any, _args: any, { prisma }: Context) => {
+      try {
+        console.log(`Resolving rewardAPR for pair ${parent.address}`);
+        
+        // Try to get from Redis first (highest priority)
+        const redis = getRedisClient();
+        const cacheKey = `${CACHE_PREFIXES.PAIR_METRICS}${parent.address.toLowerCase()}`;
+        
+        try {
+          const cachedData = await redis.get(cacheKey);
+          if (cachedData) {
+            const metrics = JSON.parse(cachedData);
+            if (metrics.rewardAPR != null && !isNaN(metrics.rewardAPR)) {
+              console.log(`Using Redis rewardAPR for pair ${parent.address}: ${metrics.rewardAPR}`);
+              return metrics.rewardAPR;
+            }
+          }
+        } catch (redisError) {
+          console.error(`Redis error fetching rewardAPR for ${parent.address}:`, redisError);
+        }
+        
+        // Find if this pair has a farming pool in the MasterChef contract
+        const farmingPool = await prisma.farmingPool.findFirst({
+          where: {
+            lpTokenAddress: parent.address.toLowerCase()
+          }
+        });
+        
+        if (!farmingPool) {
+          console.log(`No farming pool found for pair ${parent.address}`);
+          return 0;
+        }
+        
+        // For an active pool, we would calculate the reward APR here
+        // For now, return 0 as farming is not active
+        console.log(`Farming pool found but returning 0 APR as farming is not active`);
+        return 0;
+      } catch (error) {
+        console.error(`Error resolving rewardAPR for ${parent.address}:`, error);
+        return 0;
+      }
     },
     
     volume1h: async (parent: any, _args: any, { prisma }: Context) => {
@@ -1414,15 +1522,93 @@ export const resolvers = {
     },
     
     volume24h: async (parent: any, _args: any, { prisma }: Context) => {
-      return parent.volume24h || '0'
+      try {
+        console.log(`Resolving volume24h for pair ${parent.address}`);
+        
+        // Try to get from Redis first (highest priority)
+        const redis = getRedisClient();
+        const cacheKey = `${CACHE_PREFIXES.PAIR_METRICS}${parent.address.toLowerCase()}`;
+        
+        try {
+          const cachedData = await redis.get(cacheKey);
+          if (cachedData) {
+            const metrics = JSON.parse(cachedData);
+            if (metrics.volume24h != null) {
+              console.log(`Using Redis volume24h for pair ${parent.address}: ${metrics.volume24h}`);
+              return metrics.volume24h;
+            }
+          }
+        } catch (redisError) {
+          console.error(`Redis error fetching volume24h for ${parent.address}:`, redisError);
+        }
+        
+        // Fallback to parent data
+        console.log(`Falling back to database volume24h for pair ${parent.address}: ${parent.volume24h}`);
+        return parent.volume24h || "0";
+      } catch (error) {
+        console.error(`Error resolving volume24h for ${parent.address}:`, error);
+        return "0";
+      }
     },
     
     volume7d: async (parent: any, _args: any, { prisma }: Context) => {
-      return parent.volume7d || '0'
+      console.log(`volume7d for pair ${parent.address}: ${parent.volume7d}`);
+      
+      try {
+        // Try to get from Redis first (highest priority)
+        const redis = getRedisClient();
+        const cacheKey = `${CACHE_PREFIXES.PAIR_METRICS}${parent.address.toLowerCase()}`;
+        
+        try {
+          const cachedData = await redis.get(cacheKey);
+          if (cachedData) {
+            const metrics = JSON.parse(cachedData);
+            if (metrics.volume7d) {
+              console.log(`Using Redis volume7d for pair ${parent.address}: ${metrics.volume7d}`);
+              return metrics.volume7d;
+            }
+          }
+        } catch (redisError) {
+          console.error(`Redis error fetching volume7d for ${parent.address}:`, redisError);
+        }
+        
+        // Fallback to parent data
+        console.log(`Falling back to database volume7d for pair ${parent.address}: ${parent.volume7d}`);
+        return parent.volume7d || "0";
+      } catch (error) {
+        console.error(`Error resolving volume7d for ${parent.address}:`, error);
+        return "0";
+      }
     },
     
     volume30d: async (parent: any, _args: any, { prisma }: Context) => {
-      return parent.volume30d || '0'
+      try {
+        console.log(`Resolving volume30d for pair ${parent.address}`);
+        
+        // Try to get from Redis first (highest priority)
+        const redis = getRedisClient();
+        const cacheKey = `${CACHE_PREFIXES.PAIR_METRICS}${parent.address.toLowerCase()}`;
+        
+        try {
+          const cachedData = await redis.get(cacheKey);
+          if (cachedData) {
+            const metrics = JSON.parse(cachedData);
+            if (metrics.volume30d != null) {
+              console.log(`Using Redis volume30d for pair ${parent.address}: ${metrics.volume30d}`);
+              return metrics.volume30d;
+            }
+          }
+        } catch (redisError) {
+          console.error(`Redis error fetching volume30d for ${parent.address}:`, redisError);
+        }
+        
+        // Fallback to parent data
+        console.log(`Falling back to database volume30d for pair ${parent.address}: ${parent.volume30d}`);
+        return parent.volume30d || "0";
+      } catch (error) {
+        console.error(`Error resolving volume30d for ${parent.address}:`, error);
+        return "0";
+      }
     },
     
     volumeChange24h: async (parent: any, _args: any, { prisma }: Context) => {
@@ -1928,27 +2114,27 @@ export const resolvers = {
         }))
         
         // Get pair count
-        const totalCountResult = await prisma.$runCommandRaw({
-          count: "Pair",
-          query: {}
-        }) as any;
+        const totalCountResult = await prisma.pair.count()
         
         const result = {
           edges,
           pageInfo: {
             hasNextPage,
-            hasPreviousPage: false,
-            startCursor: edges[0]?.cursor,
-            endCursor: edges[edges.length - 1]?.cursor,
+            endCursor: hasNextPage ? edges[edges.length - 1].cursor : null,
           },
-          totalCount: totalCountResult?.n || 0,
+          totalCount: totalCountResult
         }
         
-        // Cache the result for longer
+        // Cache the result
         try {
-          await redis.set(cacheKey, JSON.stringify(result), 'EX', 60); // Cache for 60 seconds
+          // Serialize the result to handle BigInt values
+          const serializable = JSON.parse(JSON.stringify(result, (_, value) =>
+            typeof value === 'bigint' ? value.toString() : value
+          ));
+          await redis.set(cacheKey, JSON.stringify(serializable), 'EX', 60 * 5); // Cache for 5 minutes
         } catch (error) {
           console.error('Redis cache set error:', error);
+          // Continue without caching
         }
         
         return result

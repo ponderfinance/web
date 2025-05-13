@@ -83,8 +83,6 @@ const createSubscription: SubscribeFunction = (
     eventSource.onmessage = event => {
       try {
         const data = JSON.parse(event.data);
-        console.log(`Subscription event received for ${operationName}:`, data);
-
         if (data.type === 'connected') {
           console.log(`SSE connection established for ${operationName}`);
         }

@@ -34,6 +34,10 @@ export const poolsPageQuery = graphql`
           }
           tvl
           reserveUSD
+          poolAPR
+          rewardAPR
+          volume24h
+          volume30d
         }
       }
       pageInfo {
@@ -62,7 +66,7 @@ function PoolsLoading() {
             #
           </Text>
         </View.Item>
-        <View.Item columns={4}>
+        <View.Item columns={3}>
           <Text color="neutral-faded" weight="medium">
             Pool
           </Text>
@@ -70,6 +74,26 @@ function PoolsLoading() {
         <View.Item columns={2}>
           <Text color="neutral-faded" weight="medium">
             TVL
+          </Text>
+        </View.Item>
+        <View.Item columns={1}>
+          <Text color="neutral-faded" weight="medium">
+            Pool APR
+          </Text>
+        </View.Item>
+        <View.Item columns={1}>
+          <Text color="neutral-faded" weight="medium">
+            Reward APR
+          </Text>
+        </View.Item>
+        <View.Item columns={2}>
+          <Text color="neutral-faded" weight="medium">
+            1D vol
+          </Text>
+        </View.Item>
+        <View.Item columns={2}>
+          <Text color="neutral-faded" weight="medium">
+            30D vol
           </Text>
         </View.Item>
       </View>
@@ -87,7 +111,7 @@ function PoolsLoading() {
           <View.Item columns={1}>
             <Skeleton width="20px" height="24px" />
           </View.Item>
-          <View.Item columns={4}>
+          <View.Item columns={3}>
             <View direction="row" gap={2} align="center">
               <View direction="row" gap={1}>
                 <Skeleton width="28px" height="28px" borderRadius="circular" />
@@ -95,6 +119,18 @@ function PoolsLoading() {
               </View>
               <Skeleton width="120px" height="24px" />
             </View>
+          </View.Item>
+          <View.Item columns={2}>
+            <Skeleton width="100px" height="24px" />
+          </View.Item>
+          <View.Item columns={1}>
+            <Skeleton width="60px" height="24px" />
+          </View.Item>
+          <View.Item columns={1}>
+            <Skeleton width="60px" height="24px" />
+          </View.Item>
+          <View.Item columns={2}>
+            <Skeleton width="100px" height="24px" />
           </View.Item>
           <View.Item columns={2}>
             <Skeleton width="100px" height="24px" />

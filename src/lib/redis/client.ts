@@ -7,7 +7,8 @@ let redisClient: Redis | null = null
 export const CACHE_PREFIXES = {
   PAIR: 'pair:',
   TOKEN: 'token:',
-  PROTOCOL: 'protocol:'
+  PROTOCOL: 'protocol:',
+  PAIR_METRICS: 'pair_metrics:'
 };
 
 export const CACHE_TTLS = {
@@ -134,4 +135,13 @@ export async function clearProtocolMetricsCache(): Promise<void> {
   } catch (error) {
     console.error('Error clearing protocol metrics from Redis:', error);
   }
+}
+
+/**
+ * Update pair metrics in Redis with poolAPR and rewardAPR values
+ * @deprecated This function is no longer needed as metrics are now updated directly by the indexer
+ */
+export async function updateLocalPairMetricsInRedis() {
+  console.warn('DEPRECATED: updateLocalPairMetricsInRedis is no longer needed as metrics are now updated by the indexer');
+  return false;
 }
