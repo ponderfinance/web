@@ -1219,47 +1219,92 @@ export const resolvers = {
       console.log(`volume7d for pair ${parent.address}: ${parent.volume7d}`);
       
       try {
-        // Using Prisma directly to query the pair
-        const pairFromDB = await prisma.pair.findUnique({
-          where: { address: parent.address.toLowerCase() }
-        });
+        // Try to get from Redis first (highest priority)
+        const redis = getRedisClient();
+        const cacheKey = `${CACHE_PREFIXES.PAIR_METRICS}${parent.address.toLowerCase()}`;
         
-        console.log(`Pair from Prisma volume7d: ${pairFromDB?.volume7d}`);
-        
-        // Try direct MongoDB query if possible
         try {
-          const prismaAny = prisma as any;
-          if (prismaAny._client?.db) {
-            const collection = prismaAny._client.db().collection('Pair');
-            const pairFromMongo = await collection.findOne({ address: parent.address.toLowerCase() });
-            console.log(`MongoDB pair volume7d: ${pairFromMongo?.volume7d}`);
-            
-            // If MongoDB has it but parent doesn't, use MongoDB's value
-            if (pairFromMongo?.volume7d && (!parent.volume7d || parent.volume7d === '0')) {
-              console.log(`Using MongoDB volume7d value: ${pairFromMongo.volume7d}`);
-              return pairFromMongo.volume7d;
+          const cachedData = await redis.get(cacheKey);
+          if (cachedData) {
+            const metrics = JSON.parse(cachedData);
+            if (metrics.volume7d) {
+              console.log(`Using Redis volume7d for pair ${parent.address}: ${metrics.volume7d}`);
+              return metrics.volume7d;
             }
           }
-        } catch (error) {
-          console.log(`Direct MongoDB query failed: ${error instanceof Error ? error.message : String(error)}`);
+        } catch (redisError) {
+          console.error(`Redis error fetching volume7d for ${parent.address}:`, redisError);
         }
         
-        // Return the value from parent if it exists
-        if (parent.volume7d) {
-          return parent.volume7d;
-        } else if (pairFromDB?.volume7d) {
-          return pairFromDB.volume7d;
+        // If Redis fails, directly query MongoDB instead of relying on parent object
+        try {
+          console.log(`Querying MongoDB directly for pair ${parent.address}`);
+          const pairData = await prisma.pair.findUnique({
+            where: { address: parent.address.toLowerCase() },
+            select: { volume7d: true }
+          });
+          
+          if (pairData && pairData.volume7d !== null) {
+            console.log(`Found volume7d in MongoDB for pair ${parent.address}: ${pairData.volume7d}`);
+            return pairData.volume7d;
+          }
+        } catch (dbError) {
+          console.error(`MongoDB error fetching volume7d for ${parent.address}:`, dbError);
         }
         
-        return '0';
+        // Last resort: fallback to parent data if everything else fails
+        console.log(`Falling back to parent volume7d for pair ${parent.address}: ${parent.volume7d}`);
+        return parent.volume7d || "0";
       } catch (error) {
-        console.error('Error in volume7d resolver:', error);
-        return parent.volume7d || '0';
+        console.error(`Error resolving volume7d for ${parent.address}:`, error);
+        return "0";
       }
     },
     
     volume30d: async (parent: any, _args: any, { prisma }: Context) => {
-      return parent.volume30d || '0'
+      try {
+        console.log(`Resolving volume30d for pair ${parent.address}`);
+        
+        // Try to get from Redis first (highest priority)
+        const redis = getRedisClient();
+        const cacheKey = `${CACHE_PREFIXES.PAIR_METRICS}${parent.address.toLowerCase()}`;
+        
+        try {
+          const cachedData = await redis.get(cacheKey);
+          if (cachedData) {
+            const metrics = JSON.parse(cachedData);
+            if (metrics.volume30d != null) {
+              console.log(`Using Redis volume30d for pair ${parent.address}: ${metrics.volume30d}`);
+              return metrics.volume30d;
+            }
+          }
+        } catch (redisError) {
+          console.error(`Redis error fetching volume30d for ${parent.address}:`, redisError);
+        }
+        
+        // If Redis fails, directly query MongoDB instead of relying on parent object
+        try {
+          console.log(`Querying MongoDB directly for pair ${parent.address}`);
+          const pairData = await prisma.pair.findUnique({
+            where: { address: parent.address.toLowerCase() },
+            select: { volume30d: true }
+          });
+          
+          if (pairData && pairData.volume30d !== null) {
+            console.log(`Found volume30d in MongoDB for pair ${parent.address}: ${pairData.volume30d}`);
+            return pairData.volume30d;
+          }
+        } catch (dbError) {
+          console.error(`MongoDB error fetching volume30d for ${parent.address}:`, dbError);
+        }
+        
+        // Last resort: fallback to parent data if everything else fails
+        console.log(`Falling back to parent volume30d for pair ${parent.address}: ${parent.volume30d}`);
+        return parent.volume30d || "0";
+      } catch (error) {
+        console.error(`Error resolving volume30d for ${parent.address}:`, error);
+        return "0";
+      }
     },
     
     volumeChange24h: async (parent: any, _args: any, { prisma }: Context) => {
@@ -1465,8 +1510,24 @@ export const resolvers = {
           console.error(`Redis error fetching poolAPR for ${parent.address}:`, redisError);
         }
         
-        // Fallback to parent data
-        console.log(`Falling back to database poolAPR for pair ${parent.address}: ${parent.poolAPR}`);
+        // If Redis fails, directly query MongoDB instead of relying on parent object
+        try {
+          console.log(`Querying MongoDB directly for pair ${parent.address}`);
+          const pairData = await prisma.pair.findUnique({
+            where: { address: parent.address.toLowerCase() },
+            select: { poolAPR: true }
+          });
+          
+          if (pairData && pairData.poolAPR !== null && pairData.poolAPR !== undefined) {
+            console.log(`Found poolAPR in MongoDB for pair ${parent.address}: ${pairData.poolAPR}`);
+            return pairData.poolAPR;
+          }
+        } catch (dbError) {
+          console.error(`MongoDB error fetching poolAPR for ${parent.address}:`, dbError);
+        }
+        
+        // Last resort: fallback to parent data if everything else fails
+        console.log(`Falling back to parent poolAPR for pair ${parent.address}: ${parent.poolAPR}`);
         return parent.poolAPR || 0;
       } catch (error) {
         console.error(`Error resolving poolAPR for ${parent.address}:`, error);
@@ -1542,8 +1603,24 @@ export const resolvers = {
           console.error(`Redis error fetching volume24h for ${parent.address}:`, redisError);
         }
         
-        // Fallback to parent data
-        console.log(`Falling back to database volume24h for pair ${parent.address}: ${parent.volume24h}`);
+        // If Redis fails, directly query MongoDB instead of relying on parent object
+        try {
+          console.log(`Querying MongoDB directly for pair ${parent.address}`);
+          const pairData = await prisma.pair.findUnique({
+            where: { address: parent.address.toLowerCase() },
+            select: { volume24h: true }
+          });
+          
+          if (pairData && pairData.volume24h !== null) {
+            console.log(`Found volume24h in MongoDB for pair ${parent.address}: ${pairData.volume24h}`);
+            return pairData.volume24h;
+          }
+        } catch (dbError) {
+          console.error(`MongoDB error fetching volume24h for ${parent.address}:`, dbError);
+        }
+        
+        // Last resort: fallback to parent data if everything else fails
+        console.log(`Falling back to parent volume24h for pair ${parent.address}: ${parent.volume24h}`);
         return parent.volume24h || "0";
       } catch (error) {
         console.error(`Error resolving volume24h for ${parent.address}:`, error);
@@ -1572,8 +1649,24 @@ export const resolvers = {
           console.error(`Redis error fetching volume7d for ${parent.address}:`, redisError);
         }
         
-        // Fallback to parent data
-        console.log(`Falling back to database volume7d for pair ${parent.address}: ${parent.volume7d}`);
+        // If Redis fails, directly query MongoDB instead of relying on parent object
+        try {
+          console.log(`Querying MongoDB directly for pair ${parent.address}`);
+          const pairData = await prisma.pair.findUnique({
+            where: { address: parent.address.toLowerCase() },
+            select: { volume7d: true }
+          });
+          
+          if (pairData && pairData.volume7d !== null) {
+            console.log(`Found volume7d in MongoDB for pair ${parent.address}: ${pairData.volume7d}`);
+            return pairData.volume7d;
+          }
+        } catch (dbError) {
+          console.error(`MongoDB error fetching volume7d for ${parent.address}:`, dbError);
+        }
+        
+        // Last resort: fallback to parent data if everything else fails
+        console.log(`Falling back to parent volume7d for pair ${parent.address}: ${parent.volume7d}`);
         return parent.volume7d || "0";
       } catch (error) {
         console.error(`Error resolving volume7d for ${parent.address}:`, error);
@@ -1602,8 +1695,24 @@ export const resolvers = {
           console.error(`Redis error fetching volume30d for ${parent.address}:`, redisError);
         }
         
-        // Fallback to parent data
-        console.log(`Falling back to database volume30d for pair ${parent.address}: ${parent.volume30d}`);
+        // If Redis fails, directly query MongoDB instead of relying on parent object
+        try {
+          console.log(`Querying MongoDB directly for pair ${parent.address}`);
+          const pairData = await prisma.pair.findUnique({
+            where: { address: parent.address.toLowerCase() },
+            select: { volume30d: true }
+          });
+          
+          if (pairData && pairData.volume30d !== null) {
+            console.log(`Found volume30d in MongoDB for pair ${parent.address}: ${pairData.volume30d}`);
+            return pairData.volume30d;
+          }
+        } catch (dbError) {
+          console.error(`MongoDB error fetching volume30d for ${parent.address}:`, dbError);
+        }
+        
+        // Last resort: fallback to parent data if everything else fails
+        console.log(`Falling back to parent volume30d for pair ${parent.address}: ${parent.volume30d}`);
         return parent.volume30d || "0";
       } catch (error) {
         console.error(`Error resolving volume30d for ${parent.address}:`, error);
