@@ -140,9 +140,7 @@ export const PoolsDisplay: React.FC<PoolsDisplayProps> = ({
 
             <View.Item columns={3}>
               <View direction="row" align="center" gap={2}>
-                <Link href={`/explore/pools/${node.address}`}>
-                  <TokenPair tokenA={node.token0} tokenB={node.token1} size="small" />
-                </Link>
+                <TokenPair tokenA={node.token0} tokenB={node.token1} size="small" />
               </View>
             </View.Item>
             

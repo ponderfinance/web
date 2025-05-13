@@ -14,7 +14,7 @@ const LoadingFallback = () => (
       <View
         direction="row"
         gap={0}
-        padding={4}
+        padding={2}
         className={'border-0 border-b border-neutral-faded'}
         backgroundColor="elevation-base"
       >
