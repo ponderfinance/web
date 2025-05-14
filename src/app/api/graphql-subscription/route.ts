@@ -5,7 +5,8 @@ import Redis from 'ioredis';
 const REDIS_CHANNELS = {
   METRICS_UPDATED: 'metrics:updated',
   PAIR_UPDATED: 'pair:updated',
-  TOKEN_UPDATED: 'token:updated'
+  TOKEN_UPDATED: 'token:updated',
+  TRANSACTION_UPDATED: 'transaction:updated'
 };
 
 // Redis client for subscriptions
