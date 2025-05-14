@@ -13,7 +13,8 @@ if (typeof window === 'undefined') {
 export const REDIS_CHANNELS = {
   METRICS_UPDATED: 'metrics:updated',
   PAIR_UPDATED: 'pair:updated',
-  TOKEN_UPDATED: 'token:updated'
+  TOKEN_UPDATED: 'token:updated',
+  TRANSACTION_UPDATED: 'transaction:updated'
 };
 
 // Create a global event emitter instance
@@ -157,6 +158,8 @@ export function initRedisSubscriber(): any {
                 eventEmitter.emit('pair:updated', data);
               } else if (channel === REDIS_CHANNELS.TOKEN_UPDATED) {
                 eventEmitter.emit('token:updated', data);
+              } else if (channel === REDIS_CHANNELS.TRANSACTION_UPDATED) {
+                eventEmitter.emit('transaction:updated', data);
               }
             } catch (error) {
               console.error('Error processing Redis message:', error);
@@ -197,6 +200,14 @@ export function onPairUpdated(listener: (data: any) => void): void {
  */
 export function onTokenUpdated(listener: (data: any) => void): void {
   eventEmitter.on('token:updated', listener);
+}
+
+/**
+ * Subscribe to transaction updates
+ * @param listener The callback function
+ */
+export function onTransactionUpdated(listener: (data: any) => void): void {
+  eventEmitter.on('transaction:updated', listener);
 }
 
 /**

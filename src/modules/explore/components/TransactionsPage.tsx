@@ -1,11 +1,12 @@
 'use client'
 
 import React, { Suspense, useEffect, useState } from 'react'
-import { graphql, useLazyLoadQuery } from 'react-relay'
+import { graphql, useLazyLoadQuery, useQueryLoader } from 'react-relay'
 import { TransactionsPageQuery } from '@/src/__generated__/TransactionsPageQuery.graphql'
 import { TransactionsDisplay } from '@/src/modules/explore/components/TransactionsDisplay'
 import { View, Text, Skeleton } from 'reshaped'
 import { tokenFragment } from '@/src/components/TokenPair'
+import TransactionsSubscription from './TransactionsSubscription'
 
 export const transactionsPageQuery = graphql`
   query TransactionsPageQuery($first: Int!) {
@@ -139,7 +140,7 @@ function TransactionsLoading() {
 }
 
 // Main content component that fetches data
-function TransactionsContent() {
+function TransactionsContent({ queryRef }: { queryRef: any }) {
   const data = useLazyLoadQuery<TransactionsPageQuery>(
     transactionsPageQuery,
     {
@@ -150,22 +151,29 @@ function TransactionsContent() {
     }
   )
 
-  return <TransactionsDisplay data={data} />
+  return (
+    <TransactionsSubscription queryRef={queryRef}>
+      <TransactionsDisplay data={data} />
+    </TransactionsSubscription>
+  )
 }
 
 // Exported page component
 export const TransactionsPage = () => {
   const [mounted, setMounted] = useState(false)
+  const [queryRef, loadQuery] = useQueryLoader(transactionsPageQuery)
 
   // Only render the query component after mounting on the client
   useEffect(() => {
     setMounted(true)
     
-    // Prefetch the data
+    // Initial load
+    loadQuery({ first: 15 })
+    
     return () => {
       // Cleanup any resources if needed
     }
-  }, [])
+  }, [loadQuery])
 
   if (!mounted) {
     return <TransactionsLoading />
@@ -174,7 +182,7 @@ export const TransactionsPage = () => {
   return (
     <View gap={6}>
       <Suspense fallback={<TransactionsLoading />}>
-        <TransactionsContent />
+        {queryRef && <TransactionsContent queryRef={queryRef} />}
       </Suspense>
     </View>
   )

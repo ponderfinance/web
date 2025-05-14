@@ -5,7 +5,8 @@ import Redis from 'ioredis';
 export const REDIS_CHANNELS = {
   METRICS_UPDATED: 'metrics:updated',
   PAIR_UPDATED: 'pair:updated',
-  TOKEN_UPDATED: 'token:updated'
+  TOKEN_UPDATED: 'token:updated',
+  TRANSACTION_UPDATED: 'transaction:updated'
 };
 
 // Global event emitter and Redis subscriber
@@ -67,6 +68,8 @@ export function initSubscriptionServer(): void {
                 getEventEmitter().emit(`subscription:pairUpdated:${data.entityId}`, data);
               } else if (channel === REDIS_CHANNELS.TOKEN_UPDATED) {
                 getEventEmitter().emit(`subscription:tokenUpdated:${data.entityId}`, data);
+              } else if (channel === REDIS_CHANNELS.TRANSACTION_UPDATED) {
+                getEventEmitter().emit('subscription:transactionsUpdated', data);
               }
             } catch (error) {
               console.error('Error processing Redis message:', error);

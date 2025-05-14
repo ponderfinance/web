@@ -46,6 +46,8 @@ export async function initServerSubscriptions() {
               getEventEmitter().emit(`subscription:pairUpdated:${data.entityId}`, data);
             } else if (channel === REDIS_CHANNELS.TOKEN_UPDATED) {
               getEventEmitter().emit(`subscription:tokenUpdated:${data.entityId}`, data);
+            } else if (channel === REDIS_CHANNELS.TRANSACTION_UPDATED) {
+              getEventEmitter().emit('subscription:transactionsUpdated', data);
             }
           } catch (error) {
             console.error('Server: Error processing Redis message:', error);

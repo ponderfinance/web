@@ -5,7 +5,8 @@ import {
   initRedisSubscriber, 
   onMetricsUpdated, 
   onTokenUpdated, 
-  onPairUpdated, 
+  onPairUpdated,
+  onTransactionUpdated,
   closeRedisSubscriber,
   getEventEmitter
 } from '@/src/lib/redis/subscriber'
@@ -15,6 +16,7 @@ type RedisSubscriberContextType = {
   metricsLastUpdated: number | null
   pairLastUpdated: Record<string, number>
   tokenLastUpdated: Record<string, number>
+  transactionLastUpdated: Record<string, number>
   refreshData: () => void
 }
 
@@ -23,6 +25,7 @@ const RedisSubscriberContext = createContext<RedisSubscriberContextType>({
   metricsLastUpdated: null,
   pairLastUpdated: {},
   tokenLastUpdated: {},
+  transactionLastUpdated: {},
   refreshData: () => {},
 })
 
@@ -35,6 +38,7 @@ export function RedisSubscriberProvider({ children }: { children: React.ReactNod
   const [metricsLastUpdated, setMetricsLastUpdated] = useState<number | null>(null)
   const [pairLastUpdated, setPairLastUpdated] = useState<Record<string, number>>({})
   const [tokenLastUpdated, setTokenLastUpdated] = useState<Record<string, number>>({})
+  const [transactionLastUpdated, setTransactionLastUpdated] = useState<Record<string, number>>({})
   const [isInitialized, setIsInitialized] = useState(false)
   
   // Force refresh counter
@@ -73,6 +77,16 @@ export function RedisSubscriberProvider({ children }: { children: React.ReactNod
       }
     }
     
+    const transactionHandler = (data: any) => {
+      console.log('RedisSubscriber: received transaction update', data)
+      if (data.entityId) {
+        setTransactionLastUpdated(prev => ({
+          ...prev,
+          [data.entityId]: data.timestamp || Date.now()
+        }))
+      }
+    }
+    
     try {
       // Initialize Redis subscriber
       initRedisSubscriber()
@@ -81,6 +95,7 @@ export function RedisSubscriberProvider({ children }: { children: React.ReactNod
       onMetricsUpdated(metricsHandler)
       onPairUpdated(pairHandler)
       onTokenUpdated(tokenHandler)
+      onTransactionUpdated(transactionHandler)
       
       setIsInitialized(true)
     } catch (error) {
@@ -96,6 +111,7 @@ export function RedisSubscriberProvider({ children }: { children: React.ReactNod
       emitter.removeListener('metrics:updated', metricsHandler)
       emitter.removeListener('pair:updated', pairHandler)
       emitter.removeListener('token:updated', tokenHandler)
+      emitter.removeListener('transaction:updated', transactionHandler)
       
       // If this is the only component using the subscriber, we can close the connection
       // Consider using a ref counter pattern if multiple components might use this
@@ -108,6 +124,7 @@ export function RedisSubscriberProvider({ children }: { children: React.ReactNod
     metricsLastUpdated,
     pairLastUpdated,
     tokenLastUpdated,
+    transactionLastUpdated,
     refreshData
   }
   
