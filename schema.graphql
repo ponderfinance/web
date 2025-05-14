@@ -541,4 +541,7 @@ type Subscription {
   
   # Get real-time updates to a specific token
   tokenUpdated(tokenId: ID!): Token
+
+  # Get real-time updates when new transactions occur
+  transactionUpdated: Swap
 }

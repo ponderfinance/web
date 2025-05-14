@@ -1,9 +1,9 @@
 'use client'
 
-import React, { useEffect } from 'react';
-import { useRedisSubscriber } from '@/src/providers/RedisSubscriberProvider';
+import React, { useEffect, useRef } from 'react';
 import { useQueryLoader } from 'react-relay';
 import { transactionsPageQuery } from './TransactionsPage';
+import { subscribeToTransactionUpdates } from '@/src/lib/subscriptions/subscription-server';
 
 interface TransactionsSubscriptionProps {
   children: React.ReactNode;
@@ -11,43 +11,46 @@ interface TransactionsSubscriptionProps {
 }
 
 export default function TransactionsSubscription({ children, queryRef }: TransactionsSubscriptionProps) {
-  // Get Redis subscriber context for real-time updates
-  const { transactionLastUpdated, refreshData } = useRedisSubscriber();
   const [_, loadQuery] = useQueryLoader(transactionsPageQuery);
   
-  // Effect to handle transaction updates
+  // Track the last refresh time to prevent too frequent updates
+  const lastRefreshTimeRef = useRef<number>(0);
+  
+  // Set up event subscription for transaction updates
   useEffect(() => {
-    console.log('[TransactionsSubscription] Setting up listener for transaction updates');
+    console.log('[TransactionsSubscription] Setting up subscription to transaction updates');
     
-    // Track the latest known transaction timestamp
-    let lastUpdateTimestamp = 0;
-    
-    // Get latest transaction timestamp from updates
-    Object.values(transactionLastUpdated).forEach(timestamp => {
-      if (timestamp > lastUpdateTimestamp) {
-        lastUpdateTimestamp = timestamp;
+    // Create a handler function that implements debounce logic
+    const handleTransactionUpdate = () => {
+      const now = Date.now();
+      // Only refresh if it's been at least 1 second since the last refresh
+      if (now - lastRefreshTimeRef.current > 1000) {
+        console.log('[TransactionsSubscription] Refreshing transactions data due to update');
+        if (queryRef && queryRef.variables) {
+          loadQuery(queryRef.variables, { fetchPolicy: 'network-only' });
+          lastRefreshTimeRef.current = now;
+        }
       }
-    });
+    };
     
-    // Refresh data when we have new transactions
-    if (lastUpdateTimestamp > 0) {
-      console.log(`[TransactionsSubscription] Detected new transaction at ${new Date(lastUpdateTimestamp).toISOString()}`);
-      
-      // Reload the query with the same variables
-      if (queryRef && queryRef.variables) {
-        loadQuery(queryRef.variables);
-      }
-    }
+    // Subscribe to transaction updates
+    const unsubscribe = subscribeToTransactionUpdates(handleTransactionUpdate);
     
-    // Also set up a periodic refresh
+    // Set up a periodic refresh as a backup
     const interval = setInterval(() => {
       if (queryRef && queryRef.variables) {
-        loadQuery(queryRef.variables);
+        console.log('[TransactionsSubscription] Performing periodic refresh');
+        loadQuery(queryRef.variables, { fetchPolicy: 'network-only' });
+        lastRefreshTimeRef.current = Date.now();
       }
     }, 15000); // Refresh every 15 seconds
     
-    return () => clearInterval(interval);
-  }, [transactionLastUpdated, queryRef, loadQuery]);
+    // Clean up
+    return () => {
+      unsubscribe();
+      clearInterval(interval);
+    };
+  }, [queryRef, loadQuery]);
   
   // Just render the children directly
   return <>{children}</>;

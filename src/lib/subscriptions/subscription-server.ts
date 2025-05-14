@@ -134,6 +134,21 @@ export function subscribeToTokenUpdates(tokenId: string, callback: () => void): 
 }
 
 /**
+ * Subscribe to transaction updates
+ */
+export function subscribeToTransactionUpdates(callback: () => void): () => void {
+  const emitter = getEventEmitter();
+  const eventName = 'subscription:transactionsUpdated';
+  
+  emitter.on(eventName, callback);
+  
+  // Return unsubscribe function
+  return () => {
+    emitter.off(eventName, callback);
+  };
+}
+
+/**
  * Close the subscription server
  */
 export function closeSubscriptionServer(): void {
