@@ -102,44 +102,35 @@ const TokenItem: React.FC<TokenItemProps> = ({ token, onSelect }) => {
   const tokenIcon = token.imageURI ? getIpfsGateway(token.imageURI) : '/tokens/coin.svg'
 
   return (
-    <View
-      direction="row"
-      justify="space-between"
-      align="center"
-      borderRadius="medium"
-      grow={true}
-      width="100%"
+    <Button
+      variant="ghost"
+      onClick={onSelect}
+      fullWidth={true}
+      attributes={{ style: { width: '100%', padding: '12px', justifyContent: 'flex-start' } }}
     >
-      <Button
-        variant="ghost"
-        onClick={onSelect}
-        fullWidth={true}
-        attributes={{ style: { width: '100%' } }}
-      >
-        <View direction="row" align="center" gap={4} width="100%">
-          <View height="40px" width="40px" align="center" justify="center">
-            <Image
-              src={tokenIcon}
-              height={10}
-              width={10}
-              alt={token.symbol || 'Token Icon'}
-            />
-          </View>
+      <View direction="row" align="center" gap={4} width="100%">
+        <View height="40px" width="40px" align="center" justify="center">
+          <Image
+            src={tokenIcon}
+            height={10}
+            width={10}
+            alt={token.symbol || 'Token Icon'}
+          />
+        </View>
 
-          <View align="start" grow={true}>
-            <Text variant="body-2">{token.name}</Text>
-            <View direction="row" gap={2} align="center">
-              <Text color="neutral">{token.symbol}</Text>
-              {!token.isNative && (
-                <Text color="neutral-faded" variant="body-3">
-                  {shortenAddress(token.address)}
-                </Text>
-              )}
-            </View>
+        <View align="start" grow={true}>
+          <Text variant="body-2">{token.name}</Text>
+          <View direction="row" gap={2} align="center">
+            <Text color="neutral">{token.symbol}</Text>
+            {!token.isNative && (
+              <Text color="neutral-faded" variant="body-3">
+                {shortenAddress(token.address)}
+              </Text>
+            )}
           </View>
         </View>
-      </Button>
-    </View>
+      </View>
+    </Button>
   )
 }
 
@@ -315,8 +306,15 @@ const TokenSelectorWithData: React.FC<{
         size="400px"
         position={{ s: 'bottom', l: 'center' }}
         padding={2}
+        attributes={{ style: { maxHeight: '80vh' } }}
       >
-        <View gap={3} paddingInline={2} paddingTop={2} height={'80vh'}>
+        <View 
+          gap={3} 
+          paddingInline={2} 
+          paddingTop={2} 
+          height={{ s: '80vh', l: 'auto' }}
+          attributes={{ style: { maxHeight: '80vh' } }}
+        >
           <View direction="row" justify="space-between" align="center">
             <Modal.Title>
               <Text variant="body-1" weight="regular">
@@ -411,7 +409,14 @@ const TokenSelectorWithData: React.FC<{
           )}
 
           {/* Token list */}
-          <View gap={2} maxHeight={'400px'} width="100%" overflow="auto">
+          <View 
+            gap={2} 
+            width="100%" 
+            overflow="auto" 
+            paddingBottom={2}
+            grow={true}
+            attributes={{ style: { flex: 1 } }}
+          >
             {filteredTokens.length > 0 ? (
               filteredTokens.map((token) => (
                 <TokenItem
