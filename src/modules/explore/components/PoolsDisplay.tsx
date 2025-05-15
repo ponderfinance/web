@@ -106,13 +106,13 @@ export const PoolsDisplay: React.FC<PoolsDisplayProps> = ({
           </Text>
         </View.Item>
         
-        <View.Item columns={1}>
+        <View.Item columns={2}>
           <Text color="neutral-faded" weight="medium">
             Reward APR
           </Text>
         </View.Item>
         
-        <View.Item columns={2}>
+        <View.Item columns={1}>
           <Text color="neutral-faded" weight="medium">
             1D vol
           </Text>
@@ -133,7 +133,7 @@ export const PoolsDisplay: React.FC<PoolsDisplayProps> = ({
             direction="row"
             gap={0}
             padding={4}
-            className={'border-0'}
+            className={'border-0 border-neutral-faded hover:bg-neutral-faded'}
             align="center"
             width="100%"
           >
@@ -157,13 +157,13 @@ export const PoolsDisplay: React.FC<PoolsDisplayProps> = ({
               </Text>
             </View.Item>
             
-            <View.Item columns={1}>
+            <View.Item columns={2}>
               <Text variant="body-2" color={node.rewardAPR && node.rewardAPR > 0 ? "positive" : "neutral"}>
                 {formatPercentage(node.rewardAPR)}
               </Text>
             </View.Item>
             
-            <View.Item columns={2}>
+            <View.Item columns={1}>
               <Text variant="body-2">{formatCurrency(node.volume24h)}</Text>
             </View.Item>
             

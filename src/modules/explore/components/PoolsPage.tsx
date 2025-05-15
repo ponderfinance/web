@@ -83,12 +83,12 @@ function PoolsLoading() {
             Pool APR
           </Text>
         </View.Item>
-        <View.Item columns={1}>
+        <View.Item columns={2}>
           <Text color="neutral-faded" weight="medium">
             Reward APR
           </Text>
         </View.Item>
-        <View.Item columns={2}>
+        <View.Item columns={1}>
           <Text color="neutral-faded" weight="medium">
             1D vol
           </Text>
@@ -117,10 +117,7 @@ function PoolsLoading() {
             </View.Item>
             <View.Item columns={3}>
               <View direction="row" gap={2} align="center">
-                <View direction="row" gap={1}>
-                  <Skeleton width="28px" height="28px" borderRadius="circular" />
-                  <Skeleton width="28px" height="28px" borderRadius="circular" />
-                </View>
+                <Skeleton width={8} height={8} borderRadius="circular" />
                 <Skeleton width="120px" height="24px" />
               </View>
             </View.Item>
@@ -130,11 +127,11 @@ function PoolsLoading() {
             <View.Item columns={1}>
               <Skeleton width="60px" height="24px" />
             </View.Item>
-            <View.Item columns={1}>
-              <Skeleton width="60px" height="24px" />
-            </View.Item>
             <View.Item columns={2}>
               <Skeleton width="100px" height="24px" />
+            </View.Item>
+            <View.Item columns={1}>
+              <Skeleton width="60px" height="24px" />
             </View.Item>
             <View.Item columns={2}>
               <Skeleton width="100px" height="24px" />

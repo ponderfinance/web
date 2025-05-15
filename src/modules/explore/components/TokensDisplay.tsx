@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useEffect } from 'react'
-import { View, Text, Actionable, Image } from 'reshaped'
+import { View, Text, Actionable, Image, Skeleton } from 'reshaped'
 import { TokensPageQuery } from '@/src/__generated__/TokensPageQuery.graphql'
 import { getIpfsGateway } from '@/src/utils/ipfs'
 import { roundDecimal } from '@/src/utils/numbers'
@@ -177,9 +177,9 @@ export const TokensDisplay: React.FC<TokensDisplayProps> = ({
                     />
                   </div>
                   <View direction="row" gap={1} align="center">
-                    <Text>{node.name || node.address.slice(0, 10) + '...'}</Text>
+                    <Text>{node.name || (node.symbol ? node.symbol : <Skeleton width={80} height={24} />)}</Text>
                     <Text variant="caption-1" color="neutral-faded">
-                      {node.symbol || '—'}
+                      {node.symbol ? node.symbol : ''}
                     </Text>
                   </View>
                 </View>
