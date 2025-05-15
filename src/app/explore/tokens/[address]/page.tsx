@@ -64,7 +64,7 @@ function TokenDetailSkeleton() {
             <Skeleton width={12} height={4} borderRadius="medium" />
             <View direction="row" wrap={true} gap={8} justify="space-between">
               {[1, 2, 3, 4].map((i) => (
-                <View key={i} direction="column" gap={2} width={20}>
+                <View key={i} direction="column" gap={2}>
                   <Skeleton width={8} height={2} borderRadius="medium" />
                   <Skeleton width={12} height={3} borderRadius="medium" />
                 </View>

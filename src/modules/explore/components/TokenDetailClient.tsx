@@ -715,7 +715,7 @@ export default function TokenDetailClient({ tokenAddress }: TokenDetailClientPro
             {isLoadingStats ? (
               <View direction="row" wrap={true} gap={8} justify="space-between">
                 {[1, 2, 3, 4].map((i) => (
-                  <View key={i} direction="column" gap={2} width={80}>
+                  <View key={i} direction="column" gap={2}>
                     <Skeleton width={16} height={3} borderRadius="medium" />
                     <Skeleton width={24} height={5} borderRadius="medium" />
                   </View>
