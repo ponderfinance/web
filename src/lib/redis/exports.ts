@@ -1,14 +1,16 @@
 /**
  * Redis exports for consistent usage throughout the application
  */
-import Redis from 'ioredis';
+import * as Redis from 'ioredis';
+import { EventEmitter } from 'events';
 
 // Constants for cache prefixes and TTLs - must match indexer
 export const CACHE_PREFIXES = {
   PAIR: 'pair:',
   TOKEN: 'token:',
   PROTOCOL: 'protocol:',
-  PAIR_METRICS: 'pair_metrics:'
+  PAIR_METRICS: 'pair_metrics:',
+  PRICE_CHART: 'price_chart:'
 };
 
 export const CACHE_TTLS = {
@@ -18,17 +20,17 @@ export const CACHE_TTLS = {
 };
 
 // Single Redis client instance for the application
-let redisClient: Redis | null = null;
+let redisClient: Redis.Redis | null = null;
 
 /**
  * Get or create a Redis client
  */
-export function getRedisClient(): Redis {
+export function getRedisClient(): Redis.Redis {
   if (!redisClient) {
     const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
     console.log(`Connecting to Redis at ${redisUrl.split('@').pop()}`);
     
-    redisClient = new Redis(redisUrl, {
+    redisClient = new Redis.Redis(redisUrl, {
       retryStrategy: (times) => {
         return Math.min(times * 50, 2000);
       },

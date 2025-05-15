@@ -3,6 +3,10 @@ import { PrismaClient } from '@prisma/client';
 import { ObjectId } from 'mongodb';
 import { MongoClient } from 'mongodb';
 import { TokenPriceService } from './tokenPriceService';
+import { getRedisClient, CACHE_PREFIXES } from '@/src/lib/redis/exports';
+
+// Cache TTL in seconds (5 minutes for price data)
+const PRICE_CHART_CACHE_TTL = 300;
 
 // Export the interface for other files to use
 export interface ChartDataPoint {
@@ -40,6 +44,69 @@ export class PriceChartService {
    * @returns Array of chart data points
    */
   static async getTokenPriceChartData(
+    address: string,
+    tokenId: string,
+    timeframe: string = '1d',
+    limit: number = 100,
+    prisma: PrismaClient
+  ): Promise<ChartDataPoint[]> {
+    try {
+      // Generate a cache key based on input parameters
+      const cacheKey = `${CACHE_PREFIXES.PRICE_CHART}:${address}:${timeframe}:${limit}`;
+      
+      // Try to get data from Redis cache first
+      const redisClient = getRedisClient();
+      const cachedData = await redisClient.get(cacheKey);
+      
+      if (cachedData) {
+        try {
+          console.log(`[CHART] Cache hit for token price chart: ${address} (${timeframe})`);
+          return JSON.parse(cachedData) as ChartDataPoint[];
+        } catch (err) {
+          console.error(`[CHART] Error parsing cached chart data: ${err}`);
+          // Continue to fetch fresh data if parsing fails
+        }
+      }
+      
+      console.log(`[CHART] Cache miss for token price chart: ${address} (${timeframe}), fetching fresh data`);
+      
+      // If not in cache, fetch from database
+      const chartData = await this.fetchTokenPriceChartData(
+        address,
+        tokenId,
+        timeframe,
+        limit,
+        prisma
+      );
+      
+      // Cache the result if we have data
+      if (chartData.length > 0) {
+        try {
+          await redisClient.set(
+            cacheKey, 
+            JSON.stringify(chartData), 
+            'EX', 
+            PRICE_CHART_CACHE_TTL
+          );
+          console.log(`[CHART] Cached price chart for ${address} (${timeframe}) for ${PRICE_CHART_CACHE_TTL} seconds`);
+        } catch (err) {
+          console.error(`[CHART] Error caching chart data: ${err}`);
+          // Continue even if caching fails
+        }
+      }
+      
+      return chartData;
+    } catch (error) {
+      console.error('[CHART] Error in getTokenPriceChartData:', error);
+      return [];
+    }
+  }
+  
+  /**
+   * Fetch price chart data from the database
+   * This is the expensive operation we want to cache
+   */
+  private static async fetchTokenPriceChartData(
     address: string,
     tokenId: string,
     timeframe: string = '1d',
@@ -194,7 +261,7 @@ export class PriceChartService {
         }
       }
     } catch (error) {
-      console.error('[DEBUG] Error in getTokenPriceChartData:', error);
+      console.error('[DEBUG] Error in fetchTokenPriceChartData:', error);
       return [];
     }
   }
