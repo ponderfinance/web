@@ -166,7 +166,7 @@ function TokenNameDisplay({
   
   if (isLoadingBasic) {
     return (
-      <Skeleton width={56} height={4} borderRadius="medium" />
+      <Skeleton width={24} height={4} borderRadius="medium" />
     )
   }
   
@@ -197,8 +197,8 @@ function PriceDisplay({
   if (isLoadingPrice) {
     return (
       <View direction="row" align="center" gap={2}>
-        <Skeleton width={12} height={4} borderRadius="medium" />
-        <Skeleton width={8} height={3} borderRadius="medium" />
+        <Skeleton width={20} height={10} borderRadius="medium" />
+        <Skeleton width={12} height={10} borderRadius="medium" />
       </View>
     )
   }
