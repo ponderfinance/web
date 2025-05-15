@@ -5,6 +5,7 @@ import { View, Text, Actionable } from 'reshaped'
 import { PoolsPageQuery } from '@/src/__generated__/PoolsPageQuery.graphql'
 import { TokenPair } from '@/src/components/TokenPair'
 import Link from 'next/link'
+import ScrollableTable from '@/src/components/ScrollableTable'
 
 // Helper to format currency values
 const formatCurrency = (value: number | string | null | undefined): string => {
@@ -68,13 +69,14 @@ export const PoolsDisplay: React.FC<PoolsDisplayProps> = ({
   }, [data]);
 
   return (
-    <View borderRadius="medium" borderColor="neutral-faded" overflow="auto" width="100%">
+    <ScrollableTable minWidth="900px">
       <View
         direction="row"
         gap={0}
         padding={4}
         className={'border-0 border-b border-neutral-faded'}
         backgroundColor="elevation-base"
+        width="100%"
       >
         <View.Item columns={1}>
           <Text color="neutral-faded" weight="medium">
@@ -124,7 +126,7 @@ export const PoolsDisplay: React.FC<PoolsDisplayProps> = ({
       </View>
 
       {/* Table Body */}
-      <View direction="column" gap={0}>
+      <View direction="column" gap={0} width="100%">
         {data.pairs.edges.map(({ node }, index) => (
           <View
             key={node.id}
@@ -133,6 +135,7 @@ export const PoolsDisplay: React.FC<PoolsDisplayProps> = ({
             padding={4}
             className={'border-0'}
             align="center"
+            width="100%"
           >
             <View.Item columns={1}>
               <Text color="neutral-faded">{index + 1}</Text>
@@ -170,6 +173,6 @@ export const PoolsDisplay: React.FC<PoolsDisplayProps> = ({
           </View>
         ))}
       </View>
-    </View>
+    </ScrollableTable>
   )
 }

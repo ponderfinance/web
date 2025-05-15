@@ -6,6 +6,7 @@ import { TokensPageQuery } from '@/src/__generated__/TokensPageQuery.graphql'
 import { TokensDisplay } from '@/src/modules/explore/components/TokensDisplay'
 import { View, Text, Skeleton } from 'reshaped'
 import { tokenFragment } from '@/src/components/TokenPair'
+import ScrollableTable from '@/src/components/ScrollableTable'
 
 export const tokensPageQuery = graphql`
   query TokensPageQuery(
@@ -42,7 +43,7 @@ export const tokensPageQuery = graphql`
 // Loading component for suspense
 function TokensLoading() {
   return (
-    <View borderRadius="medium" borderColor="neutral-faded" overflow="auto" width="100%">
+    <ScrollableTable minWidth="900px">
       {/* Table Header */}
       <View
         direction="row"
@@ -50,6 +51,7 @@ function TokensLoading() {
         padding={4}
         className={'border-0 border-b border-neutral-faded'}
         backgroundColor="elevation-base"
+        width="100%"
       >
         <View.Item columns={1}>
           <Text color="neutral-faded" weight="medium">
@@ -89,44 +91,47 @@ function TokensLoading() {
       </View>
 
       {/* Skeleton Rows */}
-      {[...Array(10)].map((_, index) => (
-        <View
-          key={index}
-          direction="row"
-          gap={0}
-          padding={4}
-          className={'border-0 border-neutral-faded'}
-          align="center"
-        >
-          <View.Item columns={1}>
-            <Skeleton width="20px" height="24px" />
-          </View.Item>
-          <View.Item columns={3}>
-            <View direction="row" gap={2} align="center">
-              <Skeleton width="28px" height="28px" borderRadius="circular" />
-              <View direction="row" gap={1} align="center">
-                <Skeleton width="120px" height="24px" />
+      <View direction="column" gap={0} width="100%">
+        {[...Array(10)].map((_, index) => (
+          <View
+            key={index}
+            direction="row"
+            gap={0}
+            padding={4}
+            className={'border-0 border-neutral-faded'}
+            align="center"
+            width="100%"
+          >
+            <View.Item columns={1}>
+              <Skeleton width="20px" height="24px" />
+            </View.Item>
+            <View.Item columns={3}>
+              <View direction="row" gap={2} align="center">
+                <Skeleton width="28px" height="28px" borderRadius="circular" />
+                <View direction="row" gap={1} align="center">
+                  <Skeleton width="120px" height="24px" />
+                </View>
               </View>
-            </View>
-          </View.Item>
-          <View.Item columns={2}>
-            <Skeleton width="80px" height="24px" />
-          </View.Item>
-          <View.Item columns={1}>
-            <Skeleton width="50px" height="24px" />
-          </View.Item>
-          <View.Item columns={1}>
-            <Skeleton width="50px" height="24px" />
-          </View.Item>
-          <View.Item columns={2}>
-            <Skeleton width="80px" height="24px" />
-          </View.Item>
-          <View.Item columns={2}>
-            <Skeleton width="80px" height="24px" />
-          </View.Item>
-        </View>
-      ))}
-    </View>
+            </View.Item>
+            <View.Item columns={2}>
+              <Skeleton width="80px" height="24px" />
+            </View.Item>
+            <View.Item columns={1}>
+              <Skeleton width="50px" height="24px" />
+            </View.Item>
+            <View.Item columns={1}>
+              <Skeleton width="50px" height="24px" />
+            </View.Item>
+            <View.Item columns={2}>
+              <Skeleton width="80px" height="24px" />
+            </View.Item>
+            <View.Item columns={2}>
+              <Skeleton width="80px" height="24px" />
+            </View.Item>
+          </View>
+        ))}
+      </View>
+    </ScrollableTable>
   )
 }
 

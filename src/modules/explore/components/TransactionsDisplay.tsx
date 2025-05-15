@@ -6,6 +6,7 @@ import { TransactionsPageQuery } from '@/src/__generated__/TransactionsPageQuery
 import { TokenPair } from '@/src/components/TokenPair'
 import { formatCryptoVal } from '@/src/utils/numbers'
 import Link from 'next/link'
+import ScrollableTable from '@/src/components/ScrollableTable'
 
 // Helper to format currency values
 const formatCurrency = (value: string | null | undefined): string => {
@@ -65,7 +66,7 @@ export const TransactionsDisplay: React.FC<TransactionsDisplayProps> = ({ data }
   }, [data]);
 
   return (
-    <View borderRadius="medium" borderColor="neutral-faded" overflow="auto" width="100%">
+    <ScrollableTable minWidth="1000px">
       {/* Table Header */}
       <View
         direction="row"
@@ -73,6 +74,7 @@ export const TransactionsDisplay: React.FC<TransactionsDisplayProps> = ({ data }
         padding={4}
         className={'border-0 border-b border-neutral-faded'}
         backgroundColor="elevation-base"
+        width="100%"
       >
         <View.Item columns={2}>
           <Text color="neutral-faded" weight="medium">
@@ -112,7 +114,7 @@ export const TransactionsDisplay: React.FC<TransactionsDisplayProps> = ({ data }
       </View>
 
       {/* Table Body */}
-      <View direction="column" gap={0}>
+      <View direction="column" gap={0} width="100%">
         {data.recentTransactions.edges.map(({ node }) => {
           // Determine the direction of the swap
           const isExactIn0 =
@@ -144,6 +146,7 @@ export const TransactionsDisplay: React.FC<TransactionsDisplayProps> = ({ data }
               padding={4}
               className={'border-0 border-neutral-faded'}
               align="center"
+              width="100%"
             >
               <View.Item columns={2}>
                 <Text color="primary">
@@ -181,6 +184,6 @@ export const TransactionsDisplay: React.FC<TransactionsDisplayProps> = ({ data }
           )
         })}
       </View>
-    </View>
+    </ScrollableTable>
   )
 }

@@ -10,6 +10,7 @@ import { TokenPair } from '@/src/components/TokenPair'
 import { useRedisSubscriber } from '@/src/providers/RedisSubscriberProvider'
 import { useQueryLoader } from 'react-relay'
 import { tokensPageQuery } from './TokensPage'
+import ScrollableTable from '@/src/components/ScrollableTable'
 
 // Helper to format currency values
 const formatCurrency = (value: string | null | undefined): string => {
@@ -84,7 +85,7 @@ export const TokensDisplay: React.FC<TokensDisplayProps> = ({
   }
 
   return (
-    <View borderRadius="medium" borderColor="neutral-faded" overflow="auto" width="100%">
+    <ScrollableTable minWidth="900px">
       {/* Table Header */}
       <View
         direction="row"
@@ -93,6 +94,7 @@ export const TokensDisplay: React.FC<TokensDisplayProps> = ({
         paddingBlock={2}
         className={'border-0 border-b border-neutral-faded'}
         backgroundColor="elevation-base"
+        width="100%"
       >
         <View.Item columns={1}>
           <Text color="neutral-faded" weight="medium">
@@ -148,7 +150,7 @@ export const TokensDisplay: React.FC<TokensDisplayProps> = ({
         </View.Item>
       </View>
       {/* Table Body */}
-      <View direction="column" gap={0}>
+      <View direction="column" gap={0} width="100%">
         {data.tokens.edges.map(({ node }, index) => (
           <Link href={`/explore/tokens/${node.address}`} key={node.id}>
             <View
@@ -157,6 +159,7 @@ export const TokensDisplay: React.FC<TokensDisplayProps> = ({
               padding={4}
               className={'border-0 border-neutral-faded hover:bg-neutral-faded'}
               align="center"
+              width="100%"
             >
               <View.Item columns={1}>
                 <Text color="neutral-faded" weight="medium">
@@ -225,6 +228,6 @@ export const TokensDisplay: React.FC<TokensDisplayProps> = ({
           </Link>
         ))}
       </View>
-    </View>
+    </ScrollableTable>
   )
 }

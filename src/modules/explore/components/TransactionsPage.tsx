@@ -7,6 +7,7 @@ import { TransactionsDisplay } from '@/src/modules/explore/components/Transactio
 import { View, Text, Skeleton } from 'reshaped'
 import { tokenFragment } from '@/src/components/TokenPair'
 import TransactionsSubscription from './TransactionsSubscription'
+import ScrollableTable from '@/src/components/ScrollableTable'
 
 export const transactionsPageQuery = graphql`
   query TransactionsPageQuery($first: Int!) {
@@ -48,7 +49,7 @@ export const transactionsPageQuery = graphql`
 // Loading component for suspense
 function TransactionsLoading() {
   return (
-    <View borderRadius="medium" borderColor="neutral-faded" overflow="auto" width="100%">
+    <ScrollableTable minWidth="1000px">
       {/* Table Header */}
       <View
         direction="row"
@@ -56,6 +57,7 @@ function TransactionsLoading() {
         padding={4}
         className={'border-0 border-b border-neutral-faded'}
         backgroundColor="elevation-base"
+        width="100%"
       >
         <View.Item columns={2}>
           <Text color="neutral-faded" weight="medium">
@@ -95,47 +97,50 @@ function TransactionsLoading() {
       </View>
 
       {/* Skeleton Rows */}
-      {[...Array(10)].map((_, index) => (
-        <View
-          key={index}
-          direction="row"
-          gap={0}
-          padding={4}
-          className={'border-0 border-neutral-faded'}
-          align="center"
-        >
-          <View.Item columns={2}>
-            <Skeleton width="80px" height="24px" />
-          </View.Item>
+      <View direction="column" gap={0} width="100%">
+        {[...Array(10)].map((_, index) => (
+          <View
+            key={index}
+            direction="row"
+            gap={0}
+            padding={4}
+            className={'border-0 border-neutral-faded'}
+            align="center"
+            width="100%"
+          >
+            <View.Item columns={2}>
+              <Skeleton width="80px" height="24px" />
+            </View.Item>
 
-          <View.Item columns={1}>
-            <Skeleton width="40px" height="24px" />
-          </View.Item>
+            <View.Item columns={1}>
+              <Skeleton width="40px" height="24px" />
+            </View.Item>
 
-          <View.Item columns={4}>
-            <View direction="row" gap={2} align="center">
-              <View direction="row" gap={1}>
-                <Skeleton width="28px" height="28px" borderRadius="circular" />
-                <Skeleton width="28px" height="28px" borderRadius="circular" />
+            <View.Item columns={4}>
+              <View direction="row" gap={2} align="center">
+                <View direction="row" gap={1}>
+                  <Skeleton width="28px" height="28px" borderRadius="circular" />
+                  <Skeleton width="28px" height="28px" borderRadius="circular" />
+                </View>
+                <Skeleton width="120px" height="24px" />
               </View>
-              <Skeleton width="120px" height="24px" />
-            </View>
-          </View.Item>
+            </View.Item>
 
-          <View.Item columns={2}>
-            <Skeleton width="100px" height="24px" />
-          </View.Item>
+            <View.Item columns={2}>
+              <Skeleton width="100px" height="24px" />
+            </View.Item>
 
-          <View.Item columns={2}>
-            <Skeleton width="100px" height="24px" />
-          </View.Item>
+            <View.Item columns={2}>
+              <Skeleton width="100px" height="24px" />
+            </View.Item>
 
-          <View.Item columns={1}>
-            <Skeleton width="60px" height="24px" />
-          </View.Item>
-        </View>
-      ))}
-    </View>
+            <View.Item columns={1}>
+              <Skeleton width="60px" height="24px" />
+            </View.Item>
+          </View>
+        ))}
+      </View>
+    </ScrollableTable>
   )
 }
 

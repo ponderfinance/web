@@ -6,6 +6,7 @@ import { PoolsPageQuery } from '@/src/__generated__/PoolsPageQuery.graphql'
 import { PoolsDisplay } from '@/src/modules/explore/components/PoolsDisplay'
 import { View, Text, Skeleton } from 'reshaped'
 import { tokenFragment } from '@/src/components/TokenPair'
+import ScrollableTable from '@/src/components/ScrollableTable'
 
 export const poolsPageQuery = graphql`
   query PoolsPageQuery(
@@ -52,7 +53,7 @@ export const poolsPageQuery = graphql`
 // Loading component for suspense
 function PoolsLoading() {
   return (
-    <View borderRadius="medium" borderColor="neutral-faded" overflow="auto" width="100%">
+    <ScrollableTable minWidth="900px">
       {/* Table Header */}
       <View
         direction="row"
@@ -60,6 +61,7 @@ function PoolsLoading() {
         padding={4}
         className={'border-0 border-b border-neutral-faded'}
         backgroundColor="elevation-base"
+        width="100%"
       >
         <View.Item columns={1}>
           <Text color="neutral-faded" weight="medium">
@@ -99,45 +101,48 @@ function PoolsLoading() {
       </View>
 
       {/* Skeleton Rows */}
-      {[...Array(10)].map((_, index) => (
-        <View
-          key={index}
-          direction="row"
-          gap={0}
-          padding={4}
-          className={'border-0 border-neutral-faded'}
-          align="center"
-        >
-          <View.Item columns={1}>
-            <Skeleton width="20px" height="24px" />
-          </View.Item>
-          <View.Item columns={3}>
-            <View direction="row" gap={2} align="center">
-              <View direction="row" gap={1}>
-                <Skeleton width="28px" height="28px" borderRadius="circular" />
-                <Skeleton width="28px" height="28px" borderRadius="circular" />
+      <View direction="column" gap={0} width="100%">
+        {[...Array(10)].map((_, index) => (
+          <View
+            key={index}
+            direction="row"
+            gap={0}
+            padding={4}
+            className={'border-0 border-neutral-faded'}
+            align="center"
+            width="100%"
+          >
+            <View.Item columns={1}>
+              <Skeleton width="20px" height="24px" />
+            </View.Item>
+            <View.Item columns={3}>
+              <View direction="row" gap={2} align="center">
+                <View direction="row" gap={1}>
+                  <Skeleton width="28px" height="28px" borderRadius="circular" />
+                  <Skeleton width="28px" height="28px" borderRadius="circular" />
+                </View>
+                <Skeleton width="120px" height="24px" />
               </View>
-              <Skeleton width="120px" height="24px" />
-            </View>
-          </View.Item>
-          <View.Item columns={2}>
-            <Skeleton width="100px" height="24px" />
-          </View.Item>
-          <View.Item columns={1}>
-            <Skeleton width="60px" height="24px" />
-          </View.Item>
-          <View.Item columns={1}>
-            <Skeleton width="60px" height="24px" />
-          </View.Item>
-          <View.Item columns={2}>
-            <Skeleton width="100px" height="24px" />
-          </View.Item>
-          <View.Item columns={2}>
-            <Skeleton width="100px" height="24px" />
-          </View.Item>
-        </View>
-      ))}
-    </View>
+            </View.Item>
+            <View.Item columns={2}>
+              <Skeleton width="100px" height="24px" />
+            </View.Item>
+            <View.Item columns={1}>
+              <Skeleton width="60px" height="24px" />
+            </View.Item>
+            <View.Item columns={1}>
+              <Skeleton width="60px" height="24px" />
+            </View.Item>
+            <View.Item columns={2}>
+              <Skeleton width="100px" height="24px" />
+            </View.Item>
+            <View.Item columns={2}>
+              <Skeleton width="100px" height="24px" />
+            </View.Item>
+          </View>
+        ))}
+      </View>
+    </ScrollableTable>
   )
 }
 
