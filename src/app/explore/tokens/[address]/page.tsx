@@ -1,7 +1,7 @@
 'use client'
 
 import { Suspense } from 'react'
-import { View, Text } from 'reshaped'
+import { View, Text, Skeleton } from 'reshaped'
 import { isAddress } from 'viem'
 import dynamic from 'next/dynamic'
 
@@ -15,51 +15,69 @@ const TokenDetailPageClient = dynamic(
   { ssr: false }
 )
 
-// Loading skeleton for better UX
+// Enhanced loading skeleton with Reshaped Skeleton component
 function TokenDetailSkeleton() {
   return (
     <View direction="column" gap={6} width="100%">
-      {/* Header skeleton */}
-      <View direction="row" align="center" gap={3} height={4}>
-        <View width={12} height={2} attributes={{
-          style: { backgroundColor: 'rgba(120, 120, 120, 0.2)', borderRadius: 4 }
-        }} />
+      {/* Breadcrumb Navigation skeleton */}
+      <View direction="row" align="center" gap={1.5}>
+        <Skeleton width={4} height={0.75} borderRadius="medium" />
+        <Text color="neutral-faded" variant="body-2">›</Text>
+        <Skeleton width={4} height={0.75} borderRadius="medium" />
+        <Text color="neutral-faded" variant="body-2">›</Text>
+        <Skeleton width={4} height={0.75} borderRadius="medium" />
       </View>
       
-      {/* Token info skeleton */}
-      <View direction="row" align="center" gap={3} height={10}>
-        <View width={10} height={10} attributes={{
-          style: { backgroundColor: 'rgba(120, 120, 120, 0.2)', borderRadius: '50%' }
-        }} />
-        <View width={20} height={4} attributes={{
-          style: { backgroundColor: 'rgba(120, 120, 120, 0.2)', borderRadius: 4 }
-        }} />
+      {/* Token header with logo and name skeleton */}
+      <View direction="row" align="center" gap={3}>
+        <View width={8} height={8} overflow="hidden" borderRadius="large">
+          <Skeleton width="100%" height="100%" />
+        </View>
+        <Skeleton width={56} height={4} borderRadius="medium" />
       </View>
       
-      {/* Chart skeleton */}
-      <View height={400} width="100%" attributes={{
-        style: {
-          backgroundColor: 'rgba(120, 120, 120, 0.1)',
-          borderRadius: 4
-        }
-      }} />
+      {/* Price and percent change skeleton */}
+      <View direction="row" align="center" gap={2}>
+        <Skeleton width={12} height={4} borderRadius="medium" />
+        <Skeleton width={8} height={3} borderRadius="medium" />
+      </View>
       
-      {/* Stats skeleton */}
-      <View direction="column" gap={4}>
-        <View width={12} height={4} attributes={{
-          style: { backgroundColor: 'rgba(120, 120, 120, 0.2)', borderRadius: 4 }
-        }} />
-        <View direction="row" wrap={true} gap={6} justify="space-between">
-          {[1, 2, 3, 4].map((i) => (
-            <View key={i} direction="column" gap={2} width={80}>
-              <View width={12} height={2} attributes={{
-                style: { backgroundColor: 'rgba(120, 120, 120, 0.2)', borderRadius: 4 }
-              }} />
-              <View width={20} height={3} attributes={{
-                style: { backgroundColor: 'rgba(120, 120, 120, 0.2)', borderRadius: 4 }
-              }} />
+      {/* Main content area - responsive layout skeleton */}
+      <View direction="row" gap={6} width="100%" justify="space-between">
+        <View direction="column" gap={6} attributes={{ 
+          style: { flex: '3', width: '100%' } 
+        }}>
+          {/* Chart skeleton with fixed 400px height */}
+          <View attributes={{ style: { height: '400px', width: '100%' } }}>
+            <Skeleton height="100%" width="100%" borderRadius="small" />
+          </View>
+          
+          {/* Timeframe controls skeleton */}
+          <View direction="row" gap={2} justify="start">
+            {['1H', '1D', '1W', '1M', '1Y'].map((tf) => (
+              <Skeleton key={tf} height={6} width={8} borderRadius="small" />
+            ))}
+          </View>
+          
+          {/* Stats Section skeleton */}
+          <View direction="column" gap={4}>
+            <Skeleton width={12} height={4} borderRadius="medium" />
+            <View direction="row" wrap={true} gap={8} justify="space-between">
+              {[1, 2, 3, 4].map((i) => (
+                <View key={i} direction="column" gap={2} width={20}>
+                  <Skeleton width={8} height={2} borderRadius="medium" />
+                  <Skeleton width={12} height={3} borderRadius="medium" />
+                </View>
+              ))}
             </View>
-          ))}
+          </View>
+        </View>
+        
+        {/* Swap Interface skeleton */}
+        <View attributes={{ style: { flex: '2', width: '100%' } }}>
+          <View height={100} width="100%">
+            <Skeleton height="100%" width="100%" borderRadius="medium" />
+          </View>
         </View>
       </View>
     </View>
