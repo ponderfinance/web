@@ -119,10 +119,7 @@ function TransactionsLoading() {
 
             <View.Item columns={4}>
               <View direction="row" gap={2} align="center">
-                <View direction="row" gap={1}>
-                  <Skeleton width="28px" height="28px" borderRadius="circular" />
-                  <Skeleton width="28px" height="28px" borderRadius="circular" />
-                </View>
+                <Skeleton width={8} height={8} borderRadius="circular" />
                 <Skeleton width="120px" height="24px" />
               </View>
             </View.Item>

@@ -107,7 +107,7 @@ function TokensLoading() {
             </View.Item>
             <View.Item columns={3}>
               <View direction="row" gap={2} align="center">
-                <Skeleton width="28px" height="28px" borderRadius="circular" />
+                <Skeleton width={8} height={8} borderRadius="circular" />
                 <View direction="row" gap={1} align="center">
                   <Skeleton width="120px" height="24px" />
                 </View>
