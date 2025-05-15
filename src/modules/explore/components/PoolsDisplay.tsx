@@ -73,7 +73,8 @@ export const PoolsDisplay: React.FC<PoolsDisplayProps> = ({
       <View
         direction="row"
         gap={0}
-        padding={4}
+        paddingInline={4}
+        paddingBlock={2}
         className={'border-0 border-b border-neutral-faded'}
         backgroundColor="elevation-base"
         width="100%"

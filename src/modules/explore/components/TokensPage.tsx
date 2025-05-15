@@ -48,7 +48,8 @@ function TokensLoading() {
       <View
         direction="row"
         gap={0}
-        padding={4}
+        paddingInline={4}
+        paddingBlock={2}
         className={'border-0 border-b border-neutral-faded'}
         backgroundColor="elevation-base"
         width="100%"
@@ -183,7 +184,7 @@ export const TokensPage = () => {
   }, [])
 
   if (!mounted) {
-    return null
+    return <TokensLoading />
   }
 
   return (
