@@ -12,8 +12,8 @@ import { graphql, useLazyLoadQuery, PreloadedQuery, useQueryLoader } from 'react
 import TokenPriceChartContainer from './TokenPriceChartContainer'
 import { TokenDetailContentQuery } from '@/src/__generated__/TokenDetailContentQuery.graphql'
 import { getIpfsGateway } from '@/src/utils/ipfs'
-import { FragmentRefs } from 'relay-runtime'
 import { isAddress } from 'viem'
+import { useRedisSubscriber } from '@/src/providers/RedisSubscriberProvider'
 
 // Define the query for the token detail page
 export const TokenDetailQuery = graphql`
@@ -36,79 +36,82 @@ export const TokenDetailQuery = graphql`
   }
 `
 
-// Define token type based on the GraphQL schema
-interface TokenType {
-  id: string;
-  name?: string | null;
-  symbol?: string | null;
-  address: string;
-  decimals?: number | null;
-  priceUSD?: string | null;
-  priceChange24h?: number | null;
-  volumeUSD24h?: string | null;
-  tvl?: string | null;
-  marketCap?: string | null;
-  fdv?: string | null;
-  imageURI?: string | null;
-  // Fragment references for Relay
-  " $fragmentSpreads": FragmentRefs<"TokenPriceChartContainer_token">;
-}
+// Error fallback component
+const ErrorFallback = ({ message }: { message: string }) => (
+  <View direction="column" gap={4} align="center" justify="center" padding={6}>
+    <Text variant="title-3" color="critical">Error</Text>
+    <Text>{message}</Text>
+    <Link href="/explore/tokens">
+      <Text color="primary">Return to tokens list</Text>
+    </Link>
+  </View>
+);
 
-interface TokenDetailContentProps {
-  tokenAddress: string;
-}
+// Skeleton helper component
+const Skeleton = ({ width, height }: { width: string | number, height: string | number }) => (
+  <View 
+    width={width} 
+    height={height} 
+    backgroundColor="elevation-raised" 
+    borderRadius="small"
+  />
+);
 
-// Create a separate error boundary component to handle any render errors
-function ErrorFallback({ message }: { message: string }) {
-  return (
-    <View height={400} align="center" justify="center" direction="column" gap={4}>
-      <Text variant="featured-1" weight="medium" color="critical">Error</Text>
-      <Text>{message}</Text>
+// Loading component
+const LoadingContentSkeleton = () => (
+  <View direction="column" gap={6}>
+    <Skeleton width="100%" height={400} />
+    <View direction="row" justify="space-between" gap={6}>
+      <View width="48%">
+        <Skeleton width="100%" height={200} />
+      </View>
+      <View width="48%">
+        <Skeleton width="100%" height={200} />
+      </View>
     </View>
-  );
-}
+  </View>
+);
 
-// Loader component to handle loading state
-function TokenDetailSkeleton() {
-  return (
-    <View height={400} align="center" justify="center">
-      <Text>Loading token details...</Text>
-    </View>
-  );
-}
-
-// Split the component: one wrapper to load the query and one to render the data
-export default function TokenDetailContent({ tokenAddress }: TokenDetailContentProps) {
-  // Validate tokenAddress is a proper Ethereum address
-  if (!tokenAddress || !isAddress(tokenAddress)) {
-    console.error(`[TokenDetail] Invalid token address format: ${tokenAddress}`);
-    return <ErrorFallback message={`Invalid token address: ${tokenAddress}`} />;
-  }
-
-  // Use query loader pattern instead of direct query
+// Wrapper component that loads the query
+export function TokenDetailContentWithRelay({ tokenAddress }: { tokenAddress: string }) {
+  // Get Redis subscriber hook
+  const { tokenLastUpdated } = useRedisSubscriber();
+  
+  // Get query loader
   const [queryRef, loadQuery] = useQueryLoader<TokenDetailContentQuery>(TokenDetailQuery);
   
-  // Load the query on component mount or address change
+  // Load the query when the component mounts
   useEffect(() => {
-    console.log('[TokenDetail] Loading token data for address:', tokenAddress);
-    try {
+    if (isAddress(tokenAddress)) {
       loadQuery({ tokenAddress });
-    } catch (error) {
-      console.error('[TokenDetail] Error loading query:', error);
     }
   }, [tokenAddress, loadQuery]);
   
-  // Show loading state if query hasn't been loaded yet
+  // Refresh the data when Redis updates are received for this token
+  useEffect(() => {
+    if (tokenLastUpdated[tokenAddress]) {
+      console.log(`[TokenDetailContent] Refreshing data for token ${tokenAddress} after Redis update`);
+      loadQuery({ tokenAddress }, { fetchPolicy: 'network-only' });
+    }
+  }, [tokenAddress, tokenLastUpdated, loadQuery]);
+  
+  // Set up auto-refresh for token price
+  useEffect(() => {
+    // Refresh data every 30 seconds as a backup
+    const interval = setInterval(() => {
+      console.log(`[TokenDetailContent] Auto-refreshing token ${tokenAddress} data`);
+      loadQuery({ tokenAddress }, { fetchPolicy: 'network-only' });
+    }, 30000);
+    
+    return () => clearInterval(interval);
+  }, [tokenAddress, loadQuery]);
+  
+  // Return loading state if we haven't loaded the query yet
   if (!queryRef) {
-    return <TokenDetailSkeleton />;
+    return <LoadingContentSkeleton />;
   }
   
-  // Render the content component with the query reference
-  return (
-    <Suspense fallback={<TokenDetailSkeleton />}>
-      <TokenDetailContentRenderer queryRef={queryRef} />
-    </Suspense>
-  );
+  return <TokenDetailContentRenderer queryRef={queryRef} />;
 }
 
 // Content renderer component that uses the preloaded query
@@ -130,7 +133,7 @@ function TokenDetailContentRenderer({ queryRef }: { queryRef: PreloadedQuery<Tok
     }
     
     // Get token data
-    const token = data.tokenByAddress as unknown as TokenType;
+    const token = data.tokenByAddress;
     
     // Validate token has all required data before using it
     if (!token.address) {
@@ -143,8 +146,8 @@ function TokenDetailContentRenderer({ queryRef }: { queryRef: PreloadedQuery<Tok
     const priceChangePrefix = (token.priceChange24h || 0) >= 0 ? '+' : ''
     const priceChangeDisplay = `${priceChangePrefix}${(token.priceChange24h || 0).toFixed(2)}%`
 
-    // Format token metrics for display - memoized for performance
-    const formatLargeNumber = React.useCallback((value: string | null | undefined): string => {
+    // Format token metrics for display
+    const formatLargeNumber = (value: string | null | undefined): string => {
       if (!value) return '$0'
       const formattedNum = parseFloat(value)
 
@@ -157,23 +160,23 @@ function TokenDetailContentRenderer({ queryRef }: { queryRef: PreloadedQuery<Tok
       } else {
         return `$${formattedNum.toFixed(2)}`
       }
-    }, [])
+    }
 
-    // Get formatted metrics - memoized values
-    const metrics = React.useMemo(() => ({
+    // Get formatted metrics
+    const metrics = {
       tvl: formatLargeNumber(token?.tvl),
       marketCap: formatLargeNumber(token?.marketCap),
       fdv: formatLargeNumber(token?.fdv),
       dayVolume: formatLargeNumber(token?.volumeUSD24h)
-    }), [token?.tvl, token?.marketCap, token?.fdv, token?.volumeUSD24h, formatLargeNumber])
+    }
 
     // Handle timeframe change
     const handleTimeframeChange = (tf: string) => {
       setActiveTimeframe(tf);
     };
 
-    // Get price format based on value - memoized for performance
-    const formatTokenPrice = React.useCallback((price: number) => {
+    // Get price format based on value
+    const formatTokenPrice = (price: number) => {
       if (price < 0.001) {
         return price.toFixed(8)
       }
@@ -184,10 +187,10 @@ function TokenDetailContentRenderer({ queryRef }: { queryRef: PreloadedQuery<Tok
         return price.toFixed(4)
       }
       return price.toFixed(2)
-    }, [])
+    }
 
     // Map UI timeframe format to API timeframe format
-    const getChartTimeframe = React.useCallback(() => {
+    const getChartTimeframe = () => {
       switch (activeTimeframe) {
         case '1H': return '1h';  // 1 hour
         case '1D': return '1d';  // 1 day (24 hours)
@@ -196,87 +199,46 @@ function TokenDetailContentRenderer({ queryRef }: { queryRef: PreloadedQuery<Tok
         case '1Y': return '1y';  // 1 year (365 days)
         default: return '1m';    // Default to 1 month
       }
-    }, [activeTimeframe]);
-
-    // Memoize the chart component to prevent unnecessary re-renders
-    const timeframeForChart = getChartTimeframe();
-    
-    // Wrap the chart component in an error boundary to prevent rendering errors
-    const chartComponent = React.useMemo(() => {
-      try {
-        if (!token || !token.address) {
-          console.warn('[TokenDetail] Cannot render chart: token or address missing');
-          return (
-            <View height={400} align="center" justify="center">
-              <Text>Chart data unavailable</Text>
-            </View>
-          );
-        }
-        
-        return (
-          <TokenPriceChartContainer
-            tokenRef={token}
-            initialTimeframe={timeframeForChart}
-            initialDisplayType="area"
-          />
-        );
-      } catch (error) {
-        console.error('[TokenDetail] Error rendering chart:', error);
-        return (
-          <View height={400} align="center" justify="center">
-            <Text>Error loading chart data</Text>
-          </View>
-        );
-      }
-    }, [token, timeframeForChart]);
+    };
 
     return (
       <View direction="column" gap={6}>
-        {/* Breadcrumb Navigation */}
-        <View direction="row" align="center" gap={3}>
-          <Link href="/explore" attributes={{ style: { textDecoration: 'none' } }}>
-            <Text variant="body-2" color="neutral-faded">
-              Explore
-            </Text>
-          </Link>
-          <Text color="neutral-faded">›</Text>
-          <Link href="/explore/tokens" attributes={{ style: { textDecoration: 'none' } }}>
-            <Text variant="body-2" color="neutral-faded">
-              Tokens
-            </Text>
-          </Link>
-          <Text color="neutral-faded">›</Text>
-          <Text variant="body-2" color="neutral">
-            {token.symbol || token.address.slice(0, 8)}
-          </Text>
-        </View>
-
-        <View direction="column" position="relative">
-          {/* Token header with logo and name */}
-          <View direction="row" justify="space-between" align="center">
-            <View direction="row" gap={3} align="center">
-              <Image
-                src={getIpfsGateway(token.imageURI ?? '/tokens/coin.svg')}
-                height={8}
-                width={8}
-                alt={`${token.name || token.address.slice(0, 10)} Token Image`}
-              />
-              <Text variant="featured-2" weight="medium" color="neutral">
-                {token.name ? `${token.name}` : token.address.slice(0, 8)}
-              </Text>
-              <Text variant="featured-2" weight="medium" color="neutral-faded">
-                {token.symbol}
-              </Text>
-            </View>
+        {/* Token Metrics cards */}
+        <View 
+          direction="row" 
+          justify="space-between"
+          gap={4}
+          wrap
+        >
+          <View direction="column" gap={1} padding={4} backgroundColor="elevation-raised" borderRadius="medium" width={{ s: '100%', m: '23%' }}>
+            <Text variant="body-3" color="neutral-faded">TVL</Text>
+            <Text variant="title-6">{metrics.tvl}</Text>
           </View>
 
-          {/* Price and percent change */}
+          <View direction="column" gap={1} padding={4} backgroundColor="elevation-raised" borderRadius="medium" width={{ s: '100%', m: '23%' }}>
+            <Text variant="body-3" color="neutral-faded">Market Cap</Text>
+            <Text variant="title-6">{metrics.marketCap}</Text>
+          </View>
+
+          <View direction="column" gap={1} padding={4} backgroundColor="elevation-raised" borderRadius="medium" width={{ s: '100%', m: '23%' }}>
+            <Text variant="body-3" color="neutral-faded">FDV</Text>
+            <Text variant="title-6">{metrics.fdv}</Text>
+          </View>
+
+          <View direction="column" gap={1} padding={4} backgroundColor="elevation-raised" borderRadius="medium" width={{ s: '100%', m: '23%' }}>
+            <Text variant="body-3" color="neutral-faded">24h Volume</Text>
+            <Text variant="title-6">{metrics.dayVolume}</Text>
+          </View>
+        </View>
+
+        {/* Chart with price overlay */}
+        <View position="relative" backgroundColor="elevation-raised" borderRadius="medium" overflow="hidden">
           <View
             direction="column"
-            padding={0}
+            padding={4}
             gap={1}
             position="absolute"
-            insetTop={12}
+            insetTop={0}
             zIndex={10}
           >
             <Text variant="title-6" weight="regular" color="neutral">
@@ -297,7 +259,11 @@ function TokenDetailContentRenderer({ queryRef }: { queryRef: PreloadedQuery<Tok
                 }
               }} />
             }>
-              {chartComponent}
+              <TokenPriceChartContainer 
+                tokenRef={token}  
+                initialTimeframe={getChartTimeframe()}
+                initialDisplayType="area"
+              />
             </Suspense>
           </View>
 
@@ -328,53 +294,38 @@ function TokenDetailContentRenderer({ queryRef }: { queryRef: PreloadedQuery<Tok
           </View>
         </View>
 
-        {/* Stats Section */}
-        <View direction="column" gap={4}>
-          <Text variant="featured-2" weight="medium" color="neutral">
-            Stats
-          </Text>
-          <View direction="row" wrap={true} gap={8} justify="space-between">
-            <View direction="column" gap={1}>
-              <Text variant="body-2" color="neutral-faded">
-                TVL
-              </Text>
-              <Text variant="featured-3" weight="medium" color="neutral">
-                {metrics.tvl}
-              </Text>
-            </View>
-            <View direction="column" gap={1}>
-              <Text variant="body-2" color="neutral-faded">
-                Market cap
-              </Text>
-              <Text variant="featured-3" weight="medium" color="neutral">
-                {metrics.marketCap}
-              </Text>
-            </View>
-            <View direction="column" gap={1}>
-              <Text variant="body-2" color="neutral-faded">
-                FDV
-              </Text>
-              <Text variant="featured-3" weight="medium" color="neutral">
-                {metrics.fdv}
-              </Text>
-            </View>
-            <View direction="column" gap={1}>
-              <Text variant="body-2" color="neutral-faded">
-                24h volume
-              </Text>
-              <Text variant="featured-3" weight="medium" color="neutral">
-                {metrics.dayVolume}
-              </Text>
+        {/* Token Information Section */}
+        <View direction="column" gap={2}>
+          <View direction="column" padding={4} backgroundColor="elevation-raised" borderRadius="medium" gap={4}>
+            <Text variant="title-6">Token Information</Text>
+            
+            <View direction="column" gap={2}>
+              <View direction="row" justify="space-between" padding={2}>
+                <Text color="neutral-faded">Name</Text>
+                <Text>{token.name || '-'}</Text>
+              </View>
+              
+              <View direction="row" justify="space-between" padding={2}>
+                <Text color="neutral-faded">Symbol</Text>
+                <Text>{token.symbol || '-'}</Text>
+              </View>
+              
+              <View direction="row" justify="space-between" padding={2}>
+                <Text color="neutral-faded">Address</Text>
+                <Text attributes={{ style: { wordBreak: 'break-all' } }}>{token.address}</Text>
+              </View>
+              
+              <View direction="row" justify="space-between" padding={2}>
+                <Text color="neutral-faded">Decimals</Text>
+                <Text>{token.decimals || '-'}</Text>
+              </View>
             </View>
           </View>
         </View>
       </View>
-    )
-  } catch (error) {
-    // Handle query errors gracefully
-    console.error(`[TokenDetail] Error loading token data:`, error);
-    return (
-      <ErrorFallback message={`Error loading token data. Please try again later.`} />
     );
+  } catch (error) {
+    console.error('Error rendering token detail:', error);
+    return <ErrorFallback message="Error loading token data" />;
   }
 }

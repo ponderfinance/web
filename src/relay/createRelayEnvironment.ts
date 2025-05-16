@@ -8,8 +8,53 @@ import {
   SubscribeFunction,
   RequestParameters,
   Variables,
-  GraphQLResponse
+  GraphQLResponse,
+  RecordSourceProxy,
+  RecordProxy
 } from 'relay-runtime'
+
+// Store updater registry for efficient updates
+interface StoreUpdater {
+  pattern: RegExp;
+  updater: (store: RecordSourceProxy, data: any) => void;
+}
+
+// Registry of store updaters for different entity types
+const storeUpdaters: StoreUpdater[] = [];
+
+/**
+ * Register a store updater for a specific query pattern
+ * This helps optimize updates by making targeted changes instead of refetching
+ */
+export function registerStoreUpdater(
+  pattern: RegExp,
+  updater: (store: RecordSourceProxy, data: any) => void
+): void {
+  storeUpdaters.push({ pattern, updater });
+}
+
+/**
+ * Apply store update for a specific entity type and data
+ * Returns true if an updater was found and applied
+ */
+export function applyStoreUpdate(
+  entityType: string,
+  data: any,
+  environment: Environment
+): boolean {
+  // See if we have a registered updater for this entity type
+  const matchingUpdater = storeUpdaters.find(entry => entry.pattern.test(entityType));
+  
+  if (matchingUpdater) {
+    // If we have an updater, use it to make targeted store changes
+    environment.commitUpdate(store => {
+      matchingUpdater.updater(store, data);
+    });
+    return true;
+  }
+  
+  return false;
+}
 
 // Function to fetch query data from GraphQL API
 const fetchQuery: FetchFunction = async (
@@ -182,7 +227,10 @@ const network = Network.create(fetchQuery, createSubscription);
 
 // Create a store to cache the data
 const source = new RecordSource();
-const store = new Store(source);
+const store = new Store(source, {
+  // Enable garbage collection to free up memory
+  gcReleaseBufferSize: 10
+});
 
 let clientEnvironment: Environment | undefined;
 
@@ -200,4 +248,35 @@ export function createRelayEnvironment() {
   }
 
   return clientEnvironment;
+}
+
+// Example token price updater (can be registered from components)
+export function registerTokenPriceUpdater() {
+  registerStoreUpdater(
+    /^token-price-/,
+    (store, data) => {
+      // Get token ID from the data
+      const tokenId = data.entityId;
+      if (!tokenId) return;
+      
+      // Find the token record
+      const tokenRecord = store.get(tokenId);
+      if (!tokenRecord) return;
+      
+      // Update price fields
+      if (data.priceUSD !== undefined) {
+        tokenRecord.setValue(data.priceUSD, 'priceUSD');
+      }
+      
+      if (data.priceChange24h !== undefined) {
+        tokenRecord.setValue(data.priceChange24h, 'priceChange24h');
+      }
+      
+      if (data.priceChange1h !== undefined) {
+        tokenRecord.setValue(data.priceChange1h, 'priceChange1h');
+      }
+      
+      console.log(`Updated token ${tokenId} price in Relay store without refetching`);
+    }
+  );
 } 

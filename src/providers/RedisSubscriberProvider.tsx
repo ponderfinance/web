@@ -10,6 +10,8 @@ import {
   closeRedisSubscriber,
   getEventEmitter
 } from '@/src/lib/redis/subscriber'
+import { initRedisRecovery, stopRedisRecovery } from '@/src/lib/redis/recovery'
+import { registerTokenPriceUpdater, applyStoreUpdate, createRelayEnvironment } from '@/src/relay/createRelayEnvironment'
 
 // Define the context type
 type RedisSubscriberContextType = {
@@ -49,7 +51,10 @@ export function RedisSubscriberProvider({ children }: { children: React.ReactNod
   useEffect(() => {
     if (typeof window === 'undefined' || isInitialized) return
     
-    console.log('Initializing Redis subscriber...')
+    console.log('Initializing Redis subscriber and recovery system...')
+    
+    // Register store updaters for efficient updates
+    registerTokenPriceUpdater()
     
     // Define our handler functions first so we can reference them in cleanup
     const metricsHandler = (data: any) => {
@@ -60,6 +65,13 @@ export function RedisSubscriberProvider({ children }: { children: React.ReactNod
     const pairHandler = (data: any) => {
       console.log('RedisSubscriber: received pair update', data)
       if (data.entityId) {
+        // Try to update the store directly
+        const env = createRelayEnvironment()
+        if (env && applyStoreUpdate(`pair-${data.entityId}`, data, env)) {
+          console.log('Applied direct store update for pair')
+        }
+        
+        // Always update the timestamp for components that need it
         setPairLastUpdated(prev => ({
           ...prev,
           [data.entityId]: data.timestamp || Date.now()
@@ -70,6 +82,13 @@ export function RedisSubscriberProvider({ children }: { children: React.ReactNod
     const tokenHandler = (data: any) => {
       console.log('RedisSubscriber: received token update', data)
       if (data.entityId) {
+        // Try to update the store directly
+        const env = createRelayEnvironment()
+        if (env && applyStoreUpdate(`token-price-${data.entityId}`, data, env)) {
+          console.log('Applied direct store update for token price')
+        }
+        
+        // Always update the timestamp for components that need it
         setTokenLastUpdated(prev => ({
           ...prev,
           [data.entityId]: data.timestamp || Date.now()
@@ -97,6 +116,9 @@ export function RedisSubscriberProvider({ children }: { children: React.ReactNod
       onTokenUpdated(tokenHandler)
       onTransactionUpdated(transactionHandler)
       
+      // Initialize Redis recovery system
+      initRedisRecovery(30000) // Check every 30 seconds
+      
       setIsInitialized(true)
     } catch (error) {
       console.error('Error initializing Redis subscriber:', error)
@@ -104,7 +126,7 @@ export function RedisSubscriberProvider({ children }: { children: React.ReactNod
     
     // Return cleanup function to properly remove listeners when component unmounts
     return () => {
-      console.log('Cleaning up Redis subscriber event listeners')
+      console.log('Cleaning up Redis subscriber event listeners and recovery system')
       const emitter = getEventEmitter()
       
       // Remove our specific event listeners
@@ -112,6 +134,9 @@ export function RedisSubscriberProvider({ children }: { children: React.ReactNod
       emitter.removeListener('pair:updated', pairHandler)
       emitter.removeListener('token:updated', tokenHandler)
       emitter.removeListener('transaction:updated', transactionHandler)
+      
+      // Stop the Redis recovery system
+      stopRedisRecovery()
       
       // If this is the only component using the subscriber, we can close the connection
       // Consider using a ref counter pattern if multiple components might use this

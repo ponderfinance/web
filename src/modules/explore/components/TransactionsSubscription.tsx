@@ -3,7 +3,7 @@
 import React, { useEffect, useRef } from 'react';
 import { useQueryLoader } from 'react-relay';
 import { transactionsPageQuery } from './TransactionsPage';
-import { subscribeToTransactionUpdates } from '@/src/lib/subscriptions/subscription-server';
+import { useRedisSubscriber } from '@/src/providers/RedisSubscriberProvider';
 
 interface TransactionsSubscriptionProps {
   children: React.ReactNode;
@@ -13,43 +13,37 @@ interface TransactionsSubscriptionProps {
 export default function TransactionsSubscription({ children, queryRef }: TransactionsSubscriptionProps) {
   const [_, loadQuery] = useQueryLoader(transactionsPageQuery);
   
+  // Use Redis subscriber for real-time updates
+  const { transactionLastUpdated } = useRedisSubscriber();
+  
   // Track the last refresh time to prevent too frequent updates
   const lastRefreshTimeRef = useRef<number>(0);
   
-  // Set up event subscription for transaction updates
+  // Set up listener for transaction updates from Redis
   useEffect(() => {
-    console.log('[TransactionsSubscription] Setting up subscription to transaction updates');
-    
-    // Create a handler function that implements debounce logic
-    const handleTransactionUpdate = () => {
+    if (Object.keys(transactionLastUpdated).length > 0) {
       const now = Date.now();
-      // Only refresh if it's been at least 1 second since the last refresh
+      // Throttle refreshes to at most once per second
       if (now - lastRefreshTimeRef.current > 1000) {
-        console.log('[TransactionsSubscription] Refreshing transactions data due to update');
+        console.log('[TransactionsSubscription] Refreshing transactions data due to Redis update');
         if (queryRef && queryRef.variables) {
           loadQuery(queryRef.variables, { fetchPolicy: 'network-only' });
           lastRefreshTimeRef.current = now;
         }
       }
-    };
-    
-    // Subscribe to transaction updates
-    const unsubscribe = subscribeToTransactionUpdates(handleTransactionUpdate);
-    
-    // Set up a periodic refresh as a backup
+    }
+  }, [transactionLastUpdated, queryRef, loadQuery]);
+  
+  // Set up a periodic refresh as a backup
+  useEffect(() => {
     const interval = setInterval(() => {
       if (queryRef && queryRef.variables) {
         console.log('[TransactionsSubscription] Performing periodic refresh');
         loadQuery(queryRef.variables, { fetchPolicy: 'network-only' });
-        lastRefreshTimeRef.current = Date.now();
       }
     }, 15000); // Refresh every 15 seconds
     
-    // Clean up
-    return () => {
-      unsubscribe();
-      clearInterval(interval);
-    };
+    return () => clearInterval(interval);
   }, [queryRef, loadQuery]);
   
   // Just render the children directly

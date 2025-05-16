@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useEffect } from 'react'
+import React, { useEffect, useCallback } from 'react'
 import { View, Text, Actionable, Image, Skeleton } from 'reshaped'
 import { TokensPageQuery } from '@/src/__generated__/TokensPageQuery.graphql'
 import { getIpfsGateway } from '@/src/utils/ipfs'
@@ -11,6 +11,7 @@ import { useRedisSubscriber } from '@/src/providers/RedisSubscriberProvider'
 import { useQueryLoader } from 'react-relay'
 import { tokensPageQuery } from './TokensPage'
 import ScrollableTable from '@/src/components/ScrollableTable'
+import { withRedisRecovery } from '@/src/lib/redis/recovery'
 
 // Helper to format currency values
 const formatCurrency = (value: string | null | undefined): string => {
@@ -32,21 +33,27 @@ const formatCurrency = (value: string | null | undefined): string => {
   return `$${numValue.toFixed(2)}`
 }
 
-// Helper to format percentage change
-const formatPercent = (value: number | null | undefined): string => {
-  if (value === null || value === undefined) return '0.00%'
-
-  const fixedValue = value.toFixed(2)
-  return value > 0 ? `+${fixedValue}%` : `${fixedValue}%`
+// Format percent change values
+const formatPercentChange = (value: number | null | undefined): string => {
+  if (value === undefined || value === null) return '0.00%'
+  
+  // Format with sign and 2 decimal places
+  const sign = value >= 0 ? '+' : ''
+  return `${sign}${value.toFixed(2)}%`
 }
 
-// Define the component props
-interface TokensDisplayProps {
+// Get color for percent change
+const getPercentChangeColor = (value: number | null | undefined): 'positive' | 'critical' | 'neutral' => {
+  if (!value) return 'neutral'
+  return value >= 0 ? 'positive' : 'critical'
+}
+
+type TokensDisplayProps = {
   data: TokensPageQuery['response']
   orderBy: string
   orderDirection: string
-  setOrderBy: (value: string) => void
-  setOrderDirection: (value: string) => void
+  setOrderBy: (orderBy: string) => void
+  setOrderDirection: (orderDirection: string) => void
 }
 
 export const TokensDisplay: React.FC<TokensDisplayProps> = ({
@@ -57,22 +64,45 @@ export const TokensDisplay: React.FC<TokensDisplayProps> = ({
   setOrderDirection,
 }) => {
   // Get Redis subscriber context
-  const { tokenLastUpdated } = useRedisSubscriber();
+  const { tokenLastUpdated, refreshData } = useRedisSubscriber();
   
   // Get query loader
   const [queryRef, loadQuery] = useQueryLoader<TokensPageQuery>(tokensPageQuery);
   
-  // Handle token updates from Redis
-  useEffect(() => {
-    if (Object.keys(tokenLastUpdated).length > 0) {
-      console.log('Tokens updated, refreshing tokens list');
+  // Debounced refresh function to avoid too many refreshes
+  const refreshTokensData = useCallback(() => {
+    console.log('Refreshing tokens list data');
+    try {
       loadQuery({
         first: 20,
         orderBy: orderBy as any,
         orderDirection: orderDirection as any,
       }, { fetchPolicy: 'network-only' });
+    } catch (error) {
+      console.error('Error refreshing tokens data:', error);
     }
-  }, [tokenLastUpdated, orderBy, orderDirection, loadQuery]);
+  }, [orderBy, orderDirection, loadQuery]);
+  
+  // Handle token updates from Redis
+  useEffect(() => {
+    if (Object.keys(tokenLastUpdated).length > 0) {
+      console.log('Tokens updated from Redis, refreshing tokens list');
+      
+      // Use the recovery wrapper for the query refresh
+      refreshTokensData();
+    }
+  }, [tokenLastUpdated, refreshTokensData]);
+  
+  // Set up auto-refresh for token prices
+  useEffect(() => {
+    // Refresh data every 60 seconds as a backup
+    const interval = setInterval(() => {
+      console.log('Auto-refreshing tokens data');
+      refreshTokensData();
+    }, 60000);
+    
+    return () => clearInterval(interval);
+  }, [refreshTokensData]);
   
   // Handle sorting
   const handleSort = (column: string) => {
@@ -151,7 +181,7 @@ export const TokensDisplay: React.FC<TokensDisplayProps> = ({
       </View>
       {/* Table Body */}
       <View direction="column" gap={0} width="100%">
-        {data.tokens.edges.map(({ node }, index) => (
+        {data.tokens.edges.map(({ node }, index: number) => (
           <Link href={`/explore/tokens/${node.address}`} key={node.id}>
             <View
               direction="row"
@@ -190,30 +220,14 @@ export const TokensDisplay: React.FC<TokensDisplayProps> = ({
               </View.Item>
 
               <View.Item columns={1}>
-                <Text
-                  color={
-                    !node.priceChange1h
-                      ? 'neutral'
-                      : node.priceChange1h > 0
-                        ? 'positive'
-                        : 'critical'
-                  }
-                >
-                  {formatPercent(node.priceChange1h)}
+                <Text color={getPercentChangeColor(node.priceChange1h)}>
+                  {formatPercentChange(node.priceChange1h)}
                 </Text>
               </View.Item>
 
               <View.Item columns={1}>
-                <Text
-                  color={
-                    !node.priceChange24h
-                      ? 'neutral'
-                      : node.priceChange24h > 0
-                        ? 'positive'
-                        : 'critical'
-                  }
-                >
-                  {formatPercent(node.priceChange24h)}
+                <Text color={getPercentChangeColor(node.priceChange24h)}>
+                  {formatPercentChange(node.priceChange24h)}
                 </Text>
               </View.Item>
 

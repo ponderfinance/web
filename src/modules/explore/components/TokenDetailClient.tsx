@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import {
   View,
   Text,
@@ -12,11 +12,11 @@ import {
 import { isAddress, formatUnits } from 'viem'
 import { getIpfsGateway } from '@/src/utils/ipfs'
 import { useRedisSubscriber } from '@/src/providers/RedisSubscriberProvider'
-import { getClientEnvironment } from '@/src/lib/relay/environment'
 import dynamic from 'next/dynamic'
 import { formatCurrency } from '@/src/lib/utils/tokenPriceUtils'
 import { CURRENT_CHAIN } from '@/src/constants/chains'
 import { KKUB_ADDRESS, KOI_ADDRESS } from '@/src/constants/addresses'
+import { shouldRefresh } from '@/src/lib/utils/throttleRefresh'
 
 // Constants
 const NATIVE_KUB_ADDRESS = '0x0000000000000000000000000000000000000000' // Native KUB address
@@ -218,7 +218,6 @@ function PriceDisplay({
 // Main component
 export default function TokenDetailClient({ tokenAddress }: TokenDetailClientProps) {
   // Loading states for different parts of the UI
-  const [isLoadingEnvironment, setIsLoadingEnvironment] = useState(true)
   const [isLoadingBasicInfo, setIsLoadingBasicInfo] = useState(true)
   const [isLoadingPrice, setIsLoadingPrice] = useState(true)
   const [isLoadingChart, setIsLoadingChart] = useState(true)
@@ -226,9 +225,6 @@ export default function TokenDetailClient({ tokenAddress }: TokenDetailClientPro
   
   // Error state
   const [error, setError] = useState<string | null>(null)
-  
-  // Environment state
-  const [environment, setEnvironment] = useState<any>(null)
   
   // Token data state with default/placeholder values
   const [token, setToken] = useState<TokenData>({
@@ -244,7 +240,7 @@ export default function TokenDetailClient({ tokenAddress }: TokenDetailClientPro
   const [isMobile, setIsMobile] = useState(false)
   
   // Get Redis subscriber for real-time updates
-  const { refreshData } = useRedisSubscriber()
+  const { tokenLastUpdated } = useRedisSubscriber()
   
   // Handle responsive layout
   useEffect(() => {
@@ -262,169 +258,135 @@ export default function TokenDetailClient({ tokenAddress }: TokenDetailClientPro
     return () => window.removeEventListener('resize', checkIfMobile)
   }, [])
   
-  // Initialize environment on mount
-  useEffect(() => {
-    try {
-      // Get the Relay environment
-      const relayEnv = getClientEnvironment()
-      setEnvironment(relayEnv)
-      setIsLoadingEnvironment(false)
-      
-      // Set up refresh interval
-      const interval = setInterval(() => {
-        refreshData()
-      }, 30000)
-      
-      return () => clearInterval(interval)
-    } catch (err) {
-      console.error('Error initializing environment:', err)
-      setError('Failed to initialize data environment')
-      setIsLoadingEnvironment(false)
-    }
-  }, [refreshData])
-  
-  // Fetch basic token data (name, symbol) first - high priority
-  useEffect(() => {
-    if (isLoadingEnvironment || !environment) return
-    
+  // Function to fetch basic token data
+  const fetchBasicTokenInfo = useCallback(async () => {
     console.log('[TokenDetail] Loading basic token info...')
+    setIsLoadingBasicInfo(true)
     
-    // Make a request for basic token info
-    fetch('/api/graphql', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        query: `
-          query TokenBasicInfoQuery($tokenAddress: String!) {
-            tokenByAddress(address: $tokenAddress) {
-              name
-              symbol
-              imageURI
+    try {
+      const response = await fetch('/api/graphql', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          query: `
+            query TokenBasicInfoQuery($tokenAddress: String!) {
+              tokenByAddress(address: $tokenAddress) {
+                name
+                symbol
+                imageURI
+              }
             }
-          }
-        `,
-        variables: { tokenAddress },
-      }),
-    })
-    .then(response => response.json())
-    .then(result => {
+          `,
+          variables: { tokenAddress },
+        }),
+      })
+      
+      const result = await response.json()
+      
       if (result.errors) {
         console.error('GraphQL errors fetching basic token info:', result.errors)
         return
       }
       
       if (result.data?.tokenByAddress) {
-        // Update with basic info
         setToken(prevState => ({
           ...prevState,
           name: result.data.tokenByAddress.name || null,
           symbol: result.data.tokenByAddress.symbol || null,
           imageURI: result.data.tokenByAddress.imageURI || null,
-        } as TokenData));
+        }))
       }
-    })
-    .catch(err => {
+    } catch (err) {
       console.error('Error fetching basic token info:', err)
-    })
-    .finally(() => {
+    } finally {
       setIsLoadingBasicInfo(false)
-      
-      // Immediately fetch price data next
-      fetchPriceData()
-    })
-  }, [environment, isLoadingEnvironment, tokenAddress])
+    }
+  }, [tokenAddress])
   
-  // Function to fetch price data - medium priority
-  const fetchPriceData = () => {
-    if (!environment) return
-    
+  // Function to fetch price data
+  const fetchPriceData = useCallback(async () => {
     console.log('[TokenDetail] Loading price data...')
+    setIsLoadingPrice(true)
     
-    // Make a request for price data
-    fetch('/api/graphql', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        query: `
-          query TokenPriceQuery($tokenAddress: String!) {
-            tokenByAddress(address: $tokenAddress) {
-              priceUSD
-              priceChange24h
-              decimals
+    try {
+      const response = await fetch('/api/graphql', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          query: `
+            query TokenPriceQuery($tokenAddress: String!) {
+              tokenByAddress(address: $tokenAddress) {
+                priceUSD
+                priceChange24h
+                decimals
+              }
             }
-          }
-        `,
-        variables: { tokenAddress },
-      }),
-    })
-    .then(response => response.json())
-    .then(result => {
+          `,
+          variables: { tokenAddress },
+        }),
+      })
+      
+      const result = await response.json()
+      
       if (result.errors) {
         console.error('GraphQL errors fetching price data:', result.errors)
         return
       }
       
       if (result.data?.tokenByAddress) {
-        // Update with price info
         setToken(prevState => ({
           ...prevState,
           priceUSD: result.data.tokenByAddress.priceUSD || null,
           priceChange24h: result.data.tokenByAddress.priceChange24h || null,
           decimals: result.data.tokenByAddress.decimals || null,
-        } as TokenData))
+        }))
       }
-    })
-    .catch(err => {
+    } catch (err) {
       console.error('Error fetching price data:', err)
-    })
-    .finally(() => {
+    } finally {
       setIsLoadingPrice(false)
-      
-      // Fetch full token data next
-      fetchFullTokenData()
-    })
-  }
+    }
+  }, [tokenAddress])
   
-  // Function to fetch full token data - low priority
-  const fetchFullTokenData = () => {
-    if (!environment) return
-    
+  // Function to fetch full token data
+  const fetchFullTokenData = useCallback(async () => {
     console.log('[TokenDetail] Loading full token data...')
+    setIsLoadingStats(true)
     
-    // Make a request for full token data
-    fetch('/api/graphql', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        query: `
-          query TokenFullDataQuery($tokenAddress: String!) {
-            tokenByAddress(address: $tokenAddress) {
-              id
-              volumeUSD24h
-              tvl
-              marketCap
-              fdv
+    try {
+      const response = await fetch('/api/graphql', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          query: `
+            query TokenFullDataQuery($tokenAddress: String!) {
+              tokenByAddress(address: $tokenAddress) {
+                id
+                volumeUSD24h
+                tvl
+                marketCap
+                fdv
+              }
             }
-          }
-        `,
-        variables: { tokenAddress },
-      }),
-    })
-    .then(response => response.json())
-    .then(result => {
+          `,
+          variables: { tokenAddress },
+        }),
+      })
+      
+      const result = await response.json()
+      
       if (result.errors) {
         console.error('GraphQL errors fetching full token data:', result.errors)
         return
       }
       
       if (result.data?.tokenByAddress) {
-        // Update with full token data
         setToken(prevState => ({
           ...prevState,
           id: result.data.tokenByAddress.id || undefined,
@@ -432,50 +394,45 @@ export default function TokenDetailClient({ tokenAddress }: TokenDetailClientPro
           tvl: result.data.tokenByAddress.tvl || null,
           marketCap: result.data.tokenByAddress.marketCap || null,
           fdv: result.data.tokenByAddress.fdv || null,
-        } as TokenData))
+        }))
       }
-    })
-    .catch(err => {
+    } catch (err) {
       console.error('Error fetching full token data:', err)
-    })
-    .finally(() => {
+    } finally {
       setIsLoadingStats(false)
-      
-      // Fetch chart data in parallel
-      fetchChartData()
-    })
-  }
+    }
+  }, [tokenAddress])
   
-  // Function to fetch chart data - can run in parallel
-  const fetchChartData = () => {
-    if (!environment) return
-    
+  // Function to fetch chart data
+  const fetchChartData = useCallback(async () => {
     console.log('[TokenDetail] Loading chart data...')
+    setIsLoadingChart(true)
     
-    // Make a direct fetch request to get price chart data
-    fetch('/api/graphql', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        query: `
-          query TokenPriceChartQuery($tokenAddress: String!, $timeframe: String!, $limit: Int!) {
-            tokenPriceChart(tokenAddress: $tokenAddress, timeframe: $timeframe, limit: $limit) {
-              time
-              value
-            }
-          }
-        `,
-        variables: { 
-          tokenAddress,
-          timeframe: activeTimeframe,
-          limit: 100
+    try {
+      const response = await fetch('/api/graphql', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
         },
-      }),
-    })
-    .then(response => response.json())
-    .then(result => {
+        body: JSON.stringify({
+          query: `
+            query TokenPriceChartQuery($tokenAddress: String!, $timeframe: String!, $limit: Int!) {
+              tokenPriceChart(tokenAddress: $tokenAddress, timeframe: $timeframe, limit: $limit) {
+                time
+                value
+              }
+            }
+          `,
+          variables: { 
+            tokenAddress,
+            timeframe: activeTimeframe,
+            limit: 100
+          },
+        }),
+      })
+      
+      const result = await response.json()
+      
       if (result.errors) {
         console.error('GraphQL errors fetching chart data:', result.errors)
         return
@@ -520,14 +477,12 @@ export default function TokenDetailClient({ tokenAddress }: TokenDetailClientPro
           setPriceData(chartData)
         }
       }
-    })
-    .catch(err => {
+    } catch (err) {
       console.error('Error fetching chart data:', err)
-    })
-    .finally(() => {
+    } finally {
       setIsLoadingChart(false)
-    })
-  }
+    }
+  }, [tokenAddress, activeTimeframe, token?.decimals, token?.symbol])
   
   // Handle timeframe change
   const handleTimeframeChange = (tf: string) => {
@@ -536,6 +491,49 @@ export default function TokenDetailClient({ tokenAddress }: TokenDetailClientPro
     setIsLoadingChart(true)
     setTimeout(() => fetchChartData(), 0)
   }
+  
+  // Initial data load
+  useEffect(() => {
+    // Load all data in sequence
+    const loadAllData = async () => {
+      await fetchBasicTokenInfo()
+      await fetchPriceData() 
+      await fetchFullTokenData()
+      await fetchChartData()
+    }
+    
+    loadAllData()
+    
+    // Set up auto-refresh
+    const refreshInterval = setInterval(() => {
+      fetchPriceData()
+      fetchChartData()
+    }, 30000)
+    
+    return () => clearInterval(refreshInterval)
+  }, [fetchBasicTokenInfo, fetchPriceData, fetchFullTokenData, fetchChartData])
+  
+  // Listen for Redis token updates
+  useEffect(() => {
+    // Normalize address for comparison
+    const normalizedAddress = tokenAddress.toLowerCase()
+    
+    // Check if this specific token has been updated
+    if (tokenLastUpdated[normalizedAddress]) {
+      console.log(`[TokenDetailClient] Detected Redis update for token: ${normalizedAddress}`)
+      const timestamp = new Date(tokenLastUpdated[normalizedAddress]).toLocaleTimeString()
+      console.log(`[TokenDetailClient] Token updated at: ${timestamp}`)
+      
+      // Use intelligent throttling with high priority for detail page
+      if (shouldRefresh(`token-detail-${normalizedAddress}`, 'high')) {
+        // Refresh price data which is most likely to change
+        fetchPriceData()
+        
+        // Also refresh chart data as it may contain newer points
+        fetchChartData()
+      }
+    }
+  }, [tokenLastUpdated, tokenAddress, fetchPriceData, fetchChartData])
   
   // Helper functions for formatting
   const formatLargeNumber = (value: string | null | undefined): string => {

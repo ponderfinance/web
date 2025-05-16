@@ -1,12 +1,13 @@
 'use client'
 
-import React, { Suspense, useState, useEffect } from 'react'
-import { graphql, useLazyLoadQuery } from 'react-relay'
+import React, { Suspense, useState, useEffect, useCallback, useRef } from 'react'
+import { graphql, useLazyLoadQuery, useQueryLoader } from 'react-relay'
 import { PoolsPageQuery } from '@/src/__generated__/PoolsPageQuery.graphql'
 import { PoolsDisplay } from '@/src/modules/explore/components/PoolsDisplay'
 import { View, Text, Skeleton } from 'reshaped'
 import { tokenFragment } from '@/src/components/TokenPair'
 import ScrollableTable from '@/src/components/ScrollableTable'
+import { useRedisSubscriber } from '@/src/providers/RedisSubscriberProvider'
 
 export const poolsPageQuery = graphql`
   query PoolsPageQuery(
@@ -150,11 +151,15 @@ function PoolsContent({
   orderDirection,
   setOrderBy,
   setOrderDirection,
+  queryRef,
+  refreshData,
 }: {
   orderBy: string
   orderDirection: string
   setOrderBy: (value: string) => void
   setOrderDirection: (value: string) => void
+  queryRef: any
+  refreshData: () => void
 }) {
   const data = useLazyLoadQuery<PoolsPageQuery>(
     poolsPageQuery,
@@ -185,18 +190,63 @@ export const PoolsPage = () => {
   const [orderBy, setOrderBy] = useState<string>('reserveUSD')
   const [orderDirection, setOrderDirection] = useState<string>('desc')
   const [mounted, setMounted] = useState(false)
+  
+  // Get Redis subscriber
+  const { pairLastUpdated } = useRedisSubscriber()
+  
+  // Add query loader
+  const [queryRef, loadQuery] = useQueryLoader<PoolsPageQuery>(poolsPageQuery)
+  
+  // Track last refresh time for debouncing
+  const lastRefreshTimeRef = useRef<number>(0)
+  
+  // Function to refresh data
+  const refreshData = useCallback(() => {
+    loadQuery(
+      {
+        first: 20,
+        orderBy: orderBy as any,
+        orderDirection: orderDirection as any,
+      },
+      { fetchPolicy: 'network-only' }
+    )
+  }, [loadQuery, orderBy, orderDirection])
+  
+  // Listen for pair updates from Redis
+  useEffect(() => {
+    if (Object.keys(pairLastUpdated).length > 0) {
+      const now = Date.now()
+      // Throttle refreshes to at most once per second
+      if (now - lastRefreshTimeRef.current > 1000) {
+        console.log('[PoolsPage] Refreshing pools data due to Redis update')
+        refreshData()
+        lastRefreshTimeRef.current = now
+      }
+    }
+  }, [pairLastUpdated, refreshData])
+  
+  // Set up periodic refresh as fallback
+  useEffect(() => {
+    const interval = setInterval(() => {
+      refreshData()
+    }, 30000) // Refresh every 30 seconds
+    
+    return () => clearInterval(interval)
+  }, [refreshData])
 
   // Only render the query component after mounting on the client
   useEffect(() => {
     setMounted(true)
     
-    // Prefetch the data
-    return () => {
-      // Cleanup any resources if needed
-    }
-  }, [])
+    // Initial data load
+    loadQuery({
+      first: 20,
+      orderBy: orderBy as any,
+      orderDirection: orderDirection as any,
+    })
+  }, [loadQuery, orderBy, orderDirection])
 
-  if (!mounted) {
+  if (!mounted || !queryRef) {
     return <PoolsLoading />
   }
 
@@ -208,6 +258,8 @@ export const PoolsPage = () => {
           orderDirection={orderDirection}
           setOrderBy={setOrderBy}
           setOrderDirection={setOrderDirection}
+          queryRef={queryRef}
+          refreshData={refreshData}
         />
       </Suspense>
     </View>
