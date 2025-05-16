@@ -2,10 +2,10 @@
 
 import React, { useState } from 'react'
 import { Text, View, Skeleton, Select } from 'reshaped'
-import { graphql, useFragment, useLazyLoadQuery } from 'react-relay'
+import { graphql, useFragment } from 'react-relay'
 import PriceChart from './PriceChart'
 import { TokenChartContainer_token$key } from '@/src/__generated__/TokenChartContainer_token.graphql'
-import { TokenChartContainerQuery } from '@/src/__generated__/TokenChartContainerQuery.graphql'
+import { TokenChartContainer_priceData$key } from '@/src/__generated__/TokenChartContainer_priceData.graphql'
 
 // Define the fragment for token chart data
 const TokenChartFragment = graphql`
@@ -17,17 +17,11 @@ const TokenChartFragment = graphql`
   }
 `
 
-// Define the query to fetch token price chart data
-const TokenPriceChartQuery = graphql`
-  query TokenChartContainerQuery(
-    $tokenAddress: String!
-    $timeframe: String!
-    $limit: Int!
-  ) {
-    tokenPriceChart(tokenAddress: $tokenAddress, timeframe: $timeframe, limit: $limit) {
-      time
-      value
-    }
+// Define fragment for price chart data
+const PriceChartDataFragment = graphql`
+  fragment TokenChartContainer_priceData on ChartDataPoint @relay(plural: true) {
+    time
+    value
   }
 `
 
@@ -47,24 +41,36 @@ const DISPLAY_TYPE_OPTIONS = [
 
 interface TokenChartContainerProps {
   tokenRef: TokenChartContainer_token$key
+  priceDataRef: TokenChartContainer_priceData$key
   initialTimeframe?: string
   initialDisplayType?: string
+  onTimeframeChange?: (timeframe: string) => void
 }
 
 export default function TokenChartContainer({
   tokenRef,
+  priceDataRef,
   initialTimeframe = '1d',
   initialDisplayType = 'area',
+  onTimeframeChange,
 }: TokenChartContainerProps) {
   const [timeframe, setTimeframe] = useState(initialTimeframe)
   const [displayType, setDisplayType] = useState(initialDisplayType)
 
-  // Extract token data from the fragment
+  // Extract data from the fragments
   const token = useFragment(TokenChartFragment, tokenRef)
-  const tokenAddress = token?.address
+  const priceData = useFragment(PriceChartDataFragment, priceDataRef)
 
+  // Handle timeframe change
+  const handleTimeframeChange = (newTimeframe: string) => {
+    setTimeframe(newTimeframe)
+    if (onTimeframeChange) {
+      onTimeframeChange(newTimeframe)
+    }
+  }
+  
   // Return empty state if token data is missing
-  if (!token || !tokenAddress) {
+  if (!token) {
     return <Text>No token data available</Text>
   }
 
@@ -76,7 +82,7 @@ export default function TokenChartContainer({
         <View direction="row" gap={8}>
           <Select
             value={timeframe}
-            onChange={(value) => setTimeframe(value as unknown as string)}
+            onChange={(value) => handleTimeframeChange(value as unknown as string)}
             options={TIMEFRAME_OPTIONS}
             name={"timeframe"}
           />
@@ -92,55 +98,31 @@ export default function TokenChartContainer({
 
       {/* Chart content */}
       <TokenChartContent
-        tokenAddress={tokenAddress}
-        timeframe={timeframe}
         displayType={displayType}
         tokenSymbol={token.symbol ?? undefined}
+        priceData={priceData}
       />
     </View>
   )
 }
 
-// Separate component for chart content to handle data loading
+// Separate component for chart content to render the appropriate chart
 function TokenChartContent({
-  tokenAddress,
-  timeframe,
   displayType,
   tokenSymbol,
+  priceData,
 }: {
-  tokenAddress: string
-  timeframe: string
   displayType: string
   tokenSymbol?: string
+  priceData: ReadonlyArray<{
+    readonly time: number
+    readonly value: number
+  }>
 }) {
   const chartTitle = `${tokenSymbol || 'Token'} Price`
 
-  // Fetch token price chart data
-  const data = useLazyLoadQuery<TokenChartContainerQuery>(
-    TokenPriceChartQuery,
-    {
-      tokenAddress,
-      timeframe,
-      limit: 100,
-    },
-    {
-      fetchPolicy: 'network-only', // Always fetch fresh data
-    }
-  )
-
-  const tokenPriceChart = data.tokenPriceChart
-
-  // Loading state
-  if (!tokenPriceChart) {
-    return (
-      <View height={400}>
-        <Skeleton height="100%" width="100%" />
-      </View>
-    )
-  }
-
-  // Empty state
-  if (tokenPriceChart.length === 0) {
+  // Loading or empty state handling
+  if (!priceData || priceData.length === 0) {
     console.log(`[TOKEN-CHART] No price data available for ${tokenSymbol}`);
     return (
       <View height={400} align="center" justify="center">
@@ -150,7 +132,7 @@ function TokenChartContent({
   }
 
   // Convert readonly array to mutable array for PriceChart
-  const chartData = [...tokenPriceChart]
+  const chartData = [...priceData]
   
   // Add debug logging for diagnostics
   console.log(`[TOKEN-CHART] Rendering chart for ${tokenSymbol} with ${chartData.length} data points`);

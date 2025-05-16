@@ -1,14 +1,14 @@
 'use client'
 
-import React from 'react'
+import React, { useState } from 'react'
 import { View, Text, Card, Grid, Skeleton, Tabs, Divider } from 'reshaped'
 import { graphql, useLazyLoadQuery } from 'react-relay'
 import PriceChartContainer from './PriceChartContainer'
 import { PairDetailPageQuery } from '@/src/__generated__/PairDetailPageQuery.graphql'
 
-// Define the query for the pair detail page - using pairByAddress instead of pair
+// Define the query for the pair detail page - including chart data
 const PairDetailQuery = graphql`
-  query PairDetailPageQuery($pairAddress: String!) {
+  query PairDetailPageQuery($pairAddress: String!, $timeframe: String!, $limit: Int!) {
     pairByAddress(address: $pairAddress) {
       id
       address
@@ -25,6 +25,12 @@ const PairDetailQuery = graphql`
         address
       }
       ...PriceChartContainer_pair
+    }
+    pairPriceChart(pairAddress: $pairAddress, timeframe: $timeframe, limit: $limit) {
+      ...PriceChartContainer_priceData
+    }
+    pairVolumeChart(pairAddress: $pairAddress, timeframe: $timeframe, limit: $limit) {
+      ...PriceChartContainer_volumeData
     }
   }
 `
@@ -47,15 +53,29 @@ export default function PairDetailPage({ params }: { params: { address: string }
 }
 
 function PairDetailContent({ pairAddress }: { pairAddress: string }) {
-  // Fetch pair data using pairByAddress
+  // State for timeframe selection - default to 1d
+  const [timeframe, setTimeframe] = useState('1d')
+
+  // Fetch pair data and chart data
   const data = useLazyLoadQuery<PairDetailPageQuery>(
       PairDetailQuery,
-      { pairAddress },
+      { 
+        pairAddress,
+        timeframe,
+        limit: 100
+      },
       { fetchPolicy: 'store-or-network' }
   )
 
   // Use pairByAddress instead of pair
   const pair = data.pairByAddress
+  const priceData = data.pairPriceChart
+  const volumeData = data.pairVolumeChart
+
+  // Handle timeframe change
+  const handleTimeframeChange = (newTimeframe: string) => {
+    setTimeframe(newTimeframe)
+  }
 
   // Show error if pair not found
   if (!pair) {
@@ -84,7 +104,13 @@ function PairDetailContent({ pairAddress }: { pairAddress: string }) {
         {/* Chart section */}
         <Card>
           <View padding={16} direction="column" gap={16}>
-            <PriceChartContainer pairRef={pair} />
+            <PriceChartContainer 
+              pairRef={pair} 
+              priceDataRef={priceData}
+              volumeDataRef={volumeData}
+              initialTimeframe={timeframe}
+              onTimeframeChange={handleTimeframeChange}
+            />
           </View>
         </Card>
 

@@ -2,13 +2,13 @@
 
 import React, { useState } from 'react'
 import { Text, View, Skeleton, Select } from 'reshaped'
-import { graphql, useFragment, useLazyLoadQuery } from 'react-relay'
+import { graphql, useFragment } from 'react-relay'
 import PriceChart from './PriceChart'
 import { PriceChartContainer_pair$key } from '@/src/__generated__/PriceChartContainer_pair.graphql'
-import { PriceChartContainerPriceQuery } from '@/src/__generated__/PriceChartContainerPriceQuery.graphql'
-import { PriceChartContainerVolumeQuery } from '@/src/__generated__/PriceChartContainerVolumeQuery.graphql'
+import { PriceChartContainer_priceData$key } from '@/src/__generated__/PriceChartContainer_priceData.graphql'
+import { PriceChartContainer_volumeData$key } from '@/src/__generated__/PriceChartContainer_volumeData.graphql'
 
-// Define the fragment for pair chart data
+// Define the fragment for pair data
 const PairChartFragment = graphql`
   fragment PriceChartContainer_pair on Pair {
     id
@@ -24,34 +24,22 @@ const PairChartFragment = graphql`
   }
 `
 
-// Define the query to fetch price chart data
-const PairPriceChartQuery = graphql`
-  query PriceChartContainerPriceQuery(
-    $pairAddress: String!
-    $timeframe: String!
-    $limit: Int!
-  ) {
-    pairPriceChart(pairAddress: $pairAddress, timeframe: $timeframe, limit: $limit) {
-      time
-      value
-    }
+// Define fragment for price chart data
+const PriceChartDataFragment = graphql`
+  fragment PriceChartContainer_priceData on ChartDataPoint @relay(plural: true) {
+    time
+    value
   }
 `
 
-// Define the query to fetch volume chart data
-const PairVolumeChartQuery = graphql`
-  query PriceChartContainerVolumeQuery(
-    $pairAddress: String!
-    $timeframe: String!
-    $limit: Int!
-  ) {
-    pairVolumeChart(pairAddress: $pairAddress, timeframe: $timeframe, limit: $limit) {
-      time
-      value
-      volume0
-      volume1
-      count
-    }
+// Define fragment for volume chart data
+const VolumeChartDataFragment = graphql`
+  fragment PriceChartContainer_volumeData on VolumeChartData @relay(plural: true) {
+    time
+    value
+    volume0
+    volume1
+    count
   }
 `
 
@@ -69,7 +57,7 @@ const CHART_TYPE_OPTIONS = [
   { value: 'volume', label: 'Volume' },
 ]
 
-// Define the chart display type options
+// Define the display type options
 const DISPLAY_TYPE_OPTIONS = [
   { value: 'line', label: 'Line' },
   { value: 'area', label: 'Area' },
@@ -77,27 +65,42 @@ const DISPLAY_TYPE_OPTIONS = [
 
 interface PriceChartContainerProps {
   pairRef: PriceChartContainer_pair$key
+  priceDataRef: PriceChartContainer_priceData$key
+  volumeDataRef: PriceChartContainer_volumeData$key
   initialTimeframe?: string
   initialChartType?: string
   initialDisplayType?: string
+  onTimeframeChange?: (timeframe: string) => void
 }
 
 export default function PriceChartContainer({
   pairRef,
+  priceDataRef,
+  volumeDataRef,
   initialTimeframe = '1d',
   initialChartType = 'price',
   initialDisplayType = 'area',
+  onTimeframeChange,
 }: PriceChartContainerProps) {
   const [timeframe, setTimeframe] = useState(initialTimeframe)
   const [chartType, setChartType] = useState(initialChartType)
   const [displayType, setDisplayType] = useState(initialDisplayType)
 
-  // Extract pair data from the fragment
+  // Extract data from the fragments
   const pair = useFragment(PairChartFragment, pairRef)
-  const pairAddress = pair?.address
+  const priceData = useFragment(PriceChartDataFragment, priceDataRef)
+  const volumeData = useFragment(VolumeChartDataFragment, volumeDataRef)
+
+  // Handle timeframe change
+  const handleTimeframeChange = (newTimeframe: string) => {
+    setTimeframe(newTimeframe)
+    if (onTimeframeChange) {
+      onTimeframeChange(newTimeframe)
+    }
+  }
 
   // Return empty state if pair data is missing
-  if (!pair || !pairAddress) {
+  if (!pair) {
     return <Text>No pair data available</Text>
   }
 
@@ -111,7 +114,7 @@ export default function PriceChartContainer({
         <View direction="row" gap={8}>
           <Select
             value={timeframe}
-            onChange={(value) => setTimeframe(value as unknown as string)}
+            onChange={(value) => handleTimeframeChange(value as unknown as string)}
             options={TIMEFRAME_OPTIONS}
             name={'timeframe'}
           />
@@ -133,173 +136,81 @@ export default function PriceChartContainer({
       </View>
 
       {/* Chart content */}
-      <PriceChartContent
-        pairAddress={pairAddress}
-        timeframe={timeframe}
+      <ChartContent
         chartType={chartType}
         displayType={displayType}
-        token0Symbol={pair.token0?.symbol ?? undefined}
-        token1Symbol={pair.token1?.symbol ?? undefined}
+        token0Symbol={pair.token0?.symbol || undefined}
+        token1Symbol={pair.token1?.symbol || undefined}
+        priceData={priceData}
+        volumeData={volumeData}
       />
     </View>
   )
 }
 
-// Separate component for chart content to handle data loading
-function PriceChartContent({
-  pairAddress,
-  timeframe,
+// Separate component to render appropriate chart based on selected type
+function ChartContent({
   chartType,
   displayType,
   token0Symbol,
   token1Symbol,
+  priceData,
+  volumeData,
 }: {
-  pairAddress: string
-  timeframe: string
   chartType: string
   displayType: string
   token0Symbol?: string
   token1Symbol?: string
+  priceData: ReadonlyArray<{
+    readonly time: number
+    readonly value: number
+  }>
+  volumeData: ReadonlyArray<{
+    readonly time: number
+    readonly value: number
+    readonly volume0?: number | null
+    readonly volume1?: number | null
+    readonly count?: number | null
+  }>
 }) {
   const chartTitle = `${token0Symbol || 'Token0'}/${token1Symbol || 'Token1'} ${
     chartType === 'price' ? 'Price' : 'Volume'
   }`
 
-  // Fetch the appropriate data based on chart type
-  if (chartType === 'price') {
+  // Loading or empty state handling
+  if ((chartType === 'price' && (!priceData || priceData.length === 0)) || 
+      (chartType === 'volume' && (!volumeData || volumeData.length === 0))) {
     return (
-      <PriceChartData
-        pairAddress={pairAddress}
-        timeframe={timeframe}
-        displayType={displayType as 'line' | 'area'}
+      <View height={400} align="center" justify="center">
+        <Text>No {chartType} data available</Text>
+      </View>
+    )
+  }
+
+  // Render the appropriate chart
+  if (chartType === 'price') {
+    // Convert readonly array to mutable array for PriceChart
+    const chartData = [...priceData]
+    return (
+      <PriceChart
+        data={chartData}
+        type={displayType as 'line' | 'area'}
         title={chartTitle}
+        height={400}
+        autoSize={true}
       />
     )
   } else {
+    // Convert readonly array to mutable array for PriceChart
+    const chartData = [...volumeData]
     return (
-      <VolumeChartData
-        pairAddress={pairAddress}
-        timeframe={timeframe}
+      <PriceChart
+        data={chartData}
+        type="volume"
         title={chartTitle}
+        height={400}
+        autoSize={true}
       />
     )
   }
-}
-
-// Component to fetch and render price chart data
-function PriceChartData({
-  pairAddress,
-  timeframe,
-  displayType,
-  title,
-}: {
-  pairAddress: string
-  timeframe: string
-  displayType: 'line' | 'area'
-  title: string
-}) {
-  // Fetch price chart data
-  const data = useLazyLoadQuery<PriceChartContainerPriceQuery>(
-    PairPriceChartQuery,
-    {
-      pairAddress,
-      timeframe,
-      limit: 100,
-    },
-    {
-      fetchPolicy: 'network-only', // Always fetch fresh data
-    }
-  )
-
-  const pairPriceChart = data.pairPriceChart
-
-  // Loading state
-  if (!pairPriceChart) {
-    return (
-      <View height={400}>
-        <Skeleton height="100%" width="100%" />
-      </View>
-    )
-  }
-
-  // Empty state
-  if (pairPriceChart.length === 0) {
-    return (
-      <View height={400} align="center" justify="center">
-        <Text>No price data available</Text>
-      </View>
-    )
-  }
-
-  // Render the chart
-  // Convert readonly array to mutable array for PriceChart
-  const chartData = [...pairPriceChart]
-
-  return (
-    <PriceChart
-      data={chartData}
-      type={displayType}
-      title={title}
-      height={400}
-      autoSize={true}
-    />
-  )
-}
-
-// Component to fetch and render volume chart data
-function VolumeChartData({
-  pairAddress,
-  timeframe,
-  title,
-}: {
-  pairAddress: string
-  timeframe: string
-  title: string
-}) {
-  // Fetch volume chart data
-  const data = useLazyLoadQuery<PriceChartContainerVolumeQuery>(
-    PairVolumeChartQuery,
-    {
-      pairAddress,
-      timeframe,
-      limit: 100,
-    },
-    {
-      fetchPolicy: 'network-only', // Always fetch fresh data
-    }
-  )
-
-  const pairVolumeChart = data.pairVolumeChart
-
-  // Loading state
-  if (!pairVolumeChart) {
-    return (
-      <View height={400}>
-        <Skeleton height="100%" width="100%" />
-      </View>
-    )
-  }
-
-  // Empty state
-  if (pairVolumeChart.length === 0) {
-    return (
-      <View height={400} align="center" justify="center">
-        <Text>No volume data available</Text>
-      </View>
-    )
-  }
-
-  // Render the chart
-  // Convert readonly array to mutable array for PriceChart
-  const chartData = [...pairVolumeChart]
-
-  return (
-    <PriceChart
-      data={chartData}
-      type="volume"
-      title={title}
-      height={400}
-      autoSize={true}
-    />
-  )
 }

@@ -4,14 +4,18 @@ import { Suspense } from 'react'
 import { View, Text, Skeleton } from 'reshaped'
 import { isAddress } from 'viem'
 import dynamic from 'next/dynamic'
+import { ErrorBoundary } from 'react-error-boundary'
+import Link from 'next/link'
 
 // Force dynamic rendering to prevent errors with static generation
 export const dynamicParams = true
 
 // Use dynamic import with no SSR to ensure client-only rendering
 // This helps avoid hydration issues with Relay
-const TokenDetailPageClient = dynamic(
-  () => import('@/src/modules/explore/components/TokenDetailClient'),
+const TokenDetailWithRelay = dynamic(
+  () => import('@/src/modules/explore/components/TokenDetailContent').then(mod => ({ 
+    default: mod.TokenDetailContentWithRelay 
+  })),
   { ssr: false }
 )
 
@@ -88,9 +92,20 @@ function TokenDetailSkeleton() {
 function ErrorView({ message }: { message: string }) {
   return (
     <View padding={8} direction="column" gap={4} align="center">
-      <Text variant="featured-1" weight="medium" color="critical">Invalid Token Address</Text>
+      <Text variant="featured-1" weight="medium" color="critical">Error</Text>
       <Text>{message}</Text>
+      <Link href="/explore/tokens">
+        <Text color="primary">Return to tokens list</Text>
+      </Link>
     </View>
+  );
+}
+
+// Error boundary fallback component
+function ErrorFallback({ error }: { error: Error }) {
+  console.error('[TokenPage] Error in ErrorBoundary:', error);
+  return (
+    <ErrorView message={error.message || "Something went wrong loading the token details"} />
   );
 }
 
@@ -110,9 +125,11 @@ export default function TokenPage({ params }: { params: { address: string } }) {
   
   // Render the client-side component with the validated address
   return (
-    <Suspense fallback={<TokenDetailSkeleton />}>
-      <TokenDetailPageClient tokenAddress={normalizedAddress} />
-    </Suspense>
+    <ErrorBoundary FallbackComponent={ErrorFallback}>
+      <Suspense fallback={<TokenDetailSkeleton />}>
+        <TokenDetailWithRelay tokenAddress={normalizedAddress} />
+      </Suspense>
+    </ErrorBoundary>
   );
 }
 
