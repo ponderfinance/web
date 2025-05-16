@@ -1,7 +1,7 @@
 'use client'
 
 import React, { Suspense, useEffect, useState } from 'react'
-import { graphql, useLazyLoadQuery, useQueryLoader } from 'react-relay'
+import { graphql, useLazyLoadQuery, useQueryLoader, PreloadedQuery } from 'react-relay'
 import { TransactionsPageQuery } from '@/src/__generated__/TransactionsPageQuery.graphql'
 import { TransactionsDisplay } from '@/src/modules/explore/components/TransactionsDisplay'
 import { View, Text, Skeleton } from 'reshaped'
@@ -143,7 +143,7 @@ function TransactionsLoading() {
 }
 
 // Main content component that fetches data
-function TransactionsContent({ queryRef }: { queryRef: any }) {
+function TransactionsContent({ queryRef }: { queryRef: PreloadedQuery<TransactionsPageQuery> }) {
   const data = useLazyLoadQuery<TransactionsPageQuery>(
     transactionsPageQuery,
     {
@@ -164,7 +164,7 @@ function TransactionsContent({ queryRef }: { queryRef: any }) {
 // Exported page component
 export const TransactionsPage = () => {
   const [mounted, setMounted] = useState(false)
-  const [queryRef, loadQuery] = useQueryLoader(transactionsPageQuery)
+  const [queryRef, loadQuery] = useQueryLoader<TransactionsPageQuery>(transactionsPageQuery)
 
   // Only render the query component after mounting on the client
   useEffect(() => {

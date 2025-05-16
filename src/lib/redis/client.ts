@@ -30,19 +30,19 @@ export function getRedisClient(): Redis {
     connectionAttempts++
     
     try {
-      redisClient = new Redis(redisUrl, {
-        retryStrategy: (times) => {
-          // Retry connection with exponential backoff
-          return Math.min(times * 50, 2000)
-        },
-        maxRetriesPerRequest: 3,
+    redisClient = new Redis(redisUrl, {
+      retryStrategy: (times) => {
+        // Retry connection with exponential backoff
+        return Math.min(times * 50, 2000)
+      },
+      maxRetriesPerRequest: 3,
         connectTimeout: 10000, // 10 seconds
         enableOfflineQueue: true,
         enableReadyCheck: true,
-      })
+    })
 
-      redisClient.on('error', (err) => {
-        console.error('Redis connection error:', err)
+    redisClient.on('error', (err) => {
+      console.error('Redis connection error:', err)
         
         // Reset client on critical errors to force reconnection on next access
         if (err.message.includes('ECONNREFUSED') || 
@@ -50,27 +50,27 @@ export function getRedisClient(): Redis {
             err.message.includes('Redis connection lost')) {
           _resetRedisClient()
         }
-      })
+    })
 
-      redisClient.on('connect', () => {
-        console.log('Successfully connected to Redis')
+    redisClient.on('connect', () => {
+      console.log('Successfully connected to Redis')
         // Reset connection attempts on successful connection
         connectionAttempts = 0
       })
       
       redisClient.on('reconnecting', () => {
         console.log('Reconnecting to Redis...')
-      })
+    })
 
-      // Verify connection with a ping
-      redisClient
-        .ping()
-        .then((response) => {
-          console.log(`Redis ping response: ${response}`)
-        })
-        .catch((err) => {
-          console.error('Redis ping failed:', err)
-        })
+    // Verify connection with a ping
+    redisClient
+      .ping()
+      .then((response) => {
+        console.log(`Redis ping response: ${response}`)
+      })
+      .catch((err) => {
+        console.error('Redis ping failed:', err)
+      })
     } catch (error) {
       console.error('Error creating Redis client:', error)
       // Return a dummy Redis client that gracefully fails for all operations

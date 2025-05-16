@@ -6,14 +6,17 @@
 // Map to track last refresh times by entity type
 const lastRefreshTimes: Record<string, number> = {};
 
+// Track active refreshes to prevent concurrent operations
+const activeRefreshes: Record<string, boolean> = {};
+
 // Higher priority entities get refreshed more aggressively
 type EntityPriority = 'high' | 'medium' | 'low';
 
 // Default throttle times based on priority (in milliseconds)
 const DEFAULT_THROTTLE_TIMES: Record<EntityPriority, number> = {
-  high: 500,    // High priority (e.g., active token detail) refreshes most frequently
-  medium: 1000,  // Medium priority (e.g., list views) refreshes moderately
-  low: 3000     // Low priority (e.g., historical data) refreshes least frequently
+  high: 2000,    // High priority (e.g., active token detail) - 2 seconds minimum
+  medium: 3000,  // Medium priority (e.g., list views) - 3 seconds minimum
+  low: 5000     // Low priority (e.g., historical data) - 5 seconds minimum
 };
 
 /**
@@ -33,14 +36,31 @@ export function shouldRefresh(
   const lastRefresh = lastRefreshTimes[entityType] || 0;
   const throttleTime = customThrottleTime || DEFAULT_THROTTLE_TIMES[priority];
   
+  // Don't allow refresh if we already have an active refresh for this entity
+  if (activeRefreshes[entityType]) {
+    return false;
+  }
+  
   // Check if enough time has passed since last refresh
   if (now - lastRefresh > throttleTime) {
     // Update last refresh time
     lastRefreshTimes[entityType] = now;
+    // Mark this entity as being refreshed
+    activeRefreshes[entityType] = true;
     return true;
   }
   
   return false;
+}
+
+/**
+ * Marks a refresh operation as complete
+ * 
+ * @param entityType Unique identifier for the entity that finished refreshing
+ */
+export function markRefreshComplete(entityType: string): void {
+  // Remove from active refreshes
+  activeRefreshes[entityType] = false;
 }
 
 /**
@@ -51,6 +71,8 @@ export function shouldRefresh(
 export function forceNextRefresh(entityType: string): void {
   // Set last refresh time to a value that will allow immediate refresh
   lastRefreshTimes[entityType] = 0;
+  // Ensure it's not marked as actively refreshing
+  activeRefreshes[entityType] = false;
 }
 
 /**
@@ -69,6 +91,11 @@ export function timeUntilRefresh(
   const now = Date.now();
   const lastRefresh = lastRefreshTimes[entityType] || 0;
   const throttleTime = customThrottleTime || DEFAULT_THROTTLE_TIMES[priority];
+  
+  // If actively refreshing, return the throttle time
+  if (activeRefreshes[entityType]) {
+    return throttleTime;
+  }
   
   const remaining = throttleTime - (now - lastRefresh);
   return remaining > 0 ? remaining : 0;

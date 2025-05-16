@@ -306,9 +306,9 @@ export default function TokenDetailClient({ tokenAddress }: TokenDetailClientPro
   }, [tokenAddress])
   
   // Function to fetch price data
-  const fetchPriceData = useCallback(async () => {
+  const fetchPriceData = useCallback(async (skipLoading = true) => {
     console.log('[TokenDetail] Loading price data...')
-    setIsLoadingPrice(true)
+    setIsLoadingPrice(skipLoading)
     
     try {
       const response = await fetch('/api/graphql', {
@@ -404,9 +404,9 @@ export default function TokenDetailClient({ tokenAddress }: TokenDetailClientPro
   }, [tokenAddress])
   
   // Function to fetch chart data
-  const fetchChartData = useCallback(async () => {
+  const fetchChartData = useCallback(async (skipLoading = true) => {
     console.log('[TokenDetail] Loading chart data...')
-    setIsLoadingChart(true)
+    setIsLoadingChart(skipLoading)
     
     try {
       const response = await fetch('/api/graphql', {
@@ -516,7 +516,7 @@ export default function TokenDetailClient({ tokenAddress }: TokenDetailClientPro
   // Listen for Redis token updates
   useEffect(() => {
     // Normalize address for comparison
-    const normalizedAddress = tokenAddress.toLowerCase()
+    const normalizedAddress = tokenAddress.toLowerCase();
     
     // Check if this specific token has been updated
     if (tokenLastUpdated[normalizedAddress]) {
@@ -524,13 +524,22 @@ export default function TokenDetailClient({ tokenAddress }: TokenDetailClientPro
       const timestamp = new Date(tokenLastUpdated[normalizedAddress]).toLocaleTimeString()
       console.log(`[TokenDetailClient] Token updated at: ${timestamp}`)
       
-      // Use intelligent throttling with high priority for detail page
-      if (shouldRefresh(`token-detail-${normalizedAddress}`, 'high')) {
-        // Refresh price data which is most likely to change
-        fetchPriceData()
+      // Use a longer throttle duration to prevent frequent refreshes
+      // Higher minimum time between refreshes (5 seconds) to prevent skeleton states
+      if (shouldRefresh(`token-detail-${normalizedAddress}`, 'high', 5000)) {
+        console.log(`[TokenDetailClient] Refreshing price data after Redis update`)
         
-        // Also refresh chart data as it may contain newer points
-        fetchChartData()
+        // When refreshing data, don't set loading states
+        // This prevents skeleton states from appearing during updates
+        fetchPriceData(false); // Pass false to skip setting loading state
+        
+        // Only refresh chart data less frequently to reduce visual disruption
+        // Check if it's been at least 30 seconds since last chart update
+        if (shouldRefresh(`token-chart-${normalizedAddress}`, 'low', 30000)) {
+          fetchChartData(false); // Pass false to skip setting loading state
+        }
+      } else {
+        console.log(`[TokenDetailClient] Skipping refresh due to throttling`)
       }
     }
   }, [tokenLastUpdated, tokenAddress, fetchPriceData, fetchChartData])

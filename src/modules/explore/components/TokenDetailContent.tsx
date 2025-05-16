@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, Suspense, useEffect } from 'react'
+import React, { useState, Suspense, useEffect, useRef, useCallback } from 'react'
 import {
   View,
   Text,
@@ -40,12 +40,12 @@ export const TokenDetailQuery = graphql`
 const ErrorFallback = ({ message }: { message: string }) => (
   <View direction="column" gap={4} align="center" justify="center" padding={6}>
     <Text variant="title-3" color="critical">Error</Text>
-    <Text>{message}</Text>
+      <Text>{message}</Text>
     <Link href="/explore/tokens">
       <Text color="primary">Return to tokens list</Text>
     </Link>
-  </View>
-);
+    </View>
+  );
 
 // Skeleton helper component
 const Skeleton = ({ width, height }: { width: string | number, height: string | number }) => (
@@ -69,48 +69,70 @@ const LoadingContentSkeleton = () => (
         <Skeleton width="100%" height={200} />
       </View>
     </View>
-  </View>
-);
+    </View>
+  );
 
 // Wrapper component that loads the query
 export function TokenDetailContentWithRelay({ tokenAddress }: { tokenAddress: string }) {
-  // Get Redis subscriber hook
-  const { tokenLastUpdated } = useRedisSubscriber();
+  // Get Redis subscriber hook with the new shouldEntityRefresh helper
+  const { tokenLastUpdated, shouldEntityRefresh } = useRedisSubscriber();
   
   // Get query loader
   const [queryRef, loadQuery] = useQueryLoader<TokenDetailContentQuery>(TokenDetailQuery);
   
-  // Load the query when the component mounts
-  useEffect(() => {
-    if (isAddress(tokenAddress)) {
-      loadQuery({ tokenAddress });
-    }
-  }, [tokenAddress, loadQuery]);
+  // Track if we've ever had data - once we have data, we never want to show loading states again
+  const everHadDataRef = useRef<boolean>(false);
   
-  // Refresh the data when Redis updates are received for this token
+  // Load the query when the component mounts - ONE TIME ONLY
   useEffect(() => {
-    if (tokenLastUpdated[tokenAddress]) {
-      console.log(`[TokenDetailContent] Refreshing data for token ${tokenAddress} after Redis update`);
-      loadQuery({ tokenAddress }, { fetchPolicy: 'network-only' });
+    if (!queryRef && isAddress(tokenAddress)) {
+      console.log(`[TokenDetailContent] Initial load for token ${tokenAddress}`);
+      
+      // Use network-only for initial load to ensure we have fresh data
+      loadQuery({ tokenAddress }, { fetchPolicy: 'store-or-network' });
     }
-  }, [tokenAddress, tokenLastUpdated, loadQuery]);
-  
-  // Set up auto-refresh for token price
-  useEffect(() => {
-    // Refresh data every 30 seconds as a backup
-    const interval = setInterval(() => {
-      console.log(`[TokenDetailContent] Auto-refreshing token ${tokenAddress} data`);
-      loadQuery({ tokenAddress }, { fetchPolicy: 'network-only' });
-    }, 30000);
     
-    return () => clearInterval(interval);
-  }, [tokenAddress, loadQuery]);
+    // When component is unmounted, reset state
+    return () => {
+      everHadDataRef.current = false;
+    };
+  }, [tokenAddress, loadQuery, queryRef]);
   
-  // Return loading state if we haven't loaded the query yet
-  if (!queryRef) {
+  // Handle Redis updates - we only want to trigger an actual reload in very limited cases
+  useEffect(() => {
+    if (!queryRef) return; // Skip if no query loaded yet
+    
+    const normalizedAddress = tokenAddress.toLowerCase();
+    if (tokenLastUpdated[normalizedAddress]) {
+      // Use the shouldEntityRefresh helper to determine if we actually need to refresh
+      // 10 second minimum between UI refreshes for token detail
+      if (shouldEntityRefresh('token-detail', normalizedAddress, 10000)) {
+        console.log(`[TokenDetailContent] Refreshing token ${normalizedAddress} with store-and-network`);
+        
+        // Never use network-only after initial load - always store-and-network
+        loadQuery({ tokenAddress }, { 
+          fetchPolicy: 'store-and-network',
+        });
+      }
+    }
+  }, [tokenLastUpdated, tokenAddress, loadQuery, queryRef, shouldEntityRefresh]);
+  
+  // Mark that we have data once query is loaded
+  if (queryRef && !everHadDataRef.current) {
+    everHadDataRef.current = true;
+  }
+  
+  // Return loading state only on initial load
+  if (!queryRef && !everHadDataRef.current) {
     return <LoadingContentSkeleton />;
   }
   
+  // Don't render anything if we somehow don't have a query ref
+  if (!queryRef) {
+    return null;
+  }
+  
+  // We now know queryRef is not null
   return <TokenDetailContentRenderer queryRef={queryRef} />;
 }
 
@@ -118,9 +140,14 @@ export function TokenDetailContentWithRelay({ tokenAddress }: { tokenAddress: st
 function TokenDetailContentRenderer({ queryRef }: { queryRef: PreloadedQuery<TokenDetailContentQuery> }) {
   const [activeTimeframe, setActiveTimeframe] = useState('1M');
   const brandColor = '#94e0fe';
+  const hadErrorRef = useRef<boolean>(false);
+  
+  // Use a ref to track if we've ever had data - once we have data, we never want to show loading states again
+  const everHadDataRef = useRef<boolean>(false);
   
   try {
-    // Use the preloaded query reference
+    // Use the preloaded query reference with store-or-network fetch policy
+    // This ensures we always use cached data first
     const data = useLazyLoadQuery<TokenDetailContentQuery>(
       TokenDetailQuery,
       { tokenAddress: queryRef.variables.tokenAddress as string },
@@ -129,15 +156,29 @@ function TokenDetailContentRenderer({ queryRef }: { queryRef: PreloadedQuery<Tok
     
     // Check if we have valid data
     if (!data || !data.tokenByAddress) {
+      // Only return error if we've never had data
+      if (!everHadDataRef.current) {
+        hadErrorRef.current = true;
       return <ErrorFallback message="Token not found" />;
+      }
+      
+      // Otherwise, keep showing the previous render - React will preserve it
+      return null;
     }
+    
+    // Mark that we've had data
+    everHadDataRef.current = true;
+    hadErrorRef.current = false;
     
     // Get token data
     const token = data.tokenByAddress;
     
     // Validate token has all required data before using it
     if (!token.address) {
+      if (!everHadDataRef.current) {
       return <ErrorFallback message="Token details unavailable" />;
+      }
+      return null;
     }
 
     // Format values for display
@@ -213,12 +254,12 @@ function TokenDetailContentRenderer({ queryRef }: { queryRef: PreloadedQuery<Tok
           <View direction="column" gap={1} padding={4} backgroundColor="elevation-raised" borderRadius="medium" width={{ s: '100%', m: '23%' }}>
             <Text variant="body-3" color="neutral-faded">TVL</Text>
             <Text variant="title-6">{metrics.tvl}</Text>
-          </View>
+        </View>
 
           <View direction="column" gap={1} padding={4} backgroundColor="elevation-raised" borderRadius="medium" width={{ s: '100%', m: '23%' }}>
             <Text variant="body-3" color="neutral-faded">Market Cap</Text>
             <Text variant="title-6">{metrics.marketCap}</Text>
-          </View>
+            </View>
 
           <View direction="column" gap={1} padding={4} backgroundColor="elevation-raised" borderRadius="medium" width={{ s: '100%', m: '23%' }}>
             <Text variant="body-3" color="neutral-faded">FDV</Text>
@@ -251,13 +292,16 @@ function TokenDetailContentRenderer({ queryRef }: { queryRef: PreloadedQuery<Tok
 
           {/* Chart section */}
           <View>
+            {/* Never show loading state once we have data */}
             <Suspense fallback={
+              everHadDataRef.current ? null : (
               <View height={400} width="100%" attributes={{
                 style: {
                   backgroundColor: 'rgba(30, 30, 30, 0.6)',
                   borderRadius: 4
                 }
               }} />
+              )
             }>
               <TokenPriceChartContainer 
                 tokenRef={token}  
@@ -308,17 +352,17 @@ function TokenDetailContentRenderer({ queryRef }: { queryRef: PreloadedQuery<Tok
               <View direction="row" justify="space-between" padding={2}>
                 <Text color="neutral-faded">Symbol</Text>
                 <Text>{token.symbol || '-'}</Text>
-              </View>
+            </View>
               
               <View direction="row" justify="space-between" padding={2}>
                 <Text color="neutral-faded">Address</Text>
                 <Text attributes={{ style: { wordBreak: 'break-all' } }}>{token.address}</Text>
-              </View>
+            </View>
               
               <View direction="row" justify="space-between" padding={2}>
                 <Text color="neutral-faded">Decimals</Text>
                 <Text>{token.decimals || '-'}</Text>
-              </View>
+            </View>
             </View>
           </View>
         </View>
@@ -326,6 +370,14 @@ function TokenDetailContentRenderer({ queryRef }: { queryRef: PreloadedQuery<Tok
     );
   } catch (error) {
     console.error('Error rendering token detail:', error);
-    return <ErrorFallback message="Error loading token data" />;
+    
+    // Only show error if we've never had data or already had error
+    if (!everHadDataRef.current || hadErrorRef.current) {
+      hadErrorRef.current = true;
+      return <ErrorFallback message="Error loading token data" />;
+    }
+    
+    // Otherwise return null to preserve previous render
+    return null;
   }
 }
