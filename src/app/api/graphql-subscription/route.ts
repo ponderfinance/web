@@ -36,21 +36,45 @@ function getRedisClient() {
     redisClient.on('connect', () => {
       console.log('[SSE] Redis subscription connected');
     });
+    
+    // Verify connection
+    redisClient.ping().then(response => {
+      console.log(`[SSE] Redis ping response: ${response}`);
+    }).catch(err => {
+      console.error('[SSE] Redis ping failed:', err);
+    });
   }
   
   return redisClient;
 }
 
 export async function GET(req: NextRequest) {
+  console.log('[SSE] Received connection request');
+  
   // Create readable stream for Server-Sent Events
   const stream = new ReadableStream({
     async start(controller) {
       try {
-        const redis = getRedisClient();
+        // Get Redis client
+        let redis: Redis;
+        try {
+          redis = getRedisClient();
+        } catch (error) {
+          console.error('[SSE] Failed to initialize Redis client:', error);
+          controller.enqueue(`data: ${JSON.stringify({ 
+            type: 'error', 
+            message: 'Failed to connect to Redis server'
+          })}\n\n`);
+          return;
+        }
         
         // Subscribe to all update channels
         const channels = Object.values(REDIS_CHANNELS);
-        await redis.subscribe(...channels);
+        await redis.subscribe(...channels).catch(err => {
+          console.error('[SSE] Error subscribing to channels:', err);
+          throw err;
+        });
+        
         console.log('[SSE] Subscribed to channels:', channels);
         
         // Set up message handler
@@ -131,8 +155,14 @@ export async function GET(req: NextRequest) {
           }
         }
         
-        // Send initial connection message
-        controller.enqueue(`data: ${JSON.stringify({ type: 'connected' })}\n\n`);
+        // Send initial connection message with status and channel information
+        controller.enqueue(`data: ${JSON.stringify({ 
+          type: 'connected',
+          status: 'ready',
+          message: 'Real-time update system ready',
+          channels: channels,
+          timestamp: Date.now()
+        })}\n\n`);
         
         // Keep the connection alive with a heartbeat every 30 seconds
         const heartbeatInterval = setInterval(() => {
@@ -149,9 +179,9 @@ export async function GET(req: NextRequest) {
       }
     }
   });
-  
-  // Return the stream with appropriate headers for SSE
-  return new NextResponse(stream, {
+
+  // Return the stream response
+  return new Response(stream, {
     headers: {
       'Content-Type': 'text/event-stream',
       'Cache-Control': 'no-cache, no-transform',

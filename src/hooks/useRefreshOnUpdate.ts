@@ -4,6 +4,16 @@ import { useRelayEnvironment } from 'react-relay';
 
 type EntityType = 'token' | 'pair' | 'transaction' | 'metrics';
 
+// Define the subscriber context type
+type RedisSubscriberContextType = {
+  metricsLastUpdated: number | null;
+  pairLastUpdated: Record<string, number>;
+  tokenLastUpdated: Record<string, number>;
+  transactionLastUpdated: Record<string, number>;
+  refreshData: () => void;
+  shouldEntityRefresh: (entityType: string, entityId: string, minInterval?: number) => boolean;
+};
+
 interface RefreshOnUpdateOptions {
   entityType: EntityType;
   entityId?: string;
@@ -33,14 +43,36 @@ export function useRefreshOnUpdate({
   shouldRefetch = false, // Whether to force a refetch
   debug = entityType === 'transaction' // Default to true for transactions
 }: RefreshOnUpdateOptions) {
-  const environment = useRelayEnvironment();
+  // Try to access the Relay environment, but don't crash if it's not available
+  let environment: any = undefined;
+  try {
+    environment = useRelayEnvironment();
+  } catch (error) {
+    if (debug) {
+      console.log(`[useRefreshOnUpdate] Relay environment not available yet`);
+    }
+    // Environment will be undefined, and we'll handle that case
+  }
+  
+  // We need to try/catch the subscriber hook too since it may depend on the environment
+  let subscriberContext: RedisSubscriberContextType | undefined;
+  try {
+    subscriberContext = useRedisSubscriber();
+  } catch (error) {
+    if (debug) {
+      console.log(`[useRefreshOnUpdate] Redis subscriber context not available yet`);
+    }
+    // We'll set default values below
+  }
+  
+  // Safely extract values from the subscriber context
   const { 
-    metricsLastUpdated, 
-    tokenLastUpdated, 
-    pairLastUpdated, 
-    transactionLastUpdated,
-    shouldEntityRefresh
-  } = useRedisSubscriber();
+    metricsLastUpdated = null, 
+    tokenLastUpdated = {}, 
+    pairLastUpdated = {}, 
+    transactionLastUpdated = {},
+    shouldEntityRefresh = () => true
+  } = subscriberContext || {};
   
   const [lastUpdated, setLastUpdated] = useState<number | null>(null);
   const lastRefreshTimeRef = useRef<number>(0);
@@ -48,6 +80,9 @@ export function useRefreshOnUpdate({
   
   // Track when the entity was last updated
   useEffect(() => {
+    // Skip if no environment or subscriber context
+    if (!environment || !subscriberContext) return;
+    
     let timestamp: number | null = null;
     let hasSignificantChange = false;
     
@@ -159,11 +194,14 @@ export function useRefreshOnUpdate({
     lastUpdated,
     minRefreshInterval,
     shouldRefetch,
-    debug
+    debug,
+    subscriberContext
   ]);
   
   // Manual refresh function
   const refresh = useCallback(() => {
+    if (!subscriberContext) return;
+    
     if (shouldEntityRefresh(entityType, entityId, minRefreshInterval)) {
       if (debug) {
         console.log(`[useRefreshOnUpdate] Manual refresh for ${entityType} ${entityId}`);
@@ -174,12 +212,16 @@ export function useRefreshOnUpdate({
       }
       
       if (shouldRefetch && environment) {
-        environment.getStore().notify();
+        try {
+          environment.getStore().notify();
+        } catch (err) {
+          console.error('Error invalidating store:', err);
+        }
       }
       
       lastRefreshTimeRef.current = Date.now();
     }
-  }, [entityType, entityId, environment, shouldRefetch, onUpdate, shouldEntityRefresh, minRefreshInterval, debug]);
+  }, [entityType, entityId, environment, shouldRefetch, onUpdate, shouldEntityRefresh, minRefreshInterval, debug, subscriberContext]);
   
   return {
     refresh,

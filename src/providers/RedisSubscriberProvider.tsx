@@ -8,11 +8,13 @@ import {
   onPairUpdated,
   onTransactionUpdated,
   closeRedisSubscriber,
-  getEventEmitter
+  getEventEmitter,
+  registerSubscriber,
+  unregisterSubscriber
 } from '@/src/lib/redis/subscriber'
-import { initRedisRecovery, stopRedisRecovery } from '@/src/lib/redis/recovery'
-import { registerTokenPriceUpdater, applyStoreUpdate, createRelayEnvironment } from '@/src/relay/createRelayEnvironment'
+import { applyStoreUpdate } from '@/src/relay/createRelayEnvironment'
 import { initializeRelayUpdaters } from '@/src/relay/initRelayUpdaters'
+import { useRelayEnvironment } from 'react-relay'
 
 // Define the context type
 type RedisSubscriberContextType = {
@@ -21,77 +23,105 @@ type RedisSubscriberContextType = {
   tokenLastUpdated: Record<string, number>
   transactionLastUpdated: Record<string, number>
   refreshData: () => void
-  // New function to check if an entity should be refreshed
+  // Function to check if an entity should be refreshed
   shouldEntityRefresh: (entityType: string, entityId: string, minInterval?: number) => boolean
 }
 
-// Create context with default values
+// Create the context with a default value
 const RedisSubscriberContext = createContext<RedisSubscriberContextType>({
   metricsLastUpdated: null,
   pairLastUpdated: {},
   tokenLastUpdated: {},
   transactionLastUpdated: {},
   refreshData: () => {},
-  shouldEntityRefresh: () => false,
+  shouldEntityRefresh: () => false
 })
 
-// Hook to use the redis subscriber context
+// Helper to create styled console logs
+const logWithStyle = (message: string, type: 'success' | 'info' | 'error' | 'warning' = 'info') => {
+  if (typeof window === 'undefined') return; // Only log in browser
+  
+  const styles = {
+    success: 'color: #00c853; font-weight: bold; font-size: 14px;',
+    info: 'color: #2196f3; font-weight: bold;',
+    error: 'color: #f44336; font-weight: bold;',
+    warning: 'color: #ff9800; font-weight: bold;'
+  };
+  
+  console.log(`%c${message}`, styles[type]);
+};
+
+// Custom hook to use the Redis subscriber context
 export const useRedisSubscriber = () => useContext(RedisSubscriberContext)
 
-// Provider component
+// Provider component - simplified to always use the Relay environment hook directly
 export function RedisSubscriberProvider({ children }: { children: React.ReactNode }) {
+  // This will throw an error if used outside of a RelayEnvironmentProvider
+  // That's what we want - it ensures we only render this when Relay env is ready
+  const environment = useRelayEnvironment();
+  
   // State to track last update timestamps
   const [metricsLastUpdated, setMetricsLastUpdated] = useState<number | null>(null)
   const [pairLastUpdated, setPairLastUpdated] = useState<Record<string, number>>({})
   const [tokenLastUpdated, setTokenLastUpdated] = useState<Record<string, number>>({})
   const [transactionLastUpdated, setTransactionLastUpdated] = useState<Record<string, number>>({})
+  const [refreshCounter, setRefreshCounter] = useState(0)
   const [isInitialized, setIsInitialized] = useState(false)
   
-  // Track direct store updates
+  // Track direct store updates to avoid duplicate refreshes
   const directUpdatesRef = useRef<Record<string, number>>({})
   
-  // Force refresh counter
-  const [refreshCounter, setRefreshCounter] = useState(0)
-  const refreshData = () => setRefreshCounter(prev => prev + 1)
-  
-  // Function to check if an entity should refresh based on last update
-  const shouldEntityRefresh = (entityType: string, entityId: string, minInterval = 5000): boolean => {
-    const key = `${entityType}-${entityId}`;
-    const now = Date.now();
-    const lastUpdate = directUpdatesRef.current[key] || 0;
+  // Function to check if an entity should be refreshed based on time threshold
+  const shouldEntityRefresh = (entityType: string, entityId: string, minInterval = 5000) => {
+    const key = `${entityType}-${entityId}`
+    const lastDirectUpdate = directUpdatesRef.current[key]
+    const now = Date.now()
     
-    // Don't refresh if updated recently
-    if (now - lastUpdate < minInterval) {
-      return false;
-    }
-    
-    // Mark as updated
-    directUpdatesRef.current[key] = now;
-    return true;
+    // If no direct update or enough time has passed, allow refresh
+    return !lastDirectUpdate || (now - lastDirectUpdate) > minInterval
   }
+  
+  // Function to force refresh all data
+  const refreshData = () => {
+    setRefreshCounter(prev => prev + 1)
+  }
+  
+  // Register subscriber when provider mounts
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      // Log that we have access to the Relay environment
+      logWithStyle('✅ RedisSubscriber has valid Relay environment', 'success');
+      
+      // Register a subscriber - this tracks how many components use real-time updates
+      registerSubscriber();
+      
+      // Unregister when unmounted
+      return () => {
+        unregisterSubscriber();
+      };
+    }
+  }, []);
   
   // Initialize subscriber and set up event handlers
   useEffect(() => {
-    if (typeof window === 'undefined' || isInitialized) return
+    if (typeof window === 'undefined' || isInitialized || !environment) return
     
-    console.log('Initializing Redis subscriber and recovery system...')
+    logWithStyle('🚀 Initializing Real-Time Update System...', 'info')
     
-    // Register all store updaters for efficient updates using the new registry pattern
+    // Register all store updaters
     initializeRelayUpdaters()
     
     // Define our handler functions first so we can reference them in cleanup
     const metricsHandler = (data: any) => {
-      console.log('RedisSubscriber: received metrics update', data)
+      logWithStyle('📈 Received protocol metrics update', 'info')
       
-      // Always attempt direct store update first
-      const env = createRelayEnvironment()
       let updated = false;
       
-      if (env && data.metrics) {
+      if (environment && data.metrics) {
         // Try to update protocol metrics directly in the store
-        updated = applyStoreUpdate('global-metrics', data.metrics, env);
+        updated = applyStoreUpdate('global-metrics', data.metrics, environment);
         if (updated) {
-          console.log('Applied direct store update for global metrics');
+          logWithStyle('✅ Applied direct store update for global metrics', 'success');
           // Track this direct update
           directUpdatesRef.current['metrics-global'] = Date.now();
         }
@@ -99,86 +129,92 @@ export function RedisSubscriberProvider({ children }: { children: React.ReactNod
       
       // Only update timestamp if direct update failed or if it's been a while
       if (!updated || shouldEntityRefresh('metrics', 'global', 15000)) {
-      setMetricsLastUpdated(data.timestamp || Date.now())
+        setMetricsLastUpdated(data.timestamp || Date.now())
       }
     }
     
     const pairHandler = (data: any) => {
-      console.log('RedisSubscriber: received pair update', data)
-      if (data.entityId) {
-        // Always attempt direct store update first
-        const env = createRelayEnvironment()
-        let updated = false;
-        
-        if (env) {
-          updated = applyStoreUpdate(`pair-${data.entityId}`, data, env);
-          if (updated) {
-            console.log('Applied direct store update for pair');
-            // Track this direct update
-            directUpdatesRef.current[`pair-${data.entityId}`] = Date.now();
-          }
+      // Extract entity ID from the data
+      const entityId = data.entityId || data.pairId;
+      if (!entityId) {
+        console.warn('Pair update missing entityId/pairId', data);
+        return;
+      }
+      
+      logWithStyle(`🔄 Received pair update for ${entityId.slice(0, 6)}...`, 'info');
+      
+      let updated = false;
+      
+      if (environment) {
+        updated = applyStoreUpdate(`pair-${entityId}`, data, environment);
+        if (updated) {
+          logWithStyle(`✅ Applied direct store update for pair ${entityId.slice(0, 6)}...`, 'success');
+          // Track this direct update
+          directUpdatesRef.current[`pair-${entityId}`] = Date.now();
         }
-        
-        // Only update timestamp if direct update failed or if it's been a while
-        if (!updated || shouldEntityRefresh('pair', data.entityId, 10000)) {
+      }
+      
+      // Only update timestamps if direct update failed or we need to refresh
+      if (!updated || shouldEntityRefresh('pair', entityId, 10000)) {
         setPairLastUpdated(prev => ({
           ...prev,
-          [data.entityId]: data.timestamp || Date.now()
-        }))
-        }
+          [entityId]: data.timestamp || Date.now()
+        }));
       }
     }
     
     const tokenHandler = (data: any) => {
-      console.log('RedisSubscriber: received token update', data)
-      if (data.entityId) {
-        // Always attempt direct store update first
-        const env = createRelayEnvironment()
-        let updated = false;
-        
-        if (env) {
-          // Try both token-price and generic token updates
-          updated = applyStoreUpdate(`token-price-${data.entityId}`, data, env);
-          if (updated) {
-            console.log('Applied direct store update for token price');
-            // Track this direct update
-            directUpdatesRef.current[`token-${data.entityId}`] = Date.now();
-          }
+      // Extract entity ID from the data
+      const entityId = data.entityId || data.tokenId;
+      if (!entityId) {
+        console.warn('Token update missing entityId/tokenId', data);
+        return;
+      }
+      
+      logWithStyle(`💱 Received token update for ${entityId.slice(0, 6)}...`, 'info');
+      
+      let updated = false;
+      
+      if (environment) {
+        updated = applyStoreUpdate(`token-price-${entityId}`, data, environment);
+        if (updated) {
+          logWithStyle(`✅ Applied direct store update for token ${entityId.slice(0, 6)}...`, 'success');
+          // Track this direct update
+          directUpdatesRef.current[`token-${entityId}`] = Date.now();
         }
-        
-        // Only update timestamp if direct update failed or if it's been a while
-        if (!updated || shouldEntityRefresh('token', data.entityId, 10000)) {
+      }
+      
+      // Only update token timestamps if direct update failed
+      if (!updated || shouldEntityRefresh('token', entityId)) {
         setTokenLastUpdated(prev => ({
           ...prev,
-          [data.entityId]: data.timestamp || Date.now()
-        }))
-        }
+          [entityId]: data.timestamp || Date.now()
+        }));
       }
     }
     
     const transactionHandler = (data: any) => {
-      console.log('RedisSubscriber: received transaction update', data);
-      
       // Handle different transaction message formats
       // The entityId might be in data.entityId or data.transactionId
       const entityId = data.entityId || data.transactionId;
+      const txHash = data.txHash || '';
       const timestamp = data.timestamp || Date.now();
       
       if (entityId) {
-        // Always attempt direct store update first
-        const env = createRelayEnvironment()
+        logWithStyle(`💸 Transaction update: ${txHash ? txHash.slice(0, 8) : entityId.slice(0, 8)}...`, 'info');
+        
         let updated = false;
         
-        if (env) {
+        if (environment) {
           // Normalize the data for store update - make sure it has entityId property
           const normalizedData = { 
             ...data,
             entityId: entityId
           };
           
-          updated = applyStoreUpdate(`transaction-${entityId}`, normalizedData, env);
+          updated = applyStoreUpdate(`transaction-${entityId}`, normalizedData, environment);
           if (updated) {
-            console.log(`Applied direct store update for transaction ${entityId}`);
+            logWithStyle(`✅ Applied direct update for transaction ${entityId.slice(0, 8)}...`, 'success');
             // Track this direct update
             directUpdatesRef.current[`transaction-${entityId}`] = timestamp;
           }
@@ -197,7 +233,7 @@ export function RedisSubscriberProvider({ children }: { children: React.ReactNod
     }
     
     try {
-      // Initialize Redis subscriber
+      // Initialize Redis subscriber (SSE connection only, no direct Redis)
       initRedisSubscriber()
       
       // Set up event handlers
@@ -206,17 +242,16 @@ export function RedisSubscriberProvider({ children }: { children: React.ReactNod
       onTokenUpdated(tokenHandler)
       onTransactionUpdated(transactionHandler)
       
-      // Initialize Redis recovery system
-      initRedisRecovery(30000) // Check every 30 seconds
-      
+      logWithStyle('✅ Real-time update handlers registered successfully', 'success');
       setIsInitialized(true)
     } catch (error) {
-      console.error('Error initializing Redis subscriber:', error)
+      logWithStyle('❌ Error initializing real-time updates', 'error')
+      console.error('Error details:', error)
     }
     
     // Return cleanup function to properly remove listeners when component unmounts
     return () => {
-      console.log('Cleaning up Redis subscriber event listeners and recovery system')
+      logWithStyle('🛑 Shutting down real-time update system...', 'warning')
       const emitter = getEventEmitter()
       
       // Remove our specific event listeners
@@ -225,14 +260,10 @@ export function RedisSubscriberProvider({ children }: { children: React.ReactNod
       emitter.removeListener('token:updated', tokenHandler)
       emitter.removeListener('transaction:updated', transactionHandler)
       
-      // Stop the Redis recovery system
-      stopRedisRecovery()
-      
-      // If this is the only component using the subscriber, we can close the connection
-      // Consider using a ref counter pattern if multiple components might use this
+      // Close if no other subscribers need the connection
       closeRedisSubscriber()
     }
-  }, [isInitialized, refreshCounter])
+  }, [isInitialized, refreshCounter, environment])
   
   // Context value
   const value = {

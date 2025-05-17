@@ -1,6 +1,6 @@
 'use client'
 
-import React, { Suspense, useEffect, useState, useCallback } from 'react'
+import React, { Suspense, useEffect, useState } from 'react'
 import { graphql, useLazyLoadQuery, useQueryLoader, PreloadedQuery } from 'react-relay'
 import { TransactionsPageQuery } from '@/src/__generated__/TransactionsPageQuery.graphql'
 import { TransactionsDisplay } from '@/src/modules/explore/components/TransactionsDisplay'
@@ -8,6 +8,7 @@ import { View, Text, Skeleton } from 'reshaped'
 import { tokenFragment } from '@/src/components/TokenPair'
 import { useRefreshOnUpdate } from '@/src/hooks/useRefreshOnUpdate'
 import ScrollableTable from '@/src/components/ScrollableTable'
+import { registerSubscriber, unregisterSubscriber } from '@/src/lib/redis/subscriber'
 
 export const transactionsPageQuery = graphql`
   query TransactionsPageQuery($first: Int!) {
@@ -45,6 +46,18 @@ export const transactionsPageQuery = graphql`
     }
   }
 `
+
+// Helper for console logging
+const logWithStyle = (message: string, type: 'success' | 'info' | 'error' | 'warning' = 'info') => {
+  const styles = {
+    success: 'color: #00c853; font-weight: bold;',
+    info: 'color: #2196f3; font-weight: bold;',
+    error: 'color: #f44336; font-weight: bold;',
+    warning: 'color: #ff9800; font-weight: bold;'
+  };
+  
+  console.log(`%c${message}`, styles[type]);
+};
 
 // Loading component for suspense
 function TransactionsLoading() {
@@ -98,46 +111,42 @@ function TransactionsLoading() {
       </View>
 
       {/* Skeleton Rows */}
-      <View direction="column" gap={0} width="100%">
-        {[...Array(10)].map((_, index) => (
-          <View
-            key={index}
-            direction="row"
-            gap={0}
-            padding={4}
-            className={'border-0 border-neutral-faded'}
-            align="center"
-            width="100%"
-          >
-            <View.Item columns={2}>
-              <Skeleton width="80px" height="24px" />
-            </View.Item>
+      {Array.from({ length: 5 }).map((_, index) => (
+        <View
+          key={index}
+          direction="row"
+          gap={0}
+          paddingInline={4}
+          paddingBlock={2}
+          className={'border-0 border-b border-neutral-faded'}
+          backgroundColor="elevation-base"
+          width="100%"
+        >
+          <View.Item columns={2}>
+            <Skeleton width="80px" height="20px" />
+          </View.Item>
 
-            <View.Item columns={1}>
-              <Skeleton width="40px" height="24px" />
-            </View.Item>
+          <View.Item columns={1}>
+            <Skeleton width="60px" height="20px" />
+          </View.Item>
 
-            <View.Item columns={4}>
-              <View direction="row" gap={2} align="center">
-                <Skeleton width={8} height={8} borderRadius="circular" />
-                <Skeleton width="120px" height="24px" />
-              </View>
-            </View.Item>
+          <View.Item columns={4}>
+            <Skeleton width="120px" height="20px" />
+          </View.Item>
 
-            <View.Item columns={2}>
-              <Skeleton width="100px" height="24px" />
-            </View.Item>
+          <View.Item columns={2}>
+            <Skeleton width="90px" height="20px" />
+          </View.Item>
 
-            <View.Item columns={2}>
-              <Skeleton width="100px" height="24px" />
-            </View.Item>
+          <View.Item columns={2}>
+            <Skeleton width="90px" height="20px" />
+          </View.Item>
 
-            <View.Item columns={1}>
-              <Skeleton width="60px" height="24px" />
-            </View.Item>
-          </View>
-        ))}
-      </View>
+          <View.Item columns={1}>
+            <Skeleton width="60px" height="20px" />
+          </View.Item>
+        </View>
+      ))}
     </ScrollableTable>
   )
 }
@@ -157,44 +166,46 @@ function TransactionsContent({ queryRef }: { queryRef: PreloadedQuery<Transactio
   return <TransactionsDisplay data={data} />
 }
 
-// Exported page component
+// Main transactions page component
 export const TransactionsPage = () => {
-  const [mounted, setMounted] = useState(false)
-  const [queryRef, loadQuery] = useQueryLoader<TransactionsPageQuery>(transactionsPageQuery)
-  const [refreshCounter, setRefreshCounter] = useState(0)
-
-  // Handle transaction updates
-  const handleTransactionUpdate = useCallback(() => {
-    console.log('[TransactionsPage] Refreshing transactions due to real-time update')
-    loadQuery({ first: 15 }, { 
-      fetchPolicy: 'store-and-network',
-    })
-    // Also increment the counter to force re-render
-    setRefreshCounter(prev => prev + 1)
-  }, [loadQuery])
+  // We can safely use useQueryLoader here because this component only renders
+  // when the RelayEnvironmentProvider is available (from the parent providers)
+  const [queryRef, loadQuery] = useQueryLoader<TransactionsPageQuery>(transactionsPageQuery);
+  const [refreshKey, setRefreshKey] = useState(0);
   
-  // Use our custom hook for real-time updates
+  // Initial data load
+  useEffect(() => {
+    logWithStyle('🔄 Loading transaction data...', 'info');
+    loadQuery({ first: 15 }, { fetchPolicy: 'network-only' });
+  }, [loadQuery]);
+  
+  // Register this component as a real-time update subscriber
+  useEffect(() => {
+    // Register as a transaction subscriber
+    registerSubscriber();
+    
+    // Clean up when unmounted
+    return () => {
+      unregisterSubscriber();
+    };
+  }, []);
+  
+  // Set up real-time update hook for transactions
   useRefreshOnUpdate({
     entityType: 'transaction',
-    onUpdate: handleTransactionUpdate,
+    onUpdate: () => {
+      logWithStyle('🔄 Refreshing transactions due to real-time update', 'info');
+      // Reload query
+      loadQuery({ first: 15 }, { fetchPolicy: 'network-only' });
+      // Force re-render by changing key
+      setRefreshKey(prev => prev + 1);
+    },
     minRefreshInterval: 1000,
-    shouldRefetch: true
-  })
+    shouldRefetch: true,
+  });
 
-  // Only render the query component after mounting on the client
-  useEffect(() => {
-    setMounted(true)
-    
-    // Initial load
-    loadQuery({ first: 15 }, { fetchPolicy: 'network-only' })
-  }, [loadQuery])
-
-  // Create a key that changes when refreshCounter changes to force re-mount
-  const contentKey = `transactions-content-${refreshCounter}`
-
-  if (!mounted) {
-    return <TransactionsLoading />
-  }
+  // Create a key that changes when the refresh counter changes
+  const contentKey = `transactions-content-${refreshKey}`;
   
   return (
     <View gap={6}>
@@ -202,5 +213,5 @@ export const TransactionsPage = () => {
         {queryRef && <TransactionsContent key={contentKey} queryRef={queryRef} />}
       </Suspense>
     </View>
-  )
+  );
 }
