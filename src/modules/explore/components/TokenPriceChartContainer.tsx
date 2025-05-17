@@ -101,22 +101,6 @@ export default function TokenPriceChartContainer({
 
   return (
     <View direction="column" gap={16}>
-      {/* Connection status indicator */}
-      {isConnectionSuspended && (
-        <View 
-          padding={2} 
-          backgroundColor="neutral-faded" 
-          borderRadius="medium"
-          direction="row"
-          align="center"
-          justify="center"
-          gap={2}
-        >
-          <Text variant="body-3" color="warning">
-            Real-time updates temporarily unavailable - using cached data
-          </Text>
-        </View>
-      )}
   
       {/* Chart content */}
       {priceData && priceData.length > 0 ? (
@@ -126,11 +110,7 @@ export default function TokenPriceChartContainer({
           displayType={displayType as 'line' | 'area' | 'candle'}
           priceData={priceData}
         />
-      ) : (
-        <View height={400} align="center" justify="center">
-          <Text>No price data available</Text>
-        </View>
-      )}
+      ) : null}
     </View>
   )
 }

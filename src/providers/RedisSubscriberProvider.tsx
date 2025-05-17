@@ -61,7 +61,7 @@ export function RedisSubscriberProvider({ children }: { children: React.ReactNod
     
     try {
       environmentRef.current = getClientEnvironment();
-      console.log('✅ Got Relay environment');
+      // console.log('✅ Got Relay environment');
     } catch (error) {
       console.error('Error accessing Relay environment:', error);
     }

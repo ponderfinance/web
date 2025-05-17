@@ -87,9 +87,6 @@ export const BridgeModal = ({ isOpen, onClose }: BridgeModalProps) => {
     !!selectedToken && !!sdk?.bridge?.address
   )
 
-  useEffect(() => {
-    console.log('BridgeModal state:', { isOpen, sdk: !!sdk })
-  }, [isOpen, sdk])
 
   // Effect to set initial source chain based on current chain
   useEffect(() => {

@@ -15,7 +15,7 @@ export function getClientEnvironment() {
 
   // Create the environment once for the client if it doesn't exist
   if (!clientEnvironment) {
-    console.log('Creating and initializing Relay environment');
+    // console.log('Creating and initializing Relay environment');
     clientEnvironment = createRelayEnvironment();
     
     // Initialize all store updaters for the registry

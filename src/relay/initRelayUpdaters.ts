@@ -66,7 +66,7 @@ function registerPairUpdater() {
           pairRecord.setValue(data.priceChange24h, 'priceChange24h');
         }
         
-        console.log(`Updated pair ${pairId} in Relay store without refetching`);
+        // console.log(`Updated pair ${pairId} in Relay store without refetching`);
       } catch (error) {
         console.error('Error updating pair in store:', error);
       }

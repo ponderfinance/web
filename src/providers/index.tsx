@@ -44,7 +44,7 @@ function RelayProvider({ children }: { children: React.ReactNode }) {
     if (envRef.current) return; // Already initialized
     
     try {
-      logWithStyle('🔄 Initializing Relay environment...', 'info');
+      // logWithStyle('🔄 Initializing Relay environment...', 'info');
       
       // Get the singleton environment instance
       const env = getClientEnvironment();
@@ -52,7 +52,7 @@ function RelayProvider({ children }: { children: React.ReactNode }) {
       if (env) {
         envRef.current = env;
         setIsReady(true);
-        logWithStyle('✅ Relay environment initialized successfully', 'success');
+        // logWithStyle('✅ Relay environment initialized successfully', 'success');
       } else {
         console.error('Failed to create Relay environment');
         logWithStyle('⚠️ Failed to create Relay environment', 'warning');

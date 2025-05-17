@@ -318,4 +318,4 @@ if (typeof process !== 'undefined') {
 }
 
 // Initialize Redis on first import
-console.log('[REDIS] Universal connection manager initialized');
+// console.log('[REDIS] Universal connection manager initialized');
