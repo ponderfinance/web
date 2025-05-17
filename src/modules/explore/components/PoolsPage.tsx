@@ -198,7 +198,6 @@ const PoolsPageContent = () => {
   
   // Function to refresh data
   const handlePoolUpdate = useCallback(() => {
-    console.log('[PoolsPage] Refreshing pools due to real-time update')
     loadQuery(
       {
         first: 20,

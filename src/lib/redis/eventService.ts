@@ -93,7 +93,7 @@ class EventService {
       if (this.state === ConnectionState.CONNECTED && 
           this.lastMessageTime > 0 && 
           now - this.lastMessageTime > this.heartbeatTimeoutMs * 2) {
-        console.log(`[Events] No messages received for ${Math.round((now - this.lastMessageTime) / 1000)}s, reconnecting`);
+        // console.log(`[Events] No messages received for ${Math.round((now - this.lastMessageTime) / 1000)}s, reconnecting`);
         this.disconnect();
         this.connect();
       }
@@ -105,7 +105,7 @@ class EventService {
    */
   public register(): void {
     this.userCount++;
-    console.log(`[Events] Component registered (total: ${this.userCount})`);
+    // console.log(`[Events] Component registered (total: ${this.userCount})`);
     
     // Connect if this is our first subscriber
     if (this.userCount === 1) {
@@ -118,7 +118,7 @@ class EventService {
    */
   public unregister(): boolean {
     this.userCount = Math.max(0, this.userCount - 1);
-    console.log(`[Events] Component unregistered (remaining: ${this.userCount})`);
+    // console.log(`[Events] Component unregistered (remaining: ${this.userCount})`);
     
     // If no more users and we have a connection, clean it up
     if (this.userCount === 0 && typeof window !== 'undefined' && window.__eventSource) {
@@ -150,7 +150,7 @@ class EventService {
     
     // Too many failed attempts - go into suspended state
     if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-      console.log('[Events] Too many failed attempts, suspending reconnection');
+      // console.log('[Events] Too many failed attempts, suspending reconnection');
       this.updateState(ConnectionState.SUSPENDED);
       this.emitter.emit(ConnectionEvent.SUSPENDED, { timestamp: Date.now() });
       return;
@@ -161,7 +161,7 @@ class EventService {
     this.reconnectAttempts++;
     
     try {
-      console.log(`[Events] Connecting (attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
+      // console.log(`[Events] Connecting (attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
       
       // Clean up existing connection if any
       this.disconnect();
@@ -179,7 +179,7 @@ class EventService {
       // Set a connection timeout
       setTimeout(() => {
         if (this.state === ConnectionState.CONNECTING) {
-          console.log('[Events] Connection timeout, retrying');
+          // console.log('[Events] Connection timeout, retrying');
           this.handleError(new Error('Connection timeout'));
         }
       }, 15000);
@@ -197,7 +197,7 @@ class EventService {
     if (this.state !== newState) {
       const oldState = this.state;
       this.state = newState;
-      console.log(`[Events] Connection state: ${oldState} → ${newState}`);
+      // console.log(`[Events] Connection state: ${oldState} → ${newState}`);
       
       // Reset reconnect attempts when connected
       if (newState === ConnectionState.CONNECTED) {
@@ -224,7 +224,7 @@ class EventService {
    * Handle successful connection
    */
   private handleOpen(): void {
-    console.log('[Events] Connection established');
+    // console.log('[Events] Connection established');
     this.updateState(ConnectionState.CONNECTED);
     this.emitter.emit(ConnectionEvent.CONNECTED, { timestamp: Date.now() });
     this.lastMessageTime = Date.now();

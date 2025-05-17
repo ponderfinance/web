@@ -26,9 +26,11 @@ import {
   getRedisEventEmitter as getConfigEventEmitter,
   registerRedisConnection,
   unregisterRedisConnection,
-  shutdownRedisConnections,
-  REDIS_CHANNELS
+  shutdownRedisConnections
 } from '@/src/config/redis';
+
+// Import channels from constants
+import { REDIS_CHANNELS } from '@/src/constants/redis-channels';
 
 // Re-export from central constants
 export { REDIS_CHANNELS };

@@ -186,7 +186,6 @@ const TokensPageContent = () => {
   
   // Handle refreshing when token data updates
   const handleTokenUpdate = useCallback(() => {
-    console.log('[TokensPage] Refreshing token list due to real-time update')
     loadQuery({
       first: 20,
       orderBy: orderBy as any,

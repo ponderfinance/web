@@ -55,7 +55,7 @@ export function useRefreshOnUpdate({
     try {
       environmentRef.current = getClientEnvironment();
       if (debug && environmentRef.current) {
-        console.log('[useRefreshOnUpdate] Got Relay environment reference');
+        // console.log('[useRefreshOnUpdate] Got Relay environment reference');
       }
     } catch (error) {
       if (debug) {

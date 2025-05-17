@@ -8,7 +8,6 @@
 import Redis from 'ioredis';
 import { EventEmitter } from 'events';
 import { ConnectionState, ConnectionEvent } from '../lib/redis/singleton';
-import { REDIS_CHANNELS } from '../constants/redis-channels';
 
 // ========================= GLOBAL SINGLETON STATE =============================
 // These variables ensure that only one Redis client and subscriber exist globally
@@ -68,7 +67,7 @@ export function getRedisEventEmitter(): EventEmitter {
  */
 export function registerRedisConnection(): void {
   activeConnections++;
-  console.log(`[REDIS] Connection registered (total: ${activeConnections})`);
+  // console.log(`[REDIS] Connection registered (total: ${activeConnections})`);
 }
 
 /**
@@ -76,7 +75,7 @@ export function registerRedisConnection(): void {
  */
 export function unregisterRedisConnection(): boolean {
   activeConnections = Math.max(0, activeConnections - 1);
-  console.log(`[REDIS] Connection unregistered (remaining: ${activeConnections})`);
+  // console.log(`[REDIS] Connection unregistered (remaining: ${activeConnections})`);
   
   // Return whether this was the last connection
   return activeConnections === 0;

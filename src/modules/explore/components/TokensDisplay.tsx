@@ -71,7 +71,6 @@ export const TokensDisplay: React.FC<TokensDisplayProps> = ({
   
   // Debounced refresh function to avoid too many refreshes
   const refreshTokensData = useCallback(() => {
-    console.log('Refreshing tokens list data');
     try {
       loadQuery({
         first: 20,
@@ -79,16 +78,12 @@ export const TokensDisplay: React.FC<TokensDisplayProps> = ({
         orderDirection: orderDirection as any,
       }, { fetchPolicy: 'network-only' });
     } catch (error) {
-      console.error('Error refreshing tokens data:', error);
     }
   }, [orderBy, orderDirection, loadQuery]);
   
   // Handle token updates from Redis
   useEffect(() => {
     if (Object.keys(tokenLastUpdated).length > 0) {
-      console.log('Tokens updated from Redis, refreshing tokens list');
-      
-      // Use the recovery wrapper for the query refresh
       refreshTokensData();
     }
   }, [tokenLastUpdated, refreshTokensData]);
@@ -97,7 +92,6 @@ export const TokensDisplay: React.FC<TokensDisplayProps> = ({
   useEffect(() => {
     // Refresh data every 60 seconds as a backup
     const interval = setInterval(() => {
-      console.log('Auto-refreshing tokens data');
       refreshTokensData();
     }, 60000);
     

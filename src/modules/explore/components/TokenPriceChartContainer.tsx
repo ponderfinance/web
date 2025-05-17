@@ -80,13 +80,8 @@ export default function TokenPriceChartContainer({
     entityId: token?.address?.toLowerCase() || 'global',
     minRefreshInterval: 15000, // 15 seconds minimum between updates
     shouldRefetch: false,
-    debug: true // Enable debug logging
+    debug: false // Disable debug logging
   });
-  
-  // Log connection state changes
-  useEffect(() => {
-    console.log(`[TokenPriceChart] Connection state: ${connectionState}, last update: ${lastUpdated ? new Date(lastUpdated).toLocaleTimeString() : 'none'}`);
-  }, [connectionState, lastUpdated]);
   
   // Handle timeframe change
   const handleTimeframeChange = (newTimeframe: string) => {
@@ -210,14 +205,6 @@ function TokenPriceChartRenderer({
   // Explicitly sort the data by timestamp to ensure it's in correct order
   processedData = processedData.sort((a, b) => Number(a.time) - Number(b.time));
   
-  // Log the timestamps to help with debugging
-  console.log(`[CHART] Rendering ${processedData.length} price points for ${tokenSymbol}`);
-  if (processedData.length > 0) {
-    const firstPoint = processedData[0];
-    const lastPoint = processedData[processedData.length - 1];
-    console.log(`[CHART] Time range: ${new Date(firstPoint.time * 1000).toISOString()} to ${new Date(lastPoint.time * 1000).toISOString()}`);
-  }
-
   // If there's only one data point, duplicate it to show a flat line
   if (processedData.length === 1) {
     const existingPoint = processedData[0];

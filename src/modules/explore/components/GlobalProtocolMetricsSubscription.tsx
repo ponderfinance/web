@@ -8,18 +8,6 @@ import { useRefreshOnUpdate } from '@/src/hooks/useRefreshOnUpdate';
 import { withRelayBoundary } from '@/src/lib/relay/withRelayBoundary';
 import { ConnectionState } from '@/src/lib/redis/eventService';
 
-// Helper for console logging
-const logWithStyle = (message: string, type: 'success' | 'info' | 'error' | 'warning' = 'info') => {
-  const styles = {
-    success: 'color: #00c853; font-weight: bold;',
-    info: 'color: #2196f3; font-weight: bold;',
-    error: 'color: #f44336; font-weight: bold;',
-    warning: 'color: #ff9800; font-weight: bold;'
-  };
-  
-  console.log(`%c${message}`, styles[type]);
-};
-
 // Simple component with minimal error handling
 function GlobalProtocolMetricsContent() {
   // Use Relay hooks directly - the withRelayBoundary HOC will protect us
@@ -30,7 +18,6 @@ function GlobalProtocolMetricsContent() {
   // Callback for refreshing data
   const refreshData = useCallback(() => {
     try {
-      logWithStyle('Refreshing protocol metrics', 'info');
       loadQuery({}, { fetchPolicy: 'store-and-network' });
     } catch (err) {
       console.error('Error refreshing metrics', err);
@@ -44,7 +31,6 @@ function GlobalProtocolMetricsContent() {
     if (initialLoadComplete) return;
     
     try {
-      logWithStyle('Loading initial protocol metrics', 'info');
       loadQuery({}, { fetchPolicy: 'store-or-network' });
       setInitialLoadComplete(true);
     } catch (err) {
@@ -65,7 +51,6 @@ function GlobalProtocolMetricsContent() {
   useEffect(() => {
     if (connectionState === ConnectionState.CONNECTED && initialLoadComplete) {
       const timer = setTimeout(() => {
-        logWithStyle('Refreshing protocol metrics after reconnection', 'success');
         refreshData();
       }, 2000); // Wait 2 seconds after reconnection
       

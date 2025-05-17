@@ -48,18 +48,6 @@ export const transactionsPageQuery = graphql`
   }
 `
 
-// Helper for console logging
-const logWithStyle = (message: string, type: 'success' | 'info' | 'error' | 'warning' = 'info') => {
-  const styles = {
-    success: 'color: #00c853; font-weight: bold;',
-    info: 'color: #2196f3; font-weight: bold;',
-    error: 'color: #f44336; font-weight: bold;',
-    warning: 'color: #ff9800; font-weight: bold;'
-  };
-  
-  console.log(`%c${message}`, styles[type]);
-};
-
 // Loading component
 function TransactionsLoading() {
   return (
@@ -178,14 +166,12 @@ function TransactionsPageContent() {
   
   // Callback for refreshing data
   const refreshData = useCallback(() => {
-    logWithStyle('🔄 Refreshing transactions due to real-time update', 'info');
     loadQuery({ first: 15 }, { fetchPolicy: 'network-only' });
   }, [loadQuery]);
   
   // Initial data load
   useEffect(() => {
     loadQuery({ first: 15 }, { fetchPolicy: 'network-only' });
-    logWithStyle('🔄 Loading transaction data...', 'info');
   }, [loadQuery]);
   
   // Register for updates

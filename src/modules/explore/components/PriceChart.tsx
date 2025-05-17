@@ -102,9 +102,6 @@ export default function PriceChart({
     const maxValue = Math.max(...values)
     const avgValue = values.reduce((sum, val) => sum + val, 0) / values.length
     
-    // Log the data range to help with debugging
-    console.log(`[DEBUG] Chart data range - Min: ${minValue}, Max: ${maxValue}, Avg: ${avgValue}`)
-
     // Create a unified formatter for both the y-axis and tooltip
     const createPriceFormatter = (price: number) => {
       if (typeof formatTooltip === 'function') {
@@ -204,8 +201,6 @@ export default function PriceChart({
       // Also detect stablecoins by their price range
       (minValue > 0.1 && maxValue < 2.0);
 
-    console.log(`Chart ${title || 'Unknown'} - isStablecoin: ${isStablecoinChart}, minValue: ${minValue}, maxValue: ${maxValue}`);
-
     // Calculate color variants for area gradient
     const getAlphaColor = (baseColor: string, alpha: number) => {
       const r = parseInt(baseColor.slice(1, 3), 16)
@@ -254,13 +249,9 @@ export default function PriceChart({
     
     // For stablecoins, use special Y-axis formatting with tighter bounds
     if (isStablecoinChart) {
-      console.log(`Using stablecoin chart settings for ${title || 'Unknown'}`);
-      
       // Set reasonable bounds for stablecoins
       const lowerBound = Math.max(0.1, Math.floor(minValue * 20) / 20); // Floor to nearest 0.05
       const upperBound = Math.min(2.0, Math.ceil(maxValue * 20) / 20);  // Ceil to nearest 0.05
-      
-      console.log(`Setting tight Y-axis bounds for stablecoin: ${lowerBound} to ${upperBound}`);
       
       // Override the default Y-axis settings for better precision
       chart.priceScale('right').applyOptions({
@@ -284,9 +275,6 @@ export default function PriceChart({
 
     // Add price range configuration for non-volume charts
     if (type !== 'volume' && !isStablecoinChart) {
-      // Log the bounds we're using
-      console.log(`[DEBUG] Setting regular price range: ${minValue} to ${maxValue}`);
-      
       // Configure price range through the series for non-stablecoin charts
       series.applyOptions({
         autoscaleInfoProvider: () => ({
