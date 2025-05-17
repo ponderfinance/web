@@ -6,7 +6,6 @@ import Link from 'next/link'
 import TokenMetaDataContainers from './TokenMetaDataContainers'
 import { isAddress } from 'viem'
 import { TokenDetailContentWithRelay } from './TokenDetailContent'
-import { useRedisSubscriber } from '@/src/providers/RedisSubscriberProvider'
 
 type TokenDetailPageProps = {
   tokenAddress: string
@@ -68,23 +67,6 @@ export default function TokenDetailPage({ tokenAddress }: TokenDetailPageProps) 
     console.error(`[TokenDetail] Invalid token address format: ${tokenAddress}`);
     return renderErrorState(`Invalid token address format: ${tokenAddress}`);
   }
-
-  // Use the RedisSubscriber context for real-time updates
-  const { tokenLastUpdated } = useRedisSubscriber();
-  
-  // Subscribe to this token if it's not already subscribed
-  React.useEffect(() => {
-    console.log(`[TokenDetail] Setup for real-time updates for token: ${normalizedAddress}`);
-    
-    // Log whenever we get an update for this token
-    if (tokenLastUpdated[normalizedAddress]) {
-      const timestamp = new Date(tokenLastUpdated[normalizedAddress]).toLocaleTimeString();
-      console.log(`[TokenDetail] Token ${normalizedAddress} was updated at ${timestamp}`);
-    }
-    
-    // We don't need to do anything special here - the TokenDetailContent component
-    // will handle refreshing the data based on the tokenLastUpdated state
-  }, [normalizedAddress, tokenLastUpdated]);
 
   return (
     <View direction="column" gap={6}>

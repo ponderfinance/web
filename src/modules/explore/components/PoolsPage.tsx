@@ -8,6 +8,7 @@ import { View, Text, Skeleton } from 'reshaped'
 import { tokenFragment } from '@/src/components/TokenPair'
 import ScrollableTable from '@/src/components/ScrollableTable'
 import { useRedisSubscriber } from '@/src/providers/RedisSubscriberProvider'
+import { useRefreshOnUpdate } from '@/src/hooks/useRefreshOnUpdate'
 
 export const poolsPageQuery = graphql`
   query PoolsPageQuery(
@@ -191,49 +192,29 @@ export const PoolsPage = () => {
   const [orderDirection, setOrderDirection] = useState<string>('desc')
   const [mounted, setMounted] = useState(false)
   
-  // Get Redis subscriber
-  const { pairLastUpdated } = useRedisSubscriber()
-  
   // Add query loader
   const [queryRef, loadQuery] = useQueryLoader<PoolsPageQuery>(poolsPageQuery)
   
-  // Track last refresh time for debouncing
-  const lastRefreshTimeRef = useRef<number>(0)
-  
   // Function to refresh data
-  const refreshData = useCallback(() => {
+  const handlePoolUpdate = useCallback(() => {
     loadQuery(
       {
         first: 20,
         orderBy: orderBy as any,
         orderDirection: orderDirection as any,
       },
-      { fetchPolicy: 'network-only' }
+      { fetchPolicy: 'store-and-network' }
     )
   }, [loadQuery, orderBy, orderDirection])
   
-  // Listen for pair updates from Redis
-  useEffect(() => {
-    if (Object.keys(pairLastUpdated).length > 0) {
-      const now = Date.now()
-      // Throttle refreshes to at most once per second
-      if (now - lastRefreshTimeRef.current > 1000) {
-        console.log('[PoolsPage] Refreshing pools data due to Redis update')
-        refreshData()
-        lastRefreshTimeRef.current = now
-      }
-    }
-  }, [pairLastUpdated, refreshData])
+  // Use our custom hook for real-time updates
+  useRefreshOnUpdate({
+    entityType: 'pair',
+    onUpdate: handlePoolUpdate,
+    minRefreshInterval: 15000, // 15 seconds minimum between updates
+    shouldRefetch: false // Let handlePoolUpdate handle the refresh
+  })
   
-  // Set up periodic refresh as fallback
-  useEffect(() => {
-    const interval = setInterval(() => {
-      refreshData()
-    }, 30000) // Refresh every 30 seconds
-    
-    return () => clearInterval(interval)
-  }, [refreshData])
-
   // Only render the query component after mounting on the client
   useEffect(() => {
     setMounted(true)
@@ -259,7 +240,7 @@ export const PoolsPage = () => {
           setOrderBy={setOrderBy}
           setOrderDirection={setOrderDirection}
           queryRef={queryRef}
-          refreshData={refreshData}
+          refreshData={handlePoolUpdate}
         />
       </Suspense>
     </View>

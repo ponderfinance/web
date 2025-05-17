@@ -7,7 +7,7 @@ import PriceChart from './PriceChart'
 import { TokenPriceChartContainer_token$key } from '@/src/__generated__/TokenPriceChartContainer_token.graphql'
 import { TokenPriceChartContainer_priceChart$key } from '@/src/__generated__/TokenPriceChartContainer_priceChart.graphql'
 import { formatUnits } from 'viem'
-import { useRedisSubscriber } from '@/src/providers/RedisSubscriberProvider'
+import { useRefreshOnUpdate } from '@/src/hooks/useRefreshOnUpdate'
 
 // Define the fragment for token chart data
 const TokenChartFragment = graphql`
@@ -72,6 +72,14 @@ export default function TokenPriceChartContainer({
   // Extract data from the fragments
   const token = useFragment(TokenChartFragment, tokenRef)
   const priceData = useFragment(PriceChartDataFragment, priceChartRef)
+  
+  // Set up real-time updates for this specific token chart
+  useRefreshOnUpdate({
+    entityType: 'token',
+    entityId: token?.address?.toLowerCase() || 'global',
+    minRefreshInterval: 15000, // 15 seconds minimum between updates
+    shouldRefetch: false
+  });
   
   // Handle timeframe change
   const handleTimeframeChange = (newTimeframe: string) => {

@@ -1,7 +1,7 @@
 'use client'
 
-import React, { useEffect, useRef } from 'react';
-import { subscribeToTokenUpdates } from '@/src/lib/subscriptions/subscription-server';
+import React from 'react';
+import { useRefreshOnUpdate } from '@/src/hooks/useRefreshOnUpdate';
 
 interface TokenSubscriptionProps {
   tokenId: string;
@@ -10,42 +10,24 @@ interface TokenSubscriptionProps {
   onTokenUpdate?: () => void; // Optional callback when token updates
 }
 
+/**
+ * TokenSubscription component that uses the centralized registry-based update system
+ * This component is a wrapper that subscribes to token updates and triggers a callback
+ */
 export default function TokenSubscription({ 
   tokenId, 
   tokenAddress, 
   children,
   onTokenUpdate 
 }: TokenSubscriptionProps) {
-  // Track the last refresh time to prevent too frequent updates
-  const lastRefreshTimeRef = useRef<number>(0);
-  
-  // Set up event subscription for token updates
-  useEffect(() => {
-    if (!tokenId) return;
-    
-    console.log(`[TokenSubscription] Setting up subscription to token ${tokenId} updates`);
-    
-    // Create a handler function that implements debounce logic
-    const handleTokenUpdate = () => {
-      const now = Date.now();
-      // Only call callback if it's been at least 1 second since the last refresh
-      if (now - lastRefreshTimeRef.current > 1000) {
-        console.log(`[TokenSubscription] Token ${tokenId} updated at ${new Date().toISOString()}`);
-        if (onTokenUpdate) {
-          onTokenUpdate();
-          lastRefreshTimeRef.current = now;
-        }
-      }
-    };
-    
-    // Subscribe to token updates
-    const unsubscribe = subscribeToTokenUpdates(tokenId, handleTokenUpdate);
-    
-    // Clean up
-    return () => {
-      unsubscribe();
-    };
-  }, [tokenId, onTokenUpdate]);
+  // Use our custom hook for real-time updates
+  useRefreshOnUpdate({
+    entityType: 'token',
+    entityId: tokenAddress.toLowerCase(),
+    onUpdate: onTokenUpdate,
+    minRefreshInterval: 5000, // 5 seconds minimum between updates
+    shouldRefetch: false // Let the callback handle the refresh
+  });
   
   // Just render the children directly
   return <>{children}</>;

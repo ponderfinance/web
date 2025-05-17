@@ -12,6 +12,7 @@ import {
 } from '@/src/lib/redis/subscriber'
 import { initRedisRecovery, stopRedisRecovery } from '@/src/lib/redis/recovery'
 import { registerTokenPriceUpdater, applyStoreUpdate, createRelayEnvironment } from '@/src/relay/createRelayEnvironment'
+import { initializeRelayUpdaters } from '@/src/relay/initRelayUpdaters'
 
 // Define the context type
 type RedisSubscriberContextType = {
@@ -75,8 +76,8 @@ export function RedisSubscriberProvider({ children }: { children: React.ReactNod
     
     console.log('Initializing Redis subscriber and recovery system...')
     
-    // Register store updaters for efficient updates
-    registerTokenPriceUpdater()
+    // Register all store updaters for efficient updates using the new registry pattern
+    initializeRelayUpdaters()
     
     // Define our handler functions first so we can reference them in cleanup
     const metricsHandler = (data: any) => {

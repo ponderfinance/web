@@ -1,12 +1,13 @@
 'use client'
 
-import React, { Suspense, useState, useEffect } from 'react'
-import { graphql, useLazyLoadQuery } from 'react-relay'
+import React, { Suspense, useState, useEffect, useCallback } from 'react'
+import { graphql, useLazyLoadQuery, useQueryLoader } from 'react-relay'
 import { TokensPageQuery } from '@/src/__generated__/TokensPageQuery.graphql'
 import { TokensDisplay } from '@/src/modules/explore/components/TokensDisplay'
 import { View, Text, Skeleton } from 'reshaped'
 import { tokenFragment } from '@/src/components/TokenPair'
 import ScrollableTable from '@/src/components/ScrollableTable'
+import { useRefreshOnUpdate } from '@/src/hooks/useRefreshOnUpdate'
 
 export const tokensPageQuery = graphql`
   query TokensPageQuery(
@@ -156,8 +157,7 @@ function TokensContent({
       orderDirection: orderDirection as any,
     },
     {
-      fetchPolicy: 'store-or-network',
-      fetchKey: orderBy + orderDirection,
+      fetchPolicy: 'store-or-network'
     }
   )
 
@@ -177,11 +177,38 @@ export const TokensPage = () => {
   const [orderBy, setOrderBy] = useState<string>('volumeUSD24h')
   const [orderDirection, setOrderDirection] = useState<string>('desc')
   const [mounted, setMounted] = useState(false)
+  
+  // Add query loader for manual refreshes
+  const [queryRef, loadQuery] = useQueryLoader<TokensPageQuery>(tokensPageQuery)
+  
+  // Handle refreshing when token data updates
+  const handleTokenUpdate = useCallback(() => {
+    loadQuery({
+      first: 20,
+      orderBy: orderBy as any,
+      orderDirection: orderDirection as any
+    }, { fetchPolicy: 'store-and-network' })
+  }, [loadQuery, orderBy, orderDirection])
+  
+  // Use our custom hook for real-time updates
+  useRefreshOnUpdate({
+    entityType: 'token',
+    onUpdate: handleTokenUpdate,
+    minRefreshInterval: 15000, // 15 seconds minimum between updates
+    shouldRefetch: false // Let handleTokenUpdate handle the refresh
+  })
 
   // Only render the query component after mounting on the client
   useEffect(() => {
     setMounted(true)
-  }, [])
+    
+    // Initial data load
+    loadQuery({
+      first: 20,
+      orderBy: orderBy as any,
+      orderDirection: orderDirection as any
+    })
+  }, [loadQuery, orderBy, orderDirection])
 
   if (!mounted) {
     return <TokensLoading />

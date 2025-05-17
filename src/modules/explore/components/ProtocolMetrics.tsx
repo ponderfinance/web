@@ -1,9 +1,10 @@
 'use client'
 
-import React, { useEffect, useState } from 'react'
-import { View, Text, Card, Skeleton } from 'reshaped'
+import React from 'react'
+import { View, Text, Skeleton } from 'reshaped'
 import { graphql, useLazyLoadQuery } from 'react-relay'
 import { ProtocolMetricsQuery } from '@/src/__generated__/ProtocolMetricsQuery.graphql'
+import { useRefreshOnUpdate } from '@/src/hooks/useRefreshOnUpdate'
 
 // Define the GraphQL query
 export const protocolMetricsQuery = graphql`
@@ -58,24 +59,19 @@ const formatCurrency = (value: string | null | undefined) => {
 
 // ProtocolMetrics component
 const ProtocolMetrics = () => {
-  // Add a refresh key state to force re-fetching
-  const [refreshKey, setRefreshKey] = useState(0)
+  // Use our custom hook for real-time updates
+  const { refresh, lastUpdated } = useRefreshOnUpdate({
+    entityType: 'metrics',
+    minRefreshInterval: 30000, // 30 seconds minimum between updates
+    shouldRefetch: true // Force a refetch when metrics are updated
+  })
   
-  // Set up automatic refresh every 30 seconds
-  useEffect(() => {
-    const intervalId = setInterval(() => {
-      setRefreshKey(prev => prev + 1)
-    }, 30000) // 30 seconds
-    
-    return () => clearInterval(intervalId)
-  }, [])
-  
+  // Query metrics data with store-or-network approach for better caching
   const data = useLazyLoadQuery<ProtocolMetricsQuery>(
     protocolMetricsQuery,
     {},
     {
-      fetchPolicy: 'network-only', // Always fetch from network
-      fetchKey: refreshKey, // Use the refresh key to force new fetches
+      fetchPolicy: 'store-or-network',
     }
   )
   

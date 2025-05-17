@@ -1,12 +1,12 @@
 'use client'
 
-import React, { Suspense, useEffect, useState } from 'react'
+import React, { Suspense, useEffect, useState, useCallback } from 'react'
 import { graphql, useLazyLoadQuery, useQueryLoader, PreloadedQuery } from 'react-relay'
 import { TransactionsPageQuery } from '@/src/__generated__/TransactionsPageQuery.graphql'
 import { TransactionsDisplay } from '@/src/modules/explore/components/TransactionsDisplay'
 import { View, Text, Skeleton } from 'reshaped'
 import { tokenFragment } from '@/src/components/TokenPair'
-import TransactionsSubscription from './TransactionsSubscription'
+import { useRefreshOnUpdate } from '@/src/hooks/useRefreshOnUpdate'
 import ScrollableTable from '@/src/components/ScrollableTable'
 
 export const transactionsPageQuery = graphql`
@@ -154,11 +154,7 @@ function TransactionsContent({ queryRef }: { queryRef: PreloadedQuery<Transactio
     }
   )
 
-  return (
-    <TransactionsSubscription queryRef={queryRef}>
-      <TransactionsDisplay data={data} />
-    </TransactionsSubscription>
-  )
+  return <TransactionsDisplay data={data} />
 }
 
 // Exported page component
@@ -166,16 +162,26 @@ export const TransactionsPage = () => {
   const [mounted, setMounted] = useState(false)
   const [queryRef, loadQuery] = useQueryLoader<TransactionsPageQuery>(transactionsPageQuery)
 
+  // Handle transaction updates
+  const handleTransactionUpdate = useCallback(() => {
+    console.log('[TransactionsPage] Refreshing transactions due to real-time update')
+    loadQuery({ first: 15 }, { fetchPolicy: 'store-and-network' })
+  }, [loadQuery])
+  
+  // Use our custom hook for real-time updates
+  useRefreshOnUpdate({
+    entityType: 'transaction',
+    onUpdate: handleTransactionUpdate,
+    minRefreshInterval: 5000, // 5 seconds minimum between updates
+    shouldRefetch: true // Force refetch when transactions are updated
+  })
+
   // Only render the query component after mounting on the client
   useEffect(() => {
     setMounted(true)
     
     // Initial load
     loadQuery({ first: 15 })
-    
-    return () => {
-      // Cleanup any resources if needed
-    }
   }, [loadQuery])
 
   if (!mounted) {

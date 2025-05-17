@@ -89,6 +89,160 @@ const fetchQuery: FetchFunction = async (
   return json
 }
 
+// Define message handler types
+interface MessageHandler {
+  matcher: (operationName: string | null | undefined, variables: Variables) => boolean;
+  handler: (
+    data: any, 
+    environment: Environment | undefined, 
+    request: RequestParameters, 
+    variables: Variables, 
+    sink: any
+  ) => void;
+}
+
+// Registry of message handlers for different message types
+const messageHandlerRegistry: Record<string, MessageHandler> = {
+  'metrics:updated': {
+    matcher: () => true, // Process all metrics updates
+    handler: (data, environment, request, variables, sink) => {
+      console.log(`Received metrics update for ${request.name}:`, data.payload);
+      
+      // Try direct store update first
+      let updated = false;
+      if (environment) {
+        updated = applyStoreUpdate('global-metrics', data.payload, environment);
+        if (updated) {
+          console.log('Applied direct store update for global metrics');
+        }
+      }
+      
+      // Fall back to refetch if direct update failed or not possible
+      if (!updated) {
+        Observable.from(fetchQuery(request, variables, {}))
+          .subscribe({
+            next: (response) => {
+              console.log(`Fetched updated data for ${request.name}`);
+              sink.next(response);
+            },
+            error: (error: any) => {
+              console.error(`Error fetching updated data:`, error);
+              sink.error(error instanceof Error ? error : new Error(String(error)));
+            }
+          });
+      }
+    }
+  },
+  
+  'pair:updated': {
+    matcher: (operationName, variables) => {
+      if (!operationName) return false;
+      return operationName.toLowerCase().includes('pair') && 
+        !!variables?.pairId;
+    },
+    handler: (data, environment, request, variables, sink) => {
+      console.log(`Received pair update for ${request.name}:`, data.payload);
+      
+      // Try direct store update first
+      let updated = false;
+      if (environment && data.payload?.entityId) {
+        updated = applyStoreUpdate(`pair-${data.payload.entityId}`, data.payload, environment);
+        if (updated) {
+          console.log(`Applied direct store update for pair ${data.payload.entityId}`);
+        }
+      }
+      
+      // Fall back to refetch if direct update failed
+      if (!updated) {
+        Observable.from(fetchQuery(request, variables, {}))
+          .subscribe({
+            next: (response) => sink.next(response),
+            error: (error: any) => sink.error(error instanceof Error ? error : new Error(String(error)))
+          });
+      }
+    }
+  },
+  
+  'token:updated': {
+    matcher: (operationName, variables) => {
+      if (!operationName) return false;
+      return operationName.toLowerCase().includes('token') && 
+        (!!variables?.tokenId || !!variables?.tokenAddress);
+    },
+    handler: (data, environment, request, variables, sink) => {
+      console.log(`Received token update for ${request.name}:`, data.payload);
+      
+      // Try direct store update first
+      let updated = false;
+      if (environment && data.payload?.entityId) {
+        updated = applyStoreUpdate(`token-price-${data.payload.entityId}`, data.payload, environment);
+        if (updated) {
+          console.log(`Applied direct store update for token ${data.payload.entityId}`);
+        }
+      }
+      
+      // Fall back to refetch if direct update failed
+      if (!updated) {
+        Observable.from(fetchQuery(request, variables, {}))
+          .subscribe({
+            next: (response) => sink.next(response),
+            error: (error: any) => sink.error(error instanceof Error ? error : new Error(String(error)))
+          });
+      }
+    }
+  },
+  
+  'transaction:updated': {
+    matcher: (operationName) => {
+      if (!operationName) return false;
+      return operationName.toLowerCase().includes('transaction');
+    },
+    handler: (data, environment, request, variables, sink) => {
+      console.log(`Received transaction update for ${request.name}:`, data.payload);
+      
+      // Try store update first (when transaction updater is registered)
+      let updated = false;
+      if (environment && data.payload?.entityId) {
+        updated = applyStoreUpdate(`transaction-${data.payload.entityId}`, data.payload, environment);
+        if (updated) {
+          console.log(`Applied direct store update for transaction ${data.payload.entityId}`);
+        }
+      }
+      
+      // If direct update failed, try targeted invalidation
+      if (!updated && environment) {
+        try {
+          environment.commitUpdate(store => {
+            const root = store.getRoot();
+            // Look for the transactions connection
+            const transactionsConnection = root.getLinkedRecord('recentTransactions');
+            if (transactionsConnection) {
+              // Mark for store changes instead of invalidation
+              console.log('Marking transactions for refetch');
+              // Need to manually refetch since we can't invalidate directly
+            }
+          });
+        } catch (error) {
+          console.error('Error updating store:', error);
+        }
+      }
+      
+      // As last resort, do a full refetch
+      Observable.from(fetchQuery(request, variables, {}))
+        .subscribe({
+          next: (response) => {
+            console.log(`Fetched updated transaction data for ${request.name}`);
+            sink.next(response);
+          },
+          error: (error: any) => {
+            console.error(`Error fetching updated transaction data:`, error);
+            sink.error(error instanceof Error ? error : new Error(String(error)));
+          }
+        });
+    }
+  }
+};
+
 // Create a subscription handler using Server-Sent Events
 const createSubscription: SubscribeFunction = (
   request: RequestParameters,
@@ -124,78 +278,38 @@ const createSubscription: SubscribeFunction = (
       console.log(`Subscription connection opened for ${operationName}`);
     };
 
-    // Handle incoming messages
+    // Handle incoming messages with improved handler system
     eventSource.onmessage = event => {
       try {
         const data = JSON.parse(event.data);
+        
+        // Special case for system messages
         if (data.type === 'connected') {
           console.log(`SSE connection established for ${operationName}`);
-        }
-        // Handle metrics updates
-        else if (data.type === 'metrics:updated') {
-          console.log(`Received metrics update for ${operationName}:`, data.payload);
-          
-          // For GraphQL subscriptions, we need to trigger a query to fetch the latest data
-          // This is simpler than trying to reconstruct the subscription payload
-          Observable.from(fetchQuery(request, variables, {}))
-            .subscribe({
-              next: (response) => {
-                console.log(`Fetched updated data for ${operationName}:`, response);
-                sink.next(response);
-              },
-              error: (error: any) => {
-                console.error(`Error fetching updated data for ${operationName}:`, error);
-                sink.error(error instanceof Error ? error : new Error(String(error)));
-              }
-            });
-        }
-        // Handle pair updates
-        else if (data.type === 'pair:updated' && 
-                 operationName?.toLowerCase().includes('pair') && 
-                 variables?.pairId === data.payload?.entityId) {
-          console.log(`Received pair update for ${operationName}:`, data.payload);
-          Observable.from(fetchQuery(request, variables, {}))
-            .subscribe({
-              next: (response) => {
-                sink.next(response);
-              },
-              error: (error: any) => {
-                sink.error(error instanceof Error ? error : new Error(String(error)));
-              }
-            });
-        }
-        // Handle token updates
-        else if (data.type === 'token:updated' && 
-                 operationName?.toLowerCase().includes('token') && 
-                 variables?.tokenId === data.payload?.entityId) {
-          console.log(`Received token update for ${operationName}:`, data.payload);
-          Observable.from(fetchQuery(request, variables, {}))
-            .subscribe({
-              next: (response) => {
-                sink.next(response);
-              },
-              error: (error: any) => {
-                sink.error(error instanceof Error ? error : new Error(String(error)));
-              }
-            });
-        }
-        // Legacy handling for older style messages
-        else if (data.type === 'next') {
-          Observable.from(fetchQuery(request, variables, {}))
-            .subscribe({
-              next: (response) => {
-                sink.next(response);
-              },
-              error: (error: any) => {
-                sink.error(error instanceof Error ? error : new Error(String(error)));
-              }
-            });
-        }
-        else if (data.type === 'error') {
+          return;
+        } else if (data.type === 'error') {
           sink.error(new Error(data.payload?.message || 'Unknown subscription error'));
-        }
-        else if (data.type === 'complete') {
+          return;
+        } else if (data.type === 'complete') {
           sink.complete();
+          return;
+        }
+        
+        // Get the handler from the registry
+        const handlerConfig = messageHandlerRegistry[data.type];
+        
+        // Use the handler if available and matches the current operation
+        if (handlerConfig && handlerConfig.matcher(operationName, variables)) {
+          handlerConfig.handler(data, clientEnvironment, request, variables, sink);
+        } else if (data.type === 'next') {
+          // Legacy handling for older style messages
+          Observable.from(fetchQuery(request, variables, {}))
+            .subscribe({
+              next: (response) => sink.next(response),
+              error: (error: any) => sink.error(error instanceof Error ? error : new Error(String(error)))
+            });
+        } else {
+          console.log(`No handler for message type: ${data.type} for operation: ${operationName}`);
         }
       } catch (error) {
         console.error(`Error processing subscription message for ${operationName}:`, error);
@@ -248,6 +362,46 @@ export function createRelayEnvironment() {
   }
 
   return clientEnvironment;
+}
+
+// Register transaction list updater
+export function registerTransactionListUpdater() {
+  registerStoreUpdater(
+    /^transaction-/,
+    (store, data) => {
+      try {
+        // Get transaction ID from the data
+        const transactionId = data.entityId;
+        if (!transactionId) return;
+        
+        // Find the root and connections
+        const root = store.getRoot();
+        const connectionsRecord = root.getLinkedRecord('recentTransactions');
+        
+        if (!connectionsRecord) {
+          console.log('No transactions connection found in store');
+          return;
+        }
+        
+        // Update specific transaction if it exists in the store
+        const transactionRecord = store.get(transactionId);
+        if (transactionRecord) {
+          // Update specific fields if they exist in the data
+          if (data.valueUSD !== undefined) {
+            transactionRecord.setValue(data.valueUSD, 'valueUSD');
+          }
+          
+          console.log(`Updated transaction ${transactionId} in Relay store without refetching`);
+        } else {
+          // Transaction not in store yet, need refetch (can't use invalidateRecord directly)
+          console.log(`Transaction ${transactionId} not found in store, will need a refetch`);
+          // Store a flag to indicate we need to refetch this data on next query
+        }
+      } catch (error) {
+        console.error('Error updating transaction in store:', error);
+      }
+    }
+  );
 }
 
 // Example token price updater (can be registered from components)

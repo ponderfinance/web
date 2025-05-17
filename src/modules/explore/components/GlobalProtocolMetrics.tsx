@@ -1,10 +1,10 @@
 'use client'
 
-import React, { useEffect, useState, useCallback } from 'react'
+import React, { useEffect, useState } from 'react'
 import { View, Text, Card, Skeleton } from 'reshaped'
 import { graphql, useLazyLoadQuery, useQueryLoader, PreloadedQuery, usePreloadedQuery } from 'react-relay'
 import { GlobalProtocolMetricsQuery } from '@/src/__generated__/GlobalProtocolMetricsQuery.graphql'
-import { useRedisSubscriber } from '@/src/providers/RedisSubscriberProvider'
+import { useRefreshOnUpdate } from '@/src/hooks/useRefreshOnUpdate'
 
 // Define the GraphQL query
 export const globalProtocolMetricsQuery = graphql`
@@ -71,15 +71,6 @@ type GlobalProtocolMetricsProps = {
 
 // Component that accepts an optional queryRef
 export default function GlobalProtocolMetrics({ queryRef }: GlobalProtocolMetricsProps) {
-  // Get the Redis subscriber context
-  const { metricsLastUpdated } = useRedisSubscriber()
-  
-  // State to track the refresh key
-  const [refreshKey, setRefreshKey] = useState(0)
-  
-  // Get query reference for Relay if not provided
-  const [localQueryRef, loadQuery] = useQueryLoader<GlobalProtocolMetricsQuery>(globalProtocolMetricsQuery)
-  
   // Initialize metrics state
   const [metrics, setMetrics] = useState<{
     dailyVolumeUSD: string;
@@ -87,6 +78,24 @@ export default function GlobalProtocolMetrics({ queryRef }: GlobalProtocolMetric
     volume1hChange: number | null;
     volume24hChange: number | null;
   } | null>(null)
+  
+  // Get query reference for Relay if not provided
+  const [localQueryRef, loadQuery] = useQueryLoader<GlobalProtocolMetricsQuery>(globalProtocolMetricsQuery)
+  
+  // Handle refreshing when metrics are updated
+  const handleMetricsUpdate = () => {
+    if (!queryRef) {
+      loadQuery({}, { fetchPolicy: 'network-only' })
+    }
+  }
+  
+  // Use our custom hook for real-time updates
+  const { lastUpdated } = useRefreshOnUpdate({
+    entityType: 'metrics',
+    onUpdate: handleMetricsUpdate,
+    minRefreshInterval: 15000, // 15 seconds minimum between updates
+    shouldRefetch: !queryRef // Only refetch if we don't have a queryRef
+  })
   
   // If queryRef is provided, use usePreloadedQuery, otherwise use useLazyLoadQuery
   let data: any;
@@ -97,8 +106,10 @@ export default function GlobalProtocolMetrics({ queryRef }: GlobalProtocolMetric
       globalProtocolMetricsQuery,
       {},
       {
-        fetchPolicy: 'network-only', // Always fetch from network
-        fetchKey: refreshKey, // Use the refresh key to force new fetches
+        fetchPolicy: 'store-or-network',
+        networkCacheConfig: {
+          force: false
+        }
       }
     );
   }
@@ -110,41 +121,6 @@ export default function GlobalProtocolMetrics({ queryRef }: GlobalProtocolMetric
     }
   }, [data])
   
-  // Update when Redis metrics are updated (if not using queryRef)
-  useEffect(() => {
-    if (!queryRef && metricsLastUpdated) {
-      console.log('Metrics were updated at:', new Date(metricsLastUpdated).toISOString())
-      loadQuery({}, { fetchPolicy: 'network-only' })
-      setRefreshKey(prev => prev + 1)
-    }
-  }, [metricsLastUpdated, loadQuery, queryRef])
-  
-  // Set up periodic refresh as fallback (if not using queryRef)
-  useEffect(() => {
-    if (queryRef) return; // Don't set up interval if using queryRef
-    
-    // Set up automatic refresh every 10 seconds as fallback
-    const intervalId = setInterval(() => {
-      loadQuery({}, { fetchPolicy: 'network-only' })
-      setRefreshKey(prev => prev + 1)
-      console.log('Automatic metrics refresh, key:', refreshKey + 1)
-    }, 10000) // 10 seconds
-    
-    return () => {
-      // Clean up interval on component unmount
-      clearInterval(intervalId)
-    }
-  }, [loadQuery, refreshKey, queryRef])
-  
-  // Handle manual refresh
-  const handleRefresh = useCallback(() => {
-    if (!queryRef) {
-      loadQuery({}, { fetchPolicy: 'network-only' })
-      setRefreshKey(prev => prev + 1)
-      console.log('Manual refresh triggered')
-    }
-  }, [loadQuery, queryRef])
-  
   // If metrics aren't loaded yet, show skeleton
   if (!metrics) {
     return <GlobalProtocolMetricsSkeleton />
@@ -152,7 +128,7 @@ export default function GlobalProtocolMetrics({ queryRef }: GlobalProtocolMetric
   
   // Render metrics with clean styling
   return (
-    <View direction="row" align="center" gap={6} wrap className="justify-between">
+    <View direction="row" align="center" gap={6} wrap className="justify-between" position="relative">
       <View gap={2}>
         <Text variant="body-2" color="neutral-faded">
           24h Volume

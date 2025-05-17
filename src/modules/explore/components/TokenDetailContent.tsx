@@ -20,6 +20,7 @@ import PriceChart from './PriceChart'
 import { SwapInterface } from '@/src/components/Swap'
 import { CURRENT_CHAIN } from '@/src/constants/chains'
 import { formatNumber } from '@/src/utils/numbers'
+import { useRefreshOnUpdate } from '@/src/hooks/useRefreshOnUpdate'
 
 // For the missing constants and utilities, let's define them here
 const NATIVE_KUB_ADDRESS = '0x0000000000000000000000000000000000000000' as const
@@ -132,7 +133,7 @@ function TokenIcon({ imageURI, name, isLoading }: { imageURI?: string | null, na
     return (
       <View width={8} height={8} overflow="hidden" borderRadius="large">
         <Skeleton width="100%" height="100%" />
-      </View>
+    </View>
     )
   }
 
@@ -247,28 +248,24 @@ export function TokenDetailContentWithRelay({ tokenAddress, initialTimeframe = '
     setCurrentTimeframe(newTimeframe)
   }, [])
 
-  // Listen for Redis token updates
-  const { tokenLastUpdated } = useRedisSubscriber()
+  // Handle refreshing when token data updates
+  const handleTokenUpdate = useCallback(() => {
+    console.log(`[TokenDetailContent] Refreshing token data for ${tokenAddress}`)
+    loadQuery({
+      tokenAddress,
+      timeframe: currentTimeframe,
+      limit: 100
+    }, { fetchPolicy: 'store-and-network' })
+  }, [loadQuery, tokenAddress, currentTimeframe])
   
-  useEffect(() => {
-    // Normalize address for comparison
-    const normalizedAddress = tokenAddress.toLowerCase()
-    
-    // Check if this specific token has been updated
-    if (tokenLastUpdated[normalizedAddress]) {
-      console.log(`[TokenDetailContent] Detected Redis update for token: ${normalizedAddress}`)
-      
-      // Use intelligent throttling with high priority for detail page
-      if (shouldRefresh(`token-detail-${normalizedAddress}`, 'high')) {
-        // Refresh data with current timeframe
-        loadQuery({
-          tokenAddress,
-          timeframe: currentTimeframe,
-          limit: 100
-        })
-      }
-    }
-  }, [tokenLastUpdated, tokenAddress, loadQuery, currentTimeframe])
+  // Use our custom hook for real-time updates
+  useRefreshOnUpdate({
+    entityType: 'token',
+    entityId: tokenAddress.toLowerCase(),
+    onUpdate: handleTokenUpdate,
+    minRefreshInterval: 10000, // 10 seconds minimum between updates
+    shouldRefetch: false // Let handleTokenUpdate handle the refresh
+  })
 
   if (!queryRef) {
     return (
@@ -451,30 +448,30 @@ function TokenDetailContent({
   }, [checkIfMobile])
   
   const data = usePreloadedQuery(
-    TokenDetailQuery,
+      TokenDetailQuery,
     queryRef
   )
     
-  // Mark that we've had data
+    // Mark that we've had data
   if (data.tokenByAddress) {
     everHadDataRef.current = true
   }
   
   // Format metrics
-  const formatLargeNumber = (value: string | null | undefined): string => {
-    if (!value) return '$0'
-    const formattedNum = parseFloat(value)
+    const formatLargeNumber = (value: string | null | undefined): string => {
+      if (!value) return '$0'
+      const formattedNum = parseFloat(value)
 
-    if (formattedNum >= 1e9) {
-      return `$${(formattedNum / 1e9).toFixed(1)}B`
-    } else if (formattedNum >= 1e6) {
-      return `$${(formattedNum / 1e6).toFixed(1)}M`
-    } else if (formattedNum >= 1e3) {
-      return `$${(formattedNum / 1e3).toFixed(1)}K`
-    } else {
-      return `$${formattedNum.toFixed(2)}`
+      if (formattedNum >= 1e9) {
+        return `$${(formattedNum / 1e9).toFixed(1)}B`
+      } else if (formattedNum >= 1e6) {
+        return `$${(formattedNum / 1e6).toFixed(1)}M`
+      } else if (formattedNum >= 1e3) {
+        return `$${(formattedNum / 1e3).toFixed(1)}K`
+      } else {
+        return `$${formattedNum.toFixed(2)}`
+      }
     }
-  }
 
   // Format tooltip for price chart
   const formatTooltip = (value: number) => {
@@ -494,8 +491,8 @@ function TokenDetailContent({
   const isKKUBPage = data.tokenByAddress?.address.toLowerCase() === KKUB_ADDRESS[CURRENT_CHAIN.id].toLowerCase()
   
   // Render the token detail UI with the chart container
-  return (
-    <View direction="column" gap={6}>
+    return (
+      <View direction="column" gap={6}>
       {/* Breadcrumb Navigation */}
       <View direction="row" align="center" gap={1.5}>
         <Link href="/explore" attributes={{ style: { textDecoration: 'none' } }}>
@@ -542,11 +539,11 @@ function TokenDetailContent({
       />
 
       {/* Main content area - use ChartContainer for the chart section */}
-      <View 
+        <View 
         direction={isMobile ? "column" : "row"} 
         gap={6}
         width="100%"
-        justify="space-between"
+          justify="space-between"
       >
         <View
           direction="column"
@@ -610,12 +607,12 @@ function TokenDetailContent({
                   {formatLargeNumber(data.tokenByAddress?.volumeUSD24h)}
                 </Text>
               </View>
-            </View>
+          </View>
           </View>
         </View>
 
         {/* Swap Interface - on the right side on desktop */}
-        <View 
+          <View
           attributes={{ 
             style: { 
               flex: isMobile ? 'auto' : '2',
@@ -696,7 +693,7 @@ function SuspenseChartContainer({
             <ChartSkeleton />
           </View>
         ) : chartQueryRef ? (
-          <Suspense fallback={
+            <Suspense fallback={
             <View height="100%" width="100%">
               <ChartSkeleton />
             </View>
@@ -704,41 +701,41 @@ function SuspenseChartContainer({
             <ChartContent
               queryRef={chartQueryRef}
               tokenRef={tokenRef}
-            />
-          </Suspense>
+              />
+            </Suspense>
         ) : (
           <View height="100%" width="100%" align="center" justify="center">
             <Text>No chart data available</Text>
           </View>
         )}
-      </View>
-      
+          </View>
+
       {/* Timeframe controls - outside of Suspense boundary */}
       <View direction="row" justify="space-between" padding={2} gap={2} attributes={{ style: { marginTop: '8px' } }}>
-        <View direction="row" gap={2}>
+            <View direction="row" gap={2}>
           {['1h', '1d', '1w', '1m', '1y'].map((tf) => (
-            <Button
+                <Button
               key={tf}
               variant={currentTimeframe === tf ? 'solid' : 'ghost'}
               color={currentTimeframe === tf ? 'primary' : 'neutral'}
               onClick={(event) => handleTimeframeChange(tf, event)}
-              size="small"
-              attributes={{
-                style: {
-                  backgroundColor:
+                  size="small"
+                  attributes={{
+                    style: {
+                      backgroundColor:
                     currentTimeframe === tf
-                      ? 'rgba(148, 224, 254, 0.2)'
-                      : 'transparent',
+                          ? 'rgba(148, 224, 254, 0.2)'
+                          : 'transparent',
                   color: currentTimeframe === tf ? brandColor : '#999999',
-                },
-              }}
-            >
+                    },
+                  }}
+                >
               {tf.toUpperCase()}
-            </Button>
-          ))}
+                </Button>
+              ))}
+            </View>
+          </View>
         </View>
-      </View>
-    </View>
   )
 }
 
@@ -774,7 +771,7 @@ function ChartSkeleton() {
               <Skeleton width={15} height={4} borderRadius="circular" />
               <Skeleton width={10} height={4} borderRadius="circular" />
             </View>
-            
+              
             {/* Chart lines */}
             <View height={0.25} width="100%" backgroundColor="neutral-faded" />
             <View height={0.25} width="100%" backgroundColor="neutral-faded" />
@@ -788,11 +785,11 @@ function ChartSkeleton() {
               <Skeleton width={12} height={4} borderRadius="circular" />
               <Skeleton width={12} height={4} borderRadius="circular" />
             </View>
+            </View>
           </View>
         </View>
       </View>
-    </View>
-  );
+    );
 }
 
 export default TokenDetailContentWithRelay
