@@ -66,15 +66,16 @@ export function withRelayBoundary<P extends object>(
 ) {
   // Return a new component that wraps the original
   function WithRelayBoundary(props: P) {
-    // Since RelayProvider now waits for environment to be ready before rendering,
-    // we just need to safely use Relay hooks here
-    
     try {
-      // This will throw if Relay environment isn't ready
+      // Check if Relay environment is ready
       useRelayEnvironment();
       
-      // If we get here, environment is ready - render the component
-      return <Component {...props} />;
+      // If we get here, environment is ready - render with Suspense
+      return (
+        <Suspense fallback={<FallbackComponent />}>
+          <Component {...props} />
+        </Suspense>
+      );
     } catch (error) {
       // If we're in development, log the error
       if (process.env.NODE_ENV !== 'production') {

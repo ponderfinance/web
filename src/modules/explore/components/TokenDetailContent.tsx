@@ -226,169 +226,52 @@ function PriceDisplay({
   )
 }
 
-// Component with proper hooks that will be wrapped with boundary
-function TokenDetailContentWrapper({ tokenAddress, initialTimeframe = '1m' }: { tokenAddress: string, initialTimeframe?: string }) {
-  const [queryRef, loadQuery] = useQueryLoader<TokenDetailContentQuery>(TokenDetailQuery)
-  const [currentTimeframe, setCurrentTimeframe] = useState(initialTimeframe)
-  const [isRefetching, setIsRefetching] = useState(false)
-  const [error, setError] = useState<Error | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
-  const retryCountRef = useRef(0)
+// Wrap the component with RelayBoundary and export
+export const TokenDetailContentWithRelay = withRelayBoundary(
+  ({ tokenAddress, initialTimeframe = '1m' }: { tokenAddress: string, initialTimeframe?: string }) => {
+    const [queryRef, loadQuery] = useQueryLoader<TokenDetailContentQuery>(TokenDetailQuery)
+    const [currentTimeframe, setCurrentTimeframe] = useState(initialTimeframe)
   
-  // Load data with the current timeframe - with proper error handling
-  useEffect(() => {
-    setIsLoading(true);
-    setError(null);
-    
-    try {
-      console.log(`[TokenDetailContent] Loading token data for ${tokenAddress}`)
-      
-      // Perform the query load
+    // Load initial data
+    useEffect(() => {
       loadQuery({
         tokenAddress,
         timeframe: currentTimeframe,
         limit: 100
-      }, { fetchPolicy: 'network-only' }); // Force network fetch to ensure fresh data
-      
-      // Since Relay's loadQuery doesn't have callbacks, we'll use a timeout to check for success
-      // This isn't ideal but works as a basic error detection
-      const successTimer = setTimeout(() => {
-        setIsLoading(false);
-      }, 1000);
-      
-      return () => clearTimeout(successTimer);
-    } catch (err) {
-      console.error(`[TokenDetailContent] Exception during query setup:`, err);
-      setError(err instanceof Error ? err : new Error('Failed to load token data'));
-      setIsLoading(false);
-    }
-  }, [loadQuery, tokenAddress, currentTimeframe]);
-
-  // Add an error listener effect to detect fetch errors
-  useEffect(() => {
-    // Helper function to check if we have a network error
-    const checkForErrors = () => {
-      // Only run the check if we're loading and don't already have an error
-      if (!isLoading || error) return;
-      
-      // If we don't have a queryRef after a reasonable time, assume there was an error
-      if (!queryRef && retryCountRef.current < 3) {
-        console.error(`[TokenDetailContent] Query failed to load - retry attempt ${retryCountRef.current + 1}`);
-        
-        // Implement retry logic with exponential backoff
-        const delay = Math.pow(2, retryCountRef.current) * 1000;
-        retryCountRef.current++;
-        
-        setTimeout(() => {
-          try {
-            loadQuery({
-              tokenAddress,
-              timeframe: currentTimeframe,
-              limit: 100
-            }, { fetchPolicy: 'network-only' });
-          } catch (err) {
-            console.error(`[TokenDetailContent] Retry attempt failed:`, err);
-            setError(err instanceof Error ? err : new Error('Failed to load token data'));
-            setIsLoading(false);
-          }
-        }, delay);
-      } else if (!queryRef && retryCountRef.current >= 3) {
-        // After 3 retries, give up and show error
-        setError(new Error('Failed to load token data after multiple attempts'));
-        setIsLoading(false);
+      })
+    }, [tokenAddress, currentTimeframe, loadQuery])
+  
+    const handleTimeframeChange = useCallback((timeframe: string, event?: React.MouseEvent) => {
+      if (event) {
+        event.preventDefault()
       }
-    };
-    
-    // Run the error check after a delay
-    const errorTimer = setTimeout(checkForErrors, 3000);
-    return () => clearTimeout(errorTimer);
-  }, [queryRef, isLoading, error, loadQuery, tokenAddress, currentTimeframe]);
-
-  const everHadDataRef = useRef(false)
-
-  // Function to update timeframe that can be passed to child components
-  const handleTimeframeChange = useCallback((newTimeframe: string) => {
-    console.log(`[TokenDetailContent] Changing timeframe to ${newTimeframe}`)
-    setCurrentTimeframe(newTimeframe)
-  }, [])
-
-  // Handle refreshing when token data updates - with simplified error handling
-  const handleTokenUpdate = useCallback(() => {
-    if (isRefetching) return; // Prevent concurrent refreshes
-    
-    console.log(`[TokenDetailContent] Refreshing token data for ${tokenAddress}`)
-    setIsRefetching(true);
-    
-    try {
+      setCurrentTimeframe(timeframe)
       loadQuery({
         tokenAddress,
-        timeframe: currentTimeframe,
+        timeframe,
         limit: 100
-      }, { fetchPolicy: 'store-and-network' });
-      
-      // Reset refetching state after a delay
-      setTimeout(() => setIsRefetching(false), 1000);
-    } catch (err) {
-      console.error(`[TokenDetailContent] Exception during refresh:`, err);
-      setIsRefetching(false);
-    }
-  }, [loadQuery, tokenAddress, currentTimeframe, isRefetching]);
+      })
+    }, [tokenAddress, loadQuery])
   
-  // Use our custom hook for real-time updates
-  useRefreshOnUpdate({
-    entityType: 'token',
-    entityId: tokenAddress.toLowerCase(),
-    onUpdate: handleTokenUpdate,
-    minRefreshInterval: 10000, // 10 seconds minimum between updates
-    shouldRefetch: false // Let handleTokenUpdate handle the refresh
-  });
-
-  // Error state - render an error view with link back to tokens list
-  if (error) {
+    // Show skeleton while waiting for initial data
+    if (!queryRef) {
+      return <TokenDetailSkeleton />
+    }
+  
+    // Success state with data
     return (
-      <View padding={8} direction="column" gap={4} align="center">
-        <Text variant="featured-1" weight="medium" color="critical">Error</Text>
-        <Text>Failed to load token details. Please try again later.</Text>
-        <Link href="/explore/tokens">
-          <Text color="primary">Return to tokens list</Text>
-        </Link>
-        <Button 
-          variant="outline" 
-          color="primary" 
-          onClick={() => {
-            setError(null);
-            setIsLoading(true);
-            retryCountRef.current = 0;
-            loadQuery({
-              tokenAddress,
-              timeframe: currentTimeframe,
-              limit: 100
-            });
-          }}
-        >
-          Retry
-        </Button>
-      </View>
-    );
-  }
-
-  // Loading state
-  if (isLoading || !queryRef) {
-    return <TokenDetailSkeleton />
-  }
-
-  // Success state with data
-  return (
-    <TokenDetailContent 
-      queryRef={queryRef} 
-      everHadDataRef={everHadDataRef}
-      currentTimeframe={currentTimeframe}
-      onTimeframeChange={handleTimeframeChange}
-      isRefetching={isRefetching}
-      tokenAddress={tokenAddress}
-    />
-  );
-}
+      <Suspense fallback={<TokenDetailSkeleton />}>
+        <TokenDetailContent 
+          queryRef={queryRef} 
+          currentTimeframe={currentTimeframe}
+          onTimeframeChange={handleTimeframeChange}
+          tokenAddress={tokenAddress}
+        />
+      </Suspense>
+    )
+  },
+  TokenDetailSkeleton
+)
 
 // Token detail skeleton component for better code reuse
 function TokenDetailSkeleton() {
@@ -461,88 +344,45 @@ function TokenDetailSkeleton() {
   )
 }
 
-// Wrap the component with RelayBoundary and export
-export const TokenDetailContentWithRelay = withRelayBoundary(
-  TokenDetailContentWrapper, 
-  TokenDetailSkeleton
-);
-
 // Main content component
-function TokenDetailContent({ 
-  queryRef, 
-  everHadDataRef,
+interface TokenDetailContentProps {
+  queryRef: PreloadedQuery<TokenDetailContentQuery>
+  currentTimeframe: string
+  onTimeframeChange: (timeframe: string, event?: React.MouseEvent) => void
+  tokenAddress: string
+}
+
+function TokenDetailContent({
+  queryRef,
   currentTimeframe,
   onTimeframeChange,
-  isRefetching,
   tokenAddress
-}: { 
-  queryRef: PreloadedQuery<TokenDetailContentQuery>, 
-  everHadDataRef: React.MutableRefObject<boolean>,
-  currentTimeframe: string,
-  onTimeframeChange: (newTimeframe: string) => void,
-  isRefetching: boolean,
-  tokenAddress: string
-}) {
-  // Check for mobile view
-  const [isMobile, setIsMobile] = useState(false)
-  const brandColor = '#94E0FE'
-  
-  const checkIfMobile = useCallback(() => {
-    setIsMobile(window.innerWidth < 768)
-  }, [])
-  
-  useEffect(() => {
-    checkIfMobile()
-    window.addEventListener('resize', checkIfMobile)
-    return () => window.removeEventListener('resize', checkIfMobile)
-  }, [checkIfMobile])
-  
-  const data = usePreloadedQuery(
-      TokenDetailQuery,
-    queryRef
-  )
-    
-    // Mark that we've had data
-  if (data.tokenByAddress) {
-    everHadDataRef.current = true
-  }
-  
+}: TokenDetailContentProps): JSX.Element {
+  const data = usePreloadedQuery(TokenDetailQuery, queryRef)
+  const isMobile = typeof window !== 'undefined' && window.innerWidth < 768
+
   // Format metrics
-    const formatLargeNumber = (value: string | null | undefined): string => {
-      if (!value) return '$0'
-      const formattedNum = parseFloat(value)
+  const formatLargeNumber = (value: string | null | undefined): string => {
+    if (!value) return '$0'
+    const formattedNum = parseFloat(value)
 
-      if (formattedNum >= 1e9) {
-        return `$${(formattedNum / 1e9).toFixed(1)}B`
-      } else if (formattedNum >= 1e6) {
-        return `$${(formattedNum / 1e6).toFixed(1)}M`
-      } else if (formattedNum >= 1e3) {
-        return `$${(formattedNum / 1e3).toFixed(1)}K`
-      } else {
-        return `$${formattedNum.toFixed(2)}`
-      }
+    if (formattedNum >= 1e9) {
+      return `$${(formattedNum / 1e9).toFixed(1)}B`
+    } else if (formattedNum >= 1e6) {
+      return `$${(formattedNum / 1e6).toFixed(1)}M`
+    } else if (formattedNum >= 1e3) {
+      return `$${(formattedNum / 1e3).toFixed(1)}K`
+    } else {
+      return `$${formattedNum.toFixed(2)}`
     }
-
-  // Format tooltip for price chart
-  const formatTooltip = (value: number) => {
-    if (value < 0.001) {
-      return `$${value.toFixed(8)}`
-    }
-    if (value < 0.01) {
-      return `$${value.toFixed(6)}`
-    }
-    if (value < 1) {
-      return `$${value.toFixed(4)}`
-    }
-    return formatCurrency(value)
   }
 
   // Determine swap tokens
   const isKKUBPage = data.tokenByAddress?.address.toLowerCase() === KKUB_ADDRESS[CURRENT_CHAIN.id].toLowerCase()
-  
+
   // Render the token detail UI with the chart container
-    return (
-      <View direction="column" gap={6}>
+  return (
+    <View direction="column" gap={6}>
       {/* Breadcrumb Navigation */}
       <View direction="row" align="center" gap={1.5}>
         <Link href="/explore" attributes={{ style: { textDecoration: 'none' } }}>
@@ -589,11 +429,11 @@ function TokenDetailContent({
       />
 
       {/* Main content area - use ChartContainer for the chart section */}
-        <View 
+      <View 
         direction={isMobile ? "column" : "row"} 
         gap={6}
         width="100%"
-          justify="space-between"
+        justify="space-between"
       >
         <View
           direction="column"
@@ -657,12 +497,12 @@ function TokenDetailContent({
                   {formatLargeNumber(data.tokenByAddress?.volumeUSD24h)}
                 </Text>
               </View>
-          </View>
+            </View>
           </View>
         </View>
 
         {/* Swap Interface - on the right side on desktop */}
-          <View
+        <View
           attributes={{ 
             style: { 
               flex: isMobile ? 'auto' : '2',
@@ -701,28 +541,19 @@ function SuspenseChartContainer({
   
   // Load chart data query
   const [chartQueryRef, loadChartQuery] = useQueryLoader<TokenDetailContentChartQuery>(ChartDataQuery)
-  // Only need one loading state for chart data
-  const [isChartLoading, setIsChartLoading] = useState(false)
-  const brandColor = '#94E0FE'
   
   // Load chart data on mount and when timeframe changes
   useEffect(() => {
-    setIsChartLoading(true)
     loadChartQuery({
       tokenAddress,
       timeframe: currentTimeframe,
       limit: 100
     })
-    
-    // Reset loading state after a delay
-    const timer = setTimeout(() => setIsChartLoading(false), 300)
-    return () => clearTimeout(timer)
   }, [tokenAddress, currentTimeframe, loadChartQuery])
   
   // Handle timeframe button clicks
   const handleTimeframeChange = (newTimeframe: string, event?: React.SyntheticEvent) => {
     if (event) {
-      // Ensure we're properly preventing the default behavior
       event.preventDefault()
       event.stopPropagation()
     }
@@ -734,58 +565,50 @@ function SuspenseChartContainer({
     onTimeframeChange(newTimeframe)
   }
   
+  // Define brand color for buttons
+  const primaryColor = '#94E0FE'
+  
   return (
     <View direction="column">
       {/* Chart with Suspense boundary */}
       <View height={100}>
-        {isChartLoading ? (
-          <View height="100%" width="100%">
-            <ChartSkeleton />
-          </View>
-        ) : chartQueryRef ? (
-            <Suspense fallback={
-            <View height="100%" width="100%">
-              <ChartSkeleton />
-            </View>
-          }>
+        {chartQueryRef ? (
+          <Suspense fallback={<ChartSkeleton />}>
             <ChartContent
               queryRef={chartQueryRef}
               tokenRef={tokenRef}
-              />
-            </Suspense>
+            />
+          </Suspense>
         ) : (
-          <View height="100%" width="100%" align="center" justify="center">
-            <Text>No chart data available</Text>
-          </View>
+          <ChartSkeleton />
         )}
-          </View>
+      </View>
 
       {/* Timeframe controls - outside of Suspense boundary */}
       <View direction="row" justify="space-between" padding={2} gap={2} attributes={{ style: { marginTop: '8px' } }}>
-            <View direction="row" gap={2}>
+        <View direction="row" gap={2}>
           {['1h', '1d', '1w', '1m', '1y'].map((tf) => (
-                <Button
+            <Button
               key={tf}
               variant={currentTimeframe === tf ? 'solid' : 'ghost'}
               color={currentTimeframe === tf ? 'primary' : 'neutral'}
               onClick={(event) => handleTimeframeChange(tf, event)}
-                  size="small"
-                  attributes={{
-                    style: {
-                      backgroundColor:
-                    currentTimeframe === tf
-                          ? 'rgba(148, 224, 254, 0.2)'
-                          : 'transparent',
-                  color: currentTimeframe === tf ? brandColor : '#999999',
-                    },
-                  }}
-                >
+              size="small"
+              attributes={{
+                style: {
+                  backgroundColor: currentTimeframe === tf
+                    ? 'rgba(148, 224, 254, 0.2)'
+                    : 'transparent',
+                  color: currentTimeframe === tf ? primaryColor : '#999999',
+                },
+              }}
+            >
               {tf.toUpperCase()}
-                </Button>
-              ))}
-            </View>
-          </View>
+            </Button>
+          ))}
         </View>
+      </View>
+    </View>
   )
 }
 

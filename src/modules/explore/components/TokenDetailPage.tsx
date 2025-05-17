@@ -37,7 +37,35 @@ const TokenDetailSkeleton = () => (
     </View>
     
     {/* Chart Skeleton */}
-    <Skeleton width="100%" height={400} />
+    <View direction="row" gap={6} width="100%" justify="space-between">
+      <View direction="column" gap={6} attributes={{ style: { flex: '3', width: '100%' } }}>
+        <Skeleton width="100%" height={400} />
+        
+        <View direction="row" gap={2} justify="start">
+          {['1H', '1D', '1W', '1M', '1Y'].map((tf) => (
+            <Skeleton key={tf} height={6} width={8} borderRadius="small" />
+          ))}
+        </View>
+        
+        <View direction="column" gap={4}>
+          <Skeleton width={12} height={4} borderRadius="medium" />
+          <View direction="row" wrap={true} gap={8} justify="space-between">
+            {[1, 2, 3, 4].map((i) => (
+              <View key={i} direction="column" gap={2}>
+                <Skeleton width={8} height={2} borderRadius="medium" />
+                <Skeleton width={12} height={3} borderRadius="medium" />
+              </View>
+            ))}
+          </View>
+        </View>
+      </View>
+      
+      <View attributes={{ style: { flex: '2', width: '100%' } }}>
+        <View height={100} width="100%">
+          <Skeleton height="100%" width="100%" borderRadius="medium" />
+        </View>
+      </View>
+    </View>
   </View>
 )
 
@@ -73,7 +101,12 @@ export default function TokenDetailPage({ tokenAddress }: TokenDetailPageProps) 
       <Suspense fallback={<TokenDetailSkeleton />}>
         <TokenDetailContentWithRelay tokenAddress={normalizedAddress} />
       </Suspense>
-      <TokenMetaDataContainers tokenAddress={normalizedAddress} />
+      <View>
+        {/* Render metadata containers only after token details have loaded */}
+        <Suspense fallback={<Skeleton width="100%" height={200} />}>
+          <TokenMetaDataContainers tokenAddress={normalizedAddress} />
+        </Suspense>
+      </View>
     </View>
   )
 }
