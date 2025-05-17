@@ -237,6 +237,80 @@ class EventService {
   }
   
   /**
+   * Handle incoming SSE message
+   */
+  private handleMessage(event: MessageEvent): void {
+    try {
+      // Update last message time for heartbeat check
+      this.lastMessageTime = Date.now();
+      
+      // Skip heartbeat messages
+      if (event.data.trim() === 'heartbeat') {
+        return;
+      }
+      
+      // Handle potential empty or invalid messages
+      if (!event.data || event.data.trim() === '') {
+        console.warn('[Events] Received empty message, ignoring');
+        return;
+      }
+      
+      let data;
+      try {
+        data = JSON.parse(event.data);
+      } catch (jsonError) {
+        console.error('[Events] Invalid JSON in message:', jsonError);
+        console.log('[Events] Raw message data:', event.data);
+        // Don't propagate parsing errors to prevent component crashes
+        return;
+      }
+      
+      // Connected message is special
+      if (data.type === 'connected') {
+        console.log('[Events] Connected to real-time updates server', data);
+        this.updateState(ConnectionState.CONNECTED);
+        this.emitter.emit(ConnectionEvent.CONNECTED, data);
+        return;
+      }
+      
+      // Error message is special - handle server-side errors properly
+      if (data.type === 'error') {
+        const errorMessage = data.message || 'Unknown server error';
+        console.error('[Events] Server-side error:', errorMessage);
+        
+        // Emit the error event
+        this.emitter.emit(ConnectionEvent.ERROR, { 
+          error: errorMessage, 
+          timestamp: Date.now(),
+          recoverable: true
+        });
+        
+        // Don't disconnect for recoverable errors
+        if (data.reconnect === false) {
+          // If server explicitly says not to reconnect
+          this.updateState(ConnectionState.SUSPENDED);
+          this.emitter.emit(ConnectionEvent.SUSPENDED, { timestamp: Date.now() });
+        }
+        
+        return;
+      }
+      
+      // Emit event if it has type and payload
+      if (data.type && data.payload) {
+        // Handle known types and validate payload before emitting
+        try {
+          this.emitter.emit(data.type, data.payload);
+        } catch (emitError) {
+          console.error(`[Events] Error emitting ${data.type} event:`, emitError);
+        }
+      }
+    } catch (error) {
+      console.error('[Events] Error processing message:', error);
+      // Don't propagate this error to prevent crashes
+    }
+  }
+  
+  /**
    * Handle connection error
    */
   private handleError(error: any): void {
@@ -250,73 +324,42 @@ class EventService {
     if (typeof window !== 'undefined' && window.__eventSource) {
       try {
         window.__eventSource.close();
-        delete window.__eventSource;
-      } catch (e) {
-        // Ignore cleanup errors
+      } catch (closeError) {
+        console.error('[Events] Error closing EventSource:', closeError);
       }
+      delete window.__eventSource;
     }
     
-    // Emit event if state changed
-    if (prevState !== ConnectionState.DISCONNECTED) {
-      this.emitter.emit(ConnectionEvent.DISCONNECTED, { timestamp: Date.now() });
+    // Don't attempt to reconnect if suspended
+    if (this.state === ConnectionState.SUSPENDED) {
+      return;
     }
     
-    // Set up reconnection with exponential backoff if we have users
-    if (this.userCount > 0 && this.state === ConnectionState.DISCONNECTED) {
-      const delay = Math.min(1000 * Math.pow(2, this.reconnectAttempts), 30000);
-      console.log(`[Events] Will reconnect in ${Math.round(delay/1000)}s`);
-      
-      // Clear any existing timer
-      if (this.reconnectTimer) {
-        clearTimeout(this.reconnectTimer);
-      }
-      
-      // Set new timer
-      this.reconnectTimer = setTimeout(() => {
-        if (this.userCount > 0) {
-          this.connect();
-        }
-      }, delay);
+    // Emit error event
+    this.emitter.emit(ConnectionEvent.ERROR, { 
+      error: error?.message || 'Connection error', 
+      timestamp: Date.now(),
+      recoverable: this.reconnectAttempts < this.maxReconnectAttempts 
+    });
+    
+    // Implement exponential backoff for reconnection
+    const delay = Math.min(
+      1000 * Math.pow(1.5, this.reconnectAttempts), 
+      30000 // max 30 second delay
+    );
+    
+    console.log(`[Events] Will reconnect in ${Math.round(delay / 1000)}s (attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
+    
+    // Schedule reconnection
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
     }
-  }
-  
-  /**
-   * Handle incoming SSE message
-   */
-  private handleMessage(event: MessageEvent): void {
-    try {
-      // Update last message time for heartbeat check
-      this.lastMessageTime = Date.now();
-      
-      // Skip heartbeat messages
-      if (event.data.trim() === 'heartbeat') {
-        return;
+    
+    this.reconnectTimer = setTimeout(() => {
+      if (this.userCount > 0) {
+        this.connect();
       }
-      
-      const data = JSON.parse(event.data);
-      
-      // Connected message is special
-      if (data.type === 'connected') {
-        console.log('[Events] Connected to real-time updates server', data);
-        this.updateState(ConnectionState.CONNECTED);
-        this.emitter.emit(ConnectionEvent.CONNECTED, data);
-        return;
-      }
-      
-      // Error message is special
-      if (data.type === 'error') {
-        console.error('[Events] Server-side error:', data.message);
-        this.emitter.emit(ConnectionEvent.ERROR, data);
-        return;
-      }
-      
-      // Emit event if it has type and payload
-      if (data.type && data.payload) {
-        this.emitter.emit(data.type, data.payload);
-      }
-    } catch (error) {
-      console.error('[Events] Error processing message:', error);
-    }
+    }, delay);
   }
   
   /**

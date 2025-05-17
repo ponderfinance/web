@@ -1,6 +1,6 @@
 'use client'
 
-import { Suspense } from 'react'
+import { Suspense, useEffect } from 'react'
 import { View, Text, Skeleton } from 'reshaped'
 import { isAddress } from 'viem'
 import dynamic from 'next/dynamic'
@@ -9,6 +9,28 @@ import Link from 'next/link'
 
 // Force dynamic rendering to prevent errors with static generation
 export const dynamicParams = true
+
+// Silent error handler that logs but doesn't display errors to users
+function SilentErrorFallback({ error, resetErrorBoundary }: { error: Error, resetErrorBoundary: () => void }) {
+  // Log error but don't display to user
+  useEffect(() => {
+    console.error('[TokenPage] Error handled silently:', error);
+    
+    // Optional: Send error to monitoring service
+    // reportError(error);
+    
+    // Attempt automatic recovery after a delay
+    const timer = setTimeout(() => {
+      console.log('[TokenPage] Attempting automatic recovery');
+      resetErrorBoundary();
+    }, 5000);
+    
+    return () => clearTimeout(timer);
+  }, [error, resetErrorBoundary]);
+
+  // Show skeleton instead of error UI
+  return <TokenDetailSkeleton />;
+}
 
 // Use dynamic import with no SSR to ensure client-only rendering
 // This helps avoid hydration issues with Relay
@@ -88,44 +110,24 @@ function TokenDetailSkeleton() {
   )
 }
 
-// Helper function to render error views
-function ErrorView({ message }: { message: string }) {
-  return (
-    <View padding={8} direction="column" gap={4} align="center">
-      <Text variant="featured-1" weight="medium" color="critical">Error</Text>
-      <Text>{message}</Text>
-      <Link href="/explore/tokens">
-        <Text color="primary">Return to tokens list</Text>
-      </Link>
-    </View>
-  );
-}
-
-// Error boundary fallback component
-function ErrorFallback({ error }: { error: Error }) {
-  console.error('[TokenPage] Error in ErrorBoundary:', error);
-  return (
-    <ErrorView message={error.message || "Something went wrong loading the token details"} />
-  );
-}
-
 export default function TokenPage({ params }: { params: { address: string } }) {
-  // Basic validation at the page level
-  if (!params.address) {
-    return <ErrorView message="Token address is missing" />;
+  // Validate the token address without showing error UI
+  if (!params.address || !isAddress(params.address.toLowerCase())) {
+    console.error(`[TokenPage] Invalid token address: ${params.address || 'missing'}`);
+    return <TokenDetailSkeleton />;
   }
   
   // Normalize the address
   const normalizedAddress = params.address.toLowerCase();
   
-  // Validate the address format
-  if (!isAddress(normalizedAddress)) {
-    return <ErrorView message={`The address "${params.address}" is not a valid Ethereum address.`} />;
-  }
-  
   // Render the client-side component with the validated address
   return (
-    <ErrorBoundary FallbackComponent={ErrorFallback}>
+    <ErrorBoundary 
+      FallbackComponent={SilentErrorFallback}
+      onReset={() => {
+        console.log('[TokenPage] Error boundary reset - retrying');
+      }}
+    >
       <Suspense fallback={<TokenDetailSkeleton />}>
         <TokenDetailWithRelay tokenAddress={normalizedAddress} />
       </Suspense>

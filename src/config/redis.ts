@@ -26,23 +26,23 @@ let activeConnections = 0;
 // ========================= CONFIGURATION ====================================
 export const REDIS_CONFIG = {
   // Connection settings
-  maxRetriesPerRequest: 5,       // Increased from 3 to handle more retries
-  connectTimeoutMs: 15000,       // Increased to 15 seconds
-  keepAliveMs: 60000,            // Increased to 60 seconds to prevent disconnections
+  maxRetriesPerRequest: 10,       // Increased from 5 to handle more retries
+  connectTimeoutMs: 30000,        // Increased to 30 seconds
+  keepAliveMs: 120000,            // Increased to 120 seconds to prevent disconnections
   
   // Recovery settings
-  maxSuspensionTimeMs: 60000,    // 1 minute suspension after failures
-  maxRetryAttempts: 10,          // Max retry attempts before suspending (increased from 5)
-  retryTimeoutMs: 10000,         // 10 second timeout for operations
+  maxSuspensionTimeMs: 120000,    // 2 minutes suspension after failures
+  maxRetryAttempts: 15,           // Max retry attempts before suspending (increased from 10)
+  retryTimeoutMs: 20000,          // 20 second timeout for operations (increased from 10)
   
   // Backoff settings
-  initialRetryDelayMs: 1000,     // Start with 1 second delay
-  maxRetryDelayMs: 30000,        // Maximum 30 second delay
-  backoffFactor: 2,              // Exponential backoff factor
-  minReconnectDelay: 3000,       // Minimum time between connection attempts (reduced from 5000)
+  initialRetryDelayMs: 2000,      // Start with 2 second delay (increased from 1)
+  maxRetryDelayMs: 60000,         // Maximum 60 second delay (increased from 30)
+  backoffFactor: 1.5,             // Exponential backoff factor (reduced from 2 for more gradual increase)
+  minReconnectDelay: 5000,        // Minimum time between connection attempts (increased from 3000)
   
   // Heartbeat
-  heartbeatIntervalMs: 15000,    // Reduced to 15 seconds to detect issues earlier
+  heartbeatIntervalMs: 30000,     // Increased to 30 seconds to reduce load on Redis
   
   // Debug options
   debugMode: true                // Enable detailed logging for Redis operations
@@ -176,14 +176,21 @@ export function getRedisClient(forSubscriber = false): Redis | null {
       maxRetriesPerRequest: REDIS_CONFIG.maxRetriesPerRequest,
       connectTimeout: REDIS_CONFIG.connectTimeoutMs,
       keepAlive: REDIS_CONFIG.keepAliveMs,
+      commandTimeout: REDIS_CONFIG.retryTimeoutMs,  // Add command timeout
       enableReadyCheck: true,
       enableOfflineQueue: true,
       connectionName: forSubscriber ? 'ponder-subscriber' : 'ponder-client',
       noDelay: true,
       reconnectOnError: (err) => {
-        // Always reconnect for ECONNRESET - critical fix
+        // Special handling for ECONNRESET to avoid connection storms
         if (err.message.includes('ECONNRESET')) {
-          console.warn('[REDIS] ECONNRESET detected, attempting reconnect');
+          console.warn('[REDIS] ECONNRESET detected, controlled reconnect');
+          
+          // Add a delay to prevent connection storms
+          setTimeout(() => {
+            lastConnectionAttempt = 0; // Allow immediate retry after delay
+          }, 2000 * (connectionRetryCount + 1));
+          
           return true; // Allow reconnection for ECONNRESET errors
         }
         
