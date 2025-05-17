@@ -232,26 +232,21 @@ export const TokenDetailContentWithRelay = withRelayBoundary(
     const [queryRef, loadQuery] = useQueryLoader<TokenDetailContentQuery>(TokenDetailQuery)
     const [currentTimeframe, setCurrentTimeframe] = useState(initialTimeframe)
   
-    // Load initial data
+    // Load initial data - only on mount and tokenAddress change
     useEffect(() => {
       loadQuery({
         tokenAddress,
         timeframe: currentTimeframe,
         limit: 100
       })
-    }, [tokenAddress, currentTimeframe, loadQuery])
+    }, [tokenAddress, loadQuery]) // Removed currentTimeframe dependency
   
-    const handleTimeframeChange = useCallback((timeframe: string, event?: React.MouseEvent) => {
-      if (event) {
-        event.preventDefault()
-      }
+    // This callback only updates the UI state, not trigger a new query
+    const handleTimeframeChange = useCallback((timeframe: string) => {
+      // Just update the UI state
       setCurrentTimeframe(timeframe)
-      loadQuery({
-        tokenAddress,
-        timeframe,
-        limit: 100
-      })
-    }, [tokenAddress, loadQuery])
+      // We don't reload the main query here - each component manages its own data
+    }, [])
   
     // Show skeleton while waiting for initial data
     if (!queryRef) {
@@ -348,7 +343,7 @@ function TokenDetailSkeleton() {
 interface TokenDetailContentProps {
   queryRef: PreloadedQuery<TokenDetailContentQuery>
   currentTimeframe: string
-  onTimeframeChange: (timeframe: string, event?: React.MouseEvent) => void
+  onTimeframeChange: (timeframe: string) => void
   tokenAddress: string
 }
 
@@ -551,17 +546,17 @@ function SuspenseChartContainer({
     })
   }, [tokenAddress, currentTimeframe, loadChartQuery])
   
-  // Handle timeframe button clicks
+  // Handle timeframe button clicks - IMPORTANT: Only updates the chart, not the whole page
   const handleTimeframeChange = (newTimeframe: string, event?: React.SyntheticEvent) => {
     if (event) {
       event.preventDefault()
       event.stopPropagation()
     }
     
-    // Update the local timeframe state
+    // Set loading state by updating the local timeframe
     setCurrentTimeframe(newTimeframe)
     
-    // Also notify the parent component
+    // Notify parent for UI state synchronization only
     onTimeframeChange(newTimeframe)
   }
   
@@ -639,11 +634,7 @@ function ChartSkeleton() {
       <View grow={true} position="relative">
         <View position="absolute" width="100%" height="100%">
           <View height="100%" width="100%" direction="column" justify="space-between">
-            {/* Y-axis labels */}
-            <View direction="row" width="100%" justify="space-between">
-              <Skeleton width={15} height={4} borderRadius="circular" />
-              <Skeleton width={10} height={4} borderRadius="circular" />
-            </View>
+     
               
             {/* Chart lines */}
             <View height={0.25} width="100%" backgroundColor="neutral-faded" />
