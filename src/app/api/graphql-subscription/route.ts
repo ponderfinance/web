@@ -50,12 +50,57 @@ export async function GET(req: NextRequest) {
         // Set up message handler
         redis.on('message', (channel, message) => {
           try {
+            console.log(`[SSE] Received message on channel ${channel}`);
             const data = JSON.parse(message);
             
-            // Format the SSE message based on the channel
+            // Normalize the format based on channel and message structure
+            let normalizedPayload = { ...data };
+            
+            // For transaction updates, ensure we have a consistent format
+            if (channel === REDIS_CHANNELS.TRANSACTION_UPDATED) {
+              normalizedPayload = {
+                entityType: 'transaction',
+                entityId: data.transactionId || data.entityId,
+                txHash: data.txHash,
+                timestamp: data.timestamp || Date.now(),
+                ...data // Keep all other properties
+              };
+              
+              console.log(`[SSE] Normalized transaction message:`, normalizedPayload);
+            }
+            // For token updates, ensure consistent format
+            else if (channel === REDIS_CHANNELS.TOKEN_UPDATED) {
+              normalizedPayload = {
+                entityType: 'token',
+                entityId: data.entityId || data.tokenId,
+                timestamp: data.timestamp || Date.now(),
+                ...data
+              };
+            }
+            // For pair updates, ensure consistent format
+            else if (channel === REDIS_CHANNELS.PAIR_UPDATED) {
+              normalizedPayload = {
+                entityType: 'pair',
+                entityId: data.entityId || data.pairId,
+                timestamp: data.timestamp || Date.now(),
+                ...data
+              };
+            }
+            // For metrics updates, ensure consistent format
+            else if (channel === REDIS_CHANNELS.METRICS_UPDATED) {
+              normalizedPayload = {
+                entityType: 'metrics',
+                entityId: data.entityId || 'global',
+                metricType: data.metricType || 'unknown',
+                timestamp: data.timestamp || Date.now(),
+                ...data
+              };
+            }
+            
+            // Format the SSE message with normalized payload
             const eventData = {
               type: channel,
-              payload: data
+              payload: normalizedPayload
             };
             
             // Send the message through the stream

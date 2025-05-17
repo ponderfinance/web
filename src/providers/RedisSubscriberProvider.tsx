@@ -157,28 +157,42 @@ export function RedisSubscriberProvider({ children }: { children: React.ReactNod
     }
     
     const transactionHandler = (data: any) => {
-      console.log('RedisSubscriber: received transaction update', data)
-      if (data.entityId) {
+      console.log('RedisSubscriber: received transaction update', data);
+      
+      // Handle different transaction message formats
+      // The entityId might be in data.entityId or data.transactionId
+      const entityId = data.entityId || data.transactionId;
+      const timestamp = data.timestamp || Date.now();
+      
+      if (entityId) {
         // Always attempt direct store update first
         const env = createRelayEnvironment()
         let updated = false;
         
         if (env) {
-          updated = applyStoreUpdate(`transaction-${data.entityId}`, data, env);
+          // Normalize the data for store update - make sure it has entityId property
+          const normalizedData = { 
+            ...data,
+            entityId: entityId
+          };
+          
+          updated = applyStoreUpdate(`transaction-${entityId}`, normalizedData, env);
           if (updated) {
-            console.log('Applied direct store update for transaction');
+            console.log(`Applied direct store update for transaction ${entityId}`);
             // Track this direct update
-            directUpdatesRef.current[`transaction-${data.entityId}`] = Date.now();
+            directUpdatesRef.current[`transaction-${entityId}`] = timestamp;
           }
         }
         
         // Only update transaction timestamps if direct update failed or we need to
-        if (!updated || shouldEntityRefresh('transaction', data.entityId, 5000)) {
-        setTransactionLastUpdated(prev => ({
-          ...prev,
-          [data.entityId]: data.timestamp || Date.now()
-        }))
+        if (!updated || shouldEntityRefresh('transaction', entityId, 2000)) { // More aggressive 2s threshold
+          setTransactionLastUpdated(prev => ({
+            ...prev,
+            [entityId]: timestamp
+          }))
         }
+      } else {
+        console.warn('Transaction update missing entityId/transactionId', data);
       }
     }
     

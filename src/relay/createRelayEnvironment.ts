@@ -198,47 +198,79 @@ const messageHandlerRegistry: Record<string, MessageHandler> = {
       return operationName.toLowerCase().includes('transaction');
     },
     handler: (data, environment, request, variables, sink) => {
-      console.log(`Received transaction update for ${request.name}:`, data.payload);
+      // Extract the actual data payload, normalizing the structure of different message formats
+      const payload = data.payload || data;
+      console.log(`Received transaction update for ${request.name}:`, payload);
+      
+      // The transaction ID might be in different places depending on source
+      const entityId = payload.entityId || payload.transactionId;
+      const txHash = payload.txHash;
+      
+      if (!entityId && !txHash) {
+        console.error('Transaction update missing entityId and txHash', payload);
+        // Still fetch fresh data even if we can't do a targeted update
+        fetchFreshData();
+        return;
+      }
       
       // Try store update first (when transaction updater is registered)
       let updated = false;
-      if (environment && data.payload?.entityId) {
-        updated = applyStoreUpdate(`transaction-${data.payload.entityId}`, data.payload, environment);
+      if (environment && entityId) {
+        updated = applyStoreUpdate(`transaction-${entityId}`, payload, environment);
         if (updated) {
-          console.log(`Applied direct store update for transaction ${data.payload.entityId}`);
+          console.log(`Applied direct store update for transaction ${entityId}`);
         }
       }
       
-      // If direct update failed, try targeted invalidation
-      if (!updated && environment) {
-        try {
-          environment.commitUpdate(store => {
-            const root = store.getRoot();
-            // Look for the transactions connection
-            const transactionsConnection = root.getLinkedRecord('recentTransactions');
-            if (transactionsConnection) {
-              // Mark for store changes instead of invalidation
-              console.log('Marking transactions for refetch');
-              // Need to manually refetch since we can't invalidate directly
+      // For transaction lists, we need special handling
+      if (request.name?.toLowerCase().includes('transactionspage') ||
+          request.name?.toLowerCase().includes('recenttransactions')) {
+          
+        if (environment) {
+          try {
+            // Mark the store as needing refresh
+            environment.commitUpdate(store => {
+              // Find the root record
+              const root = store.getRoot();
+              
+              // Get the transactions connection if it exists
+              const transactionsConnection = root.getLinkedRecord('recentTransactions', variables);
+              if (transactionsConnection) {
+                // Force the connection to be refetched by touching it
+                transactionsConnection.setValue(
+                  Date.now().toString(),
+                  '__forceRefetch'
+                );
+                
+                console.log('Marked transactions connection for refetch');
+              } else {
+                console.log('No transactions connection found, will do full refetch');
+              }
+            });
+          } catch (error) {
+            console.error('Error invalidating transaction store:', error);
+          }
+        }
+      }
+      
+      // Helper function to fetch fresh data
+      function fetchFreshData() {
+        // Always fetch new data for transaction updates
+        Observable.from(fetchQuery(request, variables, {}))
+          .subscribe({
+            next: (response) => {
+              console.log(`Fetched updated transaction data for ${request.name}`);
+              sink.next(response);
+            },
+            error: (error: any) => {
+              console.error(`Error fetching updated transaction data:`, error);
+              sink.error(error instanceof Error ? error : new Error(String(error)));
             }
           });
-        } catch (error) {
-          console.error('Error updating store:', error);
-        }
       }
       
-      // As last resort, do a full refetch
-      Observable.from(fetchQuery(request, variables, {}))
-        .subscribe({
-          next: (response) => {
-            console.log(`Fetched updated transaction data for ${request.name}`);
-            sink.next(response);
-          },
-          error: (error: any) => {
-            console.error(`Error fetching updated transaction data:`, error);
-            sink.error(error instanceof Error ? error : new Error(String(error)));
-          }
-        });
+      // Fetch fresh data after store updates
+      fetchFreshData();
     }
   }
 };
@@ -393,9 +425,24 @@ export function registerTransactionListUpdater() {
           
           console.log(`Updated transaction ${transactionId} in Relay store without refetching`);
         } else {
-          // Transaction not in store yet, need refetch (can't use invalidateRecord directly)
-          console.log(`Transaction ${transactionId} not found in store, will need a refetch`);
-          // Store a flag to indicate we need to refetch this data on next query
+          // Transaction not in store yet, need to mark the connection for refetch
+          console.log(`Transaction ${transactionId} not found in store, marking connection for refetch`);
+          
+          // This is the key improvement: mark the entire connection for refetch
+          // when we have a new transaction that isn't in the store yet
+          if (connectionsRecord) {
+            // Get the edges array
+            const edges = connectionsRecord.getLinkedRecords('edges');
+            if (edges && edges.length > 0) {
+              // Mark first edge to force refetch of the connection
+              const firstEdge = edges[0];
+              if (firstEdge) {
+                // This doesn't actually change data, but marks the record as changed
+                // which will trigger Relay to refetch the connection
+                firstEdge.setValue(firstEdge.getValue('cursor'), 'cursor');
+              }
+            }
+          }
         }
       } catch (error) {
         console.error('Error updating transaction in store:', error);

@@ -150,7 +150,7 @@ function TransactionsContent({ queryRef }: { queryRef: PreloadedQuery<Transactio
       first: 15,
     },
     {
-      fetchPolicy: 'store-or-network',
+      fetchPolicy: 'store-and-network',
     }
   )
 
@@ -161,19 +161,24 @@ function TransactionsContent({ queryRef }: { queryRef: PreloadedQuery<Transactio
 export const TransactionsPage = () => {
   const [mounted, setMounted] = useState(false)
   const [queryRef, loadQuery] = useQueryLoader<TransactionsPageQuery>(transactionsPageQuery)
+  const [refreshCounter, setRefreshCounter] = useState(0)
 
   // Handle transaction updates
   const handleTransactionUpdate = useCallback(() => {
     console.log('[TransactionsPage] Refreshing transactions due to real-time update')
-    loadQuery({ first: 15 }, { fetchPolicy: 'store-and-network' })
+    loadQuery({ first: 15 }, { 
+      fetchPolicy: 'store-and-network',
+    })
+    // Also increment the counter to force re-render
+    setRefreshCounter(prev => prev + 1)
   }, [loadQuery])
   
   // Use our custom hook for real-time updates
   useRefreshOnUpdate({
     entityType: 'transaction',
     onUpdate: handleTransactionUpdate,
-    minRefreshInterval: 5000, // 5 seconds minimum between updates
-    shouldRefetch: true // Force refetch when transactions are updated
+    minRefreshInterval: 1000,
+    shouldRefetch: true
   })
 
   // Only render the query component after mounting on the client
@@ -181,8 +186,11 @@ export const TransactionsPage = () => {
     setMounted(true)
     
     // Initial load
-    loadQuery({ first: 15 })
+    loadQuery({ first: 15 }, { fetchPolicy: 'network-only' })
   }, [loadQuery])
+
+  // Create a key that changes when refreshCounter changes to force re-mount
+  const contentKey = `transactions-content-${refreshCounter}`
 
   if (!mounted) {
     return <TransactionsLoading />
@@ -191,7 +199,7 @@ export const TransactionsPage = () => {
   return (
     <View gap={6}>
       <Suspense fallback={<TransactionsLoading />}>
-        {queryRef && <TransactionsContent queryRef={queryRef} />}
+        {queryRef && <TransactionsContent key={contentKey} queryRef={queryRef} />}
       </Suspense>
     </View>
   )

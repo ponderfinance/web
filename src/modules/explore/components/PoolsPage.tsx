@@ -7,7 +7,6 @@ import { PoolsDisplay } from '@/src/modules/explore/components/PoolsDisplay'
 import { View, Text, Skeleton } from 'reshaped'
 import { tokenFragment } from '@/src/components/TokenPair'
 import ScrollableTable from '@/src/components/ScrollableTable'
-import { useRedisSubscriber } from '@/src/providers/RedisSubscriberProvider'
 import { useRefreshOnUpdate } from '@/src/hooks/useRefreshOnUpdate'
 
 export const poolsPageQuery = graphql`
@@ -170,7 +169,7 @@ function PoolsContent({
       orderDirection: orderDirection as any,
     },
     {
-      fetchPolicy: 'store-or-network',
+      fetchPolicy: 'store-and-network',
       fetchKey: orderBy + orderDirection,
     }
   )
@@ -191,28 +190,34 @@ export const PoolsPage = () => {
   const [orderBy, setOrderBy] = useState<string>('reserveUSD')
   const [orderDirection, setOrderDirection] = useState<string>('desc')
   const [mounted, setMounted] = useState(false)
+  const [refreshCounter, setRefreshCounter] = useState(0)
   
   // Add query loader
   const [queryRef, loadQuery] = useQueryLoader<PoolsPageQuery>(poolsPageQuery)
   
   // Function to refresh data
   const handlePoolUpdate = useCallback(() => {
+    console.log('[PoolsPage] Refreshing pools due to real-time update')
     loadQuery(
       {
         first: 20,
         orderBy: orderBy as any,
         orderDirection: orderDirection as any,
       },
-      { fetchPolicy: 'store-and-network' }
+      { 
+        fetchPolicy: 'store-and-network'
+      }
     )
+    // Force re-render with counter increment
+    setRefreshCounter(prev => prev + 1)
   }, [loadQuery, orderBy, orderDirection])
   
   // Use our custom hook for real-time updates
   useRefreshOnUpdate({
     entityType: 'pair',
     onUpdate: handlePoolUpdate,
-    minRefreshInterval: 15000, // 15 seconds minimum between updates
-    shouldRefetch: false // Let handlePoolUpdate handle the refresh
+    minRefreshInterval: 5000,
+    shouldRefetch: true
   })
   
   // Only render the query component after mounting on the client
@@ -224,8 +229,13 @@ export const PoolsPage = () => {
       first: 20,
       orderBy: orderBy as any,
       orderDirection: orderDirection as any,
+    }, {
+      fetchPolicy: 'network-only'
     })
   }, [loadQuery, orderBy, orderDirection])
+
+  // Create a key that changes when refreshCounter changes to force re-mount
+  const contentKey = `pools-content-${refreshCounter}`
 
   if (!mounted || !queryRef) {
     return <PoolsLoading />
@@ -235,6 +245,7 @@ export const PoolsPage = () => {
     <View gap={6}>
       <Suspense fallback={<PoolsLoading />}>
         <PoolsContent
+          key={contentKey}
           orderBy={orderBy}
           orderDirection={orderDirection}
           setOrderBy={setOrderBy}

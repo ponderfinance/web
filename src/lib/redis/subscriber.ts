@@ -69,14 +69,19 @@ export function initRedisSubscriber(): any {
             console.log('[SSE] Received message:', data);
             
             // Route the message to the appropriate event based on type
-            if (data.type === 'metrics:updated') {
+            if (data.type === REDIS_CHANNELS.METRICS_UPDATED && data.payload) {
               eventEmitter.emit('metrics:updated', data.payload);
-            } else if (data.type === 'pair:updated') {
+            } else if (data.type === REDIS_CHANNELS.PAIR_UPDATED && data.payload) {
               eventEmitter.emit('pair:updated', data.payload);
-            } else if (data.type === 'token:updated') {
+            } else if (data.type === REDIS_CHANNELS.TOKEN_UPDATED && data.payload) {
               eventEmitter.emit('token:updated', data.payload);
+            } else if (data.type === REDIS_CHANNELS.TRANSACTION_UPDATED && data.payload) {
+              console.log('[SSE] Emitting transaction update:', data.payload);
+              eventEmitter.emit('transaction:updated', data.payload);
             } else if (data.type === 'connected') {
               console.log('[SSE] Connected to server successfully');
+            } else {
+              console.log(`[SSE] Received unknown message type: ${data.type}`, data);
             }
           } catch (error) {
             console.error('[SSE] Error processing message:', error);

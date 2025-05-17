@@ -157,7 +157,8 @@ function TokensContent({
       orderDirection: orderDirection as any,
     },
     {
-      fetchPolicy: 'store-or-network'
+      fetchPolicy: 'store-and-network', // Use store data but still fetch from network
+      fetchKey: orderBy + orderDirection, // Use orderBy/direction as fetchKey to ensure correct data when sorting changes
     }
   )
 
@@ -177,25 +178,32 @@ export const TokensPage = () => {
   const [orderBy, setOrderBy] = useState<string>('volumeUSD24h')
   const [orderDirection, setOrderDirection] = useState<string>('desc')
   const [mounted, setMounted] = useState(false)
+  const [refreshCounter, setRefreshCounter] = useState(0)
   
   // Add query loader for manual refreshes
   const [queryRef, loadQuery] = useQueryLoader<TokensPageQuery>(tokensPageQuery)
   
   // Handle refreshing when token data updates
   const handleTokenUpdate = useCallback(() => {
+    console.log('[TokensPage] Refreshing token list due to real-time update')
     loadQuery({
       first: 20,
       orderBy: orderBy as any,
       orderDirection: orderDirection as any
-    }, { fetchPolicy: 'store-and-network' })
+    }, { 
+      fetchPolicy: 'store-and-network' // Use store data and update from network
+    })
+    
+    // Force re-render with counter increment
+    setRefreshCounter(prev => prev + 1)
   }, [loadQuery, orderBy, orderDirection])
   
   // Use our custom hook for real-time updates
   useRefreshOnUpdate({
     entityType: 'token',
     onUpdate: handleTokenUpdate,
-    minRefreshInterval: 15000, // 15 seconds minimum between updates
-    shouldRefetch: false // Let handleTokenUpdate handle the refresh
+    minRefreshInterval: 5000, // 5 seconds minimum between updates
+    shouldRefetch: true // Force refetch to ensure we get fresh data
   })
 
   // Only render the query component after mounting on the client
@@ -207,8 +215,13 @@ export const TokensPage = () => {
       first: 20,
       orderBy: orderBy as any,
       orderDirection: orderDirection as any
+    }, {
+      fetchPolicy: 'network-only' // Always get fresh data on initial load
     })
   }, [loadQuery, orderBy, orderDirection])
+
+  // Create a key that changes when refreshCounter changes to force re-mount
+  const contentKey = `tokens-content-${refreshCounter}`
 
   if (!mounted) {
     return <TokensLoading />
@@ -218,6 +231,7 @@ export const TokensPage = () => {
     <View gap={6}>
       <Suspense fallback={<TokensLoading />}>
         <TokensContent
+          key={contentKey}
           orderBy={orderBy}
           orderDirection={orderDirection}
           setOrderBy={setOrderBy}
