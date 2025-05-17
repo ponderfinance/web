@@ -1,28 +1,113 @@
-import { getRedisSingleton, getRedisEventEmitter } from './singleton';
-
 /**
- * UNIFIED REDIS API
- * -----------------
- * This is the main entry point for Redis access throughout the application.
- * All Redis operations should go through this API to ensure connection reuse.
+ * UNIFIED REDIS API - STRICT CONNECTION MANAGEMENT
+ * 
+ * This module provides Redis operations with strict connection management
+ * to prevent connection storms. We use a single connection for the entire
+ * application and enforce strict retry policies.
  */
 
+// Import from strict implementations
+import { 
+  getKeyStrict, 
+  setKeyStrict, 
+  getMultipleKeysStrict, 
+  deleteKeyStrict,
+  CACHE_PREFIXES,
+  CACHE_TTLS,
+  strictEventEmitter,
+  ConnectionState,
+  ConnectionEvent
+} from './strictOperations';
+
+// Import from centralized config
+import {
+  getRedisClient as getConfigRedisClient,
+  getRedisSubscriber as getConfigRedisSubscriber,
+  getRedisEventEmitter as getConfigEventEmitter,
+  registerRedisConnection,
+  unregisterRedisConnection,
+  shutdownRedisConnections,
+  REDIS_CHANNELS
+} from '@/src/config/redis';
+
+// Re-export from central constants
+export { REDIS_CHANNELS };
+
+// Re-export functions with standard names
+export const getKey = getKeyStrict;
+export const setKey = setKeyStrict;
+export const getMultipleKeys = getMultipleKeysStrict;
+export const deleteKey = deleteKeyStrict;
+export { CACHE_PREFIXES, CACHE_TTLS };
+
+// Export connection state enums
+export { ConnectionState, ConnectionEvent };
+
+// Export event emitter for subscribers
+export const getEventEmitter = () => {
+  // We want to get the emitter from config while maintaining backward compatibility
+  return getConfigEventEmitter() || strictEventEmitter;
+};
+
 /**
- * Get a Redis client from the application-wide singleton.
- * @deprecated Direct Redis access is discouraged - use the helper methods instead
+ * Close the Redis connection safely - preferred method
  */
-export function getRedisClient() {
-  console.warn('[REDIS] Using getRedisClient directly is deprecated - consider using the helper methods');
-  return getRedisSingleton().getRedisClient();
+export async function closeRedisConnection(): Promise<void> {
+  try {
+    await shutdownRedisConnections();
+  } catch (error) {
+    console.error('[REDIS] Error closing Redis connections:', error);
+  }
 }
 
 /**
- * Get a key from Redis
+ * Get the Redis client instance
+ * Use the high-level API functions instead when possible
  */
-export async function getKey(key: string): Promise<string | null> {
+export function getRedisClient() {
+  return getConfigRedisClient();
+}
+
+/**
+ * Get the Redis subscriber instance
+ * Use the high-level subscription API instead when possible 
+ */
+export function getRedisSubscriber() {
+  return getConfigRedisSubscriber();
+}
+
+// Export connection registration functions
+export { registerRedisConnection, unregisterRedisConnection };
+
+// Export utility types for use with Redis data
+export type RedisEntityType = 'token' | 'pair' | 'transaction' | 'metrics';
+export type RedisEntityId = string;
+export type RedisTimestamp = number;
+
+/**
+ * Build a Redis channel name from entity type and optional ID
+ */
+export function buildRedisChannelName(entityType: RedisEntityType, entityId?: string): string {
+  const baseChannel = entityType === 'metrics' 
+    ? REDIS_CHANNELS.METRICS_UPDATED
+    : entityType === 'token'
+      ? REDIS_CHANNELS.TOKEN_UPDATED
+      : entityType === 'pair'
+        ? REDIS_CHANNELS.PAIR_UPDATED
+        : REDIS_CHANNELS.TRANSACTION_UPDATED;
+  
+  return entityId ? `${baseChannel}:${entityId}` : baseChannel;
+}
+
+/**
+ * Safely get a value from Redis, handling null clients
+ * This helps avoid the need for null checks everywhere
+ */
+export async function safeRedisGet(key: string): Promise<string | null> {
+  const redis = getRedisClient();
+  if (!redis) return null;
+  
   try {
-    const redis = getRedisSingleton().getRedisClient();
-    if (!redis) return null;
     return await redis.get(key);
   } catch (error) {
     console.error(`[REDIS] Error getting key ${key}:`, error);
@@ -31,15 +116,15 @@ export async function getKey(key: string): Promise<string | null> {
 }
 
 /**
- * Set a key in Redis
+ * Safely set a value in Redis, handling null clients
  */
-export async function setKey(key: string, value: string, ttlSeconds?: number): Promise<boolean> {
+export async function safeRedisSet(key: string, value: string, ttl?: number): Promise<boolean> {
+  const redis = getRedisClient();
+  if (!redis) return false;
+  
   try {
-    const redis = getRedisSingleton().getRedisClient();
-    if (!redis) return false;
-    
-    if (ttlSeconds) {
-      await redis.set(key, value, 'EX', ttlSeconds);
+    if (ttl) {
+      await redis.set(key, value, 'EX', ttl);
     } else {
       await redis.set(key, value);
     }
@@ -51,26 +136,13 @@ export async function setKey(key: string, value: string, ttlSeconds?: number): P
 }
 
 /**
- * Get multiple keys from Redis
+ * Safely delete a key from Redis, handling null clients
  */
-export async function getMultipleKeys(keys: string[]): Promise<(string | null)[]> {
+export async function safeRedisDelete(key: string): Promise<boolean> {
+  const redis = getRedisClient();
+  if (!redis) return false;
+  
   try {
-    const redis = getRedisSingleton().getRedisClient();
-    if (!redis) return keys.map(() => null);
-    return await redis.mget(keys);
-  } catch (error) {
-    console.error(`[REDIS] Error getting multiple keys:`, error);
-    return keys.map(() => null);
-  }
-}
-
-/**
- * Delete a key from Redis
- */
-export async function deleteKey(key: string): Promise<boolean> {
-  try {
-    const redis = getRedisSingleton().getRedisClient();
-    if (!redis) return false;
     await redis.del(key);
     return true;
   } catch (error) {
@@ -78,32 +150,3 @@ export async function deleteKey(key: string): Promise<boolean> {
     return false;
   }
 }
-
-/**
- * Close the Redis connection safely
- */
-export async function closeRedisConnection(): Promise<void> {
-  try {
-    getRedisSingleton().closeRedisSubscriber();
-  } catch (error) {
-    console.error('[REDIS] Error closing Redis connection:', error);
-  }
-}
-
-// Re-export useful types and functions from singleton
-export { ConnectionState, ConnectionEvent } from './singleton';
-export const getEventEmitter = getRedisEventEmitter;
-
-// Constants for cache prefixes and TTLs - must match indexer
-export const CACHE_PREFIXES = {
-  PAIR: 'pair:',
-  TOKEN: 'token:',
-  PROTOCOL: 'protocol:',
-  PAIR_METRICS: 'pair_metrics:'
-};
-
-export const CACHE_TTLS = {
-  SHORT: 60, // 1 minute
-  MEDIUM: 5 * 60, // 5 minutes
-  LONG: 30 * 60 // 30 minutes
-}; 

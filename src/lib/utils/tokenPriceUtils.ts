@@ -7,7 +7,7 @@ export const STABLECOIN_ADDRESSES: string[] = [
   '0x7d984c24d2499d840eb3b7016077164e15e5faa6', // USDT lowercase
   '0x77071ad51ca93fc90e77BCdECE5aa6F1B40fcb21', // USDC
   '0x77071ad51ca93fc90e77bcdece5aa6f1b40fcb21', // USDC lowercase
-].map((address) => address.toLowerCase())
+].map((address) => address?.toLowerCase() || '')
 
 // Map symbols to addresses for easier reference
 export const STABLECOIN_SYMBOLS = ['USDT', 'USDC', 'DAI', 'BUSD', 'TUSD', 'USDC.e', 'FRAX', 'USDP']
@@ -138,8 +138,8 @@ export function processPriceHistoryData(
 /**
  * Check if a token is a stablecoin by address
  */
-export function isStablecoin(address?: string): boolean {
-  if (!address) return false
+export function isStablecoin(address?: string | null): boolean {
+  if (!address) return false;
   return STABLECOIN_ADDRESSES.includes(address.toLowerCase())
 }
 

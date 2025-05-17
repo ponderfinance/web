@@ -31,7 +31,7 @@ export function initRedisRecovery(intervalMs = 30000): void {
   if (healthCheckInterval) {
     clearInterval(healthCheckInterval);
   }
-  
+
   // Set up health check interval that just calls the singleton to ensure it's initialized
   healthCheckInterval = setInterval(() => {
     try {

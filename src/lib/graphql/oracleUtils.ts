@@ -135,12 +135,12 @@ export async function findPair(
     where: {
       OR: [
         {
-          token0: { address: token0Address.toLowerCase() },
-          token1: { address: token1Address.toLowerCase() },
+          token0: { address: token0Address?.toLowerCase() || "" },
+          token1: { address: token1Address?.toLowerCase() || "" },
         },
         {
-          token0: { address: token1Address.toLowerCase() },
-          token1: { address: token0Address.toLowerCase() },
+          token0: { address: token1Address?.toLowerCase() || "" },
+          token1: { address: token0Address?.toLowerCase() || "" },
         },
       ],
     },

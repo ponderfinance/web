@@ -28,7 +28,7 @@ export async function getTokenPriceFromOracle(params: {
     }
 
     // Determine which token we're pricing
-    const isToken0 = tokenAddress.toLowerCase() === pair.token0.address.toLowerCase()
+    const isToken0 = tokenAddress?.toLowerCase() || "" === pair?.token0?.address?.toLowerCase() || ""
     const token = isToken0 ? pair.token0 : pair.token1
     const otherToken = isToken0 ? pair.token1 : pair.token0
 

@@ -1,34 +1,66 @@
 /**
- * Redis Exports Compatibility Layer
- * 
- * This file provides backward compatibility for older imports.
- * It re-exports functions and constants from the centralized Redis implementation.
- * 
- * @deprecated Import from '@/src/lib/redis' instead
+ * Redis exports for consistent usage throughout the application
  */
+import * as Redis from 'ioredis';
+import { EventEmitter } from 'events';
 
-import { getRedisClient as getRedisClientFromConfig } from '@/src/config/redis';
-import { CACHE_PREFIXES, CACHE_TTLS } from '@/src/lib/redis';
+// Constants for cache prefixes and TTLs - must match indexer
+export const CACHE_PREFIXES = {
+  PAIR: 'pair:',
+  TOKEN: 'token:',
+  PROTOCOL: 'protocol:',
+  PAIR_METRICS: 'pair_metrics:',
+  PRICE_CHART: 'price_chart:'
+};
+
+export const CACHE_TTLS = {
+  SHORT: 60, // 1 minute
+  MEDIUM: 5 * 60, // 5 minutes
+  LONG: 30 * 60 // 30 minutes
+};
+
+// Single Redis client instance for the application
+let redisClient: Redis.Redis | null = null;
 
 /**
  * Get or create a Redis client
- * @deprecated Import from '@/src/lib/redis' instead
  */
-export function getRedisClient() {
-  return getRedisClientFromConfig();
+export function getRedisClient(): Redis.Redis {
+  if (!redisClient) {
+    const redisUrl = process.env.REDIS_URL;
+    
+    if (!redisUrl) {
+      console.error('No Redis URL provided in environment variable REDIS_URL');
+      throw new Error('Redis URL not configured');
+    }
+    
+    console.log(`Connecting to Redis at ${redisUrl.includes('@') ? redisUrl.split('@').pop() : 'redis-server'}`);
+    
+    redisClient = new Redis.Redis(redisUrl, {
+      retryStrategy: (times) => {
+        return Math.min(times * 50, 2000);
+      },
+      maxRetriesPerRequest: 3
+    });
+    
+    redisClient.on('error', (err) => {
+      console.error('Redis connection error:', err);
+    });
+    
+    redisClient.on('connect', () => {
+      console.log('Successfully connected to Redis');
+    });
+  }
+  
+  return redisClient;
 }
-
-// Re-export constants
-export { CACHE_PREFIXES, CACHE_TTLS };
 
 /**
  * Get protocol metrics from Redis
- * @deprecated Use MetricsService instead
  */
 export async function getProtocolMetricsFromRedis(): Promise<any | null> {
   try {
     const redis = getRedisClient();
-    if (!redis) return null;
     
     const [
       tvl,
@@ -71,12 +103,10 @@ export async function getProtocolMetricsFromRedis(): Promise<any | null> {
 
 /**
  * Clear protocol metrics cache
- * @deprecated Use CacheManager.invalidateByPrefix instead
  */
 export async function clearProtocolMetricsCache(): Promise<void> {
   try {
     const redis = getRedisClient();
-    if (!redis) return;
     
     const keys = await redis.keys(`${CACHE_PREFIXES.PROTOCOL}*`);
     

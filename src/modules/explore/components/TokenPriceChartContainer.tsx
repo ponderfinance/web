@@ -8,6 +8,7 @@ import { TokenPriceChartContainer_token$key } from '@/src/__generated__/TokenPri
 import { TokenPriceChartContainer_priceChart$key } from '@/src/__generated__/TokenPriceChartContainer_priceChart.graphql'
 import { formatUnits } from 'viem'
 import { useRefreshOnUpdate } from '@/src/hooks/useRefreshOnUpdate'
+import { ConnectionState } from '@/src/lib/redis/eventService'
 
 // Define the fragment for token chart data
 const TokenChartFragment = graphql`
@@ -74,12 +75,18 @@ export default function TokenPriceChartContainer({
   const priceData = useFragment(PriceChartDataFragment, priceChartRef)
   
   // Set up real-time updates for this specific token chart
-  useRefreshOnUpdate({
+  const { connectionState, lastUpdated } = useRefreshOnUpdate({
     entityType: 'token',
     entityId: token?.address?.toLowerCase() || 'global',
     minRefreshInterval: 15000, // 15 seconds minimum between updates
-    shouldRefetch: false
+    shouldRefetch: false,
+    debug: true // Enable debug logging
   });
+  
+  // Log connection state changes
+  useEffect(() => {
+    console.log(`[TokenPriceChart] Connection state: ${connectionState}, last update: ${lastUpdated ? new Date(lastUpdated).toLocaleTimeString() : 'none'}`);
+  }, [connectionState, lastUpdated]);
   
   // Handle timeframe change
   const handleTimeframeChange = (newTimeframe: string) => {
@@ -94,8 +101,27 @@ export default function TokenPriceChartContainer({
     return <TokenChartSkeleton />
   }
 
+  // Show message if connection is suspended
+  const isConnectionSuspended = connectionState === ConnectionState.SUSPENDED;
+
   return (
     <View direction="column" gap={16}>
+      {/* Connection status indicator */}
+      {isConnectionSuspended && (
+        <View 
+          padding={2} 
+          backgroundColor="neutral-faded" 
+          borderRadius="medium"
+          direction="row"
+          align="center"
+          justify="center"
+          gap={2}
+        >
+          <Text variant="body-3" color="warning">
+            Real-time updates temporarily unavailable - using cached data
+          </Text>
+        </View>
+      )}
   
       {/* Chart content */}
       {priceData && priceData.length > 0 ? (

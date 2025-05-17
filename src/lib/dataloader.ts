@@ -18,14 +18,14 @@ export function createLoaders(prisma: PrismaClient) {
     // Loader for tokens by address (lowercase for consistency)
     tokenByAddressLoader: new DataLoader<string, Token | null>(
       async (addresses: readonly string[]) => {
-        const lowerCaseAddresses = addresses.map((a) => a.toLowerCase())
+        const lowerCaseAddresses = addresses.map((a) => a?.toLowerCase?.() || '')
         const tokens = await prisma.token.findMany({
           where: { address: { in: lowerCaseAddresses } },
         })
 
         return addresses.map(
           (address) =>
-            tokens.find((token) => token.address === address.toLowerCase()) || null
+            tokens.find((token) => token.address === (address?.toLowerCase?.() || '')) || null
         )
       }
     ),
@@ -111,14 +111,14 @@ export function createLoaders(prisma: PrismaClient) {
     // Loader for pairs by address (lowercase for consistency)
     pairByAddressLoader: new DataLoader<string, Pair | null>(
       async (addresses: readonly string[]) => {
-        const lowerCaseAddresses = addresses.map((a) => a.toLowerCase())
+        const lowerCaseAddresses = addresses.map((a) => a?.toLowerCase?.() || '')
         const pairs = await prisma.pair.findMany({
           where: { address: { in: lowerCaseAddresses } },
         })
 
         return addresses.map(
           (address) =>
-            pairs.find((pair) => pair.address === address.toLowerCase()) || null
+            pairs.find((pair) => pair.address === (address?.toLowerCase?.() || '')) || null
         )
       }
     ),

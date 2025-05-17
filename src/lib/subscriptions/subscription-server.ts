@@ -1,13 +1,9 @@
 import { EventEmitter } from 'events';
 import Redis from 'ioredis';
+import { REDIS_CHANNELS } from '@/src/constants/redis-channels';
 
-// Define Redis constants - matching the ones in the indexer
-export const REDIS_CHANNELS = {
-  METRICS_UPDATED: 'metrics:updated',
-  PAIR_UPDATED: 'pair:updated',
-  TOKEN_UPDATED: 'token:updated',
-  TRANSACTION_UPDATED: 'transaction:updated'
-};
+// Re-export Redis channels for compatibility
+export { REDIS_CHANNELS };
 
 // Global event emitter and Redis subscriber
 let eventEmitter: EventEmitter | null = null;

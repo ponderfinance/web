@@ -2,366 +2,293 @@
 
 import React, { createContext, useContext, useEffect, useState, useRef } from 'react'
 import { 
-  getRedisSingleton,
+  registerSubscriber,
+  unregisterSubscriber,
+  getSubscriberEventEmitter,
+  REDIS_CHANNELS,
   ConnectionState,
   ConnectionEvent,
-  REDIS_CHANNELS
-} from '@/src/lib/redis/singleton'
+  getConnectionState
+} from '@/src/lib/redis/eventService';
 import { applyStoreUpdate } from '@/src/relay/createRelayEnvironment'
 import { initializeRelayUpdaters } from '@/src/relay/initRelayUpdaters'
 import { getClientEnvironment } from '@/src/lib/relay/environment'
 
-// Define the context type
+// Context type definition
 type RedisSubscriberContextType = {
   metricsLastUpdated: number | null
   pairLastUpdated: Record<string, number>
   tokenLastUpdated: Record<string, number>
   transactionLastUpdated: Record<string, number>
   connectionState: ConnectionState
-  connectionStateTimestamp: number
-  retryCount: number
   refreshData: () => void
-  // Function to check if an entity should be refreshed
   shouldEntityRefresh: (entityType: string, entityId: string, minInterval?: number) => boolean
 }
 
-// Create the context with a default value
+// Create context with default values
 const RedisSubscriberContext = createContext<RedisSubscriberContextType>({
   metricsLastUpdated: null,
   pairLastUpdated: {},
   tokenLastUpdated: {},
   transactionLastUpdated: {},
   connectionState: ConnectionState.DISCONNECTED,
-  connectionStateTimestamp: 0,
-  retryCount: 0,
   refreshData: () => {},
   shouldEntityRefresh: () => false
 })
 
-// Helper to create styled console logs
-const logWithStyle = (message: string, type: 'success' | 'info' | 'error' | 'warning' = 'info') => {
-  if (typeof window === 'undefined') return; // Only log in browser
-  
-  const styles = {
-    success: 'color: #00c853; font-weight: bold; font-size: 14px;',
-    info: 'color: #2196f3; font-weight: bold;',
-    error: 'color: #f44336; font-weight: bold;',
-    warning: 'color: #ff9800; font-weight: bold;'
-  };
-  
-  console.log(`%c${message}`, styles[type]);
-};
-
-// Custom hook to use the Redis subscriber context
+// Custom hook to use the context
 export const useRedisSubscriber = () => useContext(RedisSubscriberContext)
 
-// Improved provider component following best practices
+// Provider component
 export function RedisSubscriberProvider({ children }: { children: React.ReactNode }) {
-  // Get Redis singleton instance
-  const redisSingleton = getRedisSingleton();
-  const eventEmitter = redisSingleton.getEventEmitter();
-  
-  // State to track last update timestamps
+  // Update timestamps
   const [metricsLastUpdated, setMetricsLastUpdated] = useState<number | null>(null)
   const [pairLastUpdated, setPairLastUpdated] = useState<Record<string, number>>({})
   const [tokenLastUpdated, setTokenLastUpdated] = useState<Record<string, number>>({})
   const [transactionLastUpdated, setTransactionLastUpdated] = useState<Record<string, number>>({})
-  const [refreshCounter, setRefreshCounter] = useState(0)
+  const [connectionState, setConnectionState] = useState<ConnectionState>(ConnectionState.DISCONNECTED)
+  const [refreshTrigger, setRefreshTrigger] = useState(0)
   
-  // Connection state
-  const [connectionState, setConnectionState] = useState(ConnectionState.DISCONNECTED)
-  const [connectionStateTimestamp, setConnectionStateTimestamp] = useState(0)
-  const [retryCount, setRetryCount] = useState(0)
-  
-  // Store environment reference to prevent direct hook calls
+  // References
   const environmentRef = useRef<any>(null);
+  const updatesRef = useRef<Record<string, number>>({});
+  const initialized = useRef(false);
+  const pollingTimerRef = useRef<any>(null);
   
-  // Track direct store updates to avoid duplicate refreshes
-  const directUpdatesRef = useRef<Record<string, number>>({})
-  
-  // Track initialization state
-  const isInitializedRef = useRef(false);
-  
-  // Function to check if an entity should be refreshed based on time threshold
-  const shouldEntityRefresh = (entityType: string, entityId: string, minInterval = 5000) => {
-    const key = `${entityType}-${entityId}`
-    const lastDirectUpdate = directUpdatesRef.current[key]
-    const now = Date.now()
-    
-    // If no direct update or enough time has passed, allow refresh
-    return !lastDirectUpdate || (now - lastDirectUpdate) > minInterval
-  }
-  
-  // Function to force refresh all data
-  const refreshData = () => {
-    setRefreshCounter(prev => prev + 1)
-  }
-  
-  // Initialize the environment safely
+  // Get Relay environment
   useEffect(() => {
     if (typeof window === 'undefined') return;
     
     try {
-      // Get the environment directly without using hooks
       environmentRef.current = getClientEnvironment();
-      
-      if (environmentRef.current) {
-        logWithStyle('✅ RedisSubscriber: Got Relay environment successfully', 'success');
-      } else {
-        logWithStyle('⚠️ RedisSubscriber: Relay environment not available', 'warning');
-      }
+      console.log('✅ Got Relay environment');
     } catch (error) {
       console.error('Error accessing Relay environment:', error);
     }
   }, []);
   
-  // Track connection state changes
+  // Function to check if an entity should be refreshed
+  const shouldEntityRefresh = (entityType: string, entityId: string, minInterval = 5000) => {
+    const key = `${entityType}-${entityId}`;
+    const lastUpdate = updatesRef.current[key];
+    const now = Date.now();
+    
+    return !lastUpdate || (now - lastUpdate) > minInterval;
+  };
+  
+  // Force refresh all data
+  const refreshData = () => {
+    setRefreshTrigger(prev => prev + 1);
+  };
+  
+  // Setup polling fallback when connection is suspended or disconnected for too long
   useEffect(() => {
-    // Skip SSR
     if (typeof window === 'undefined') return;
     
-    // Handler for connection events
-    const handleConnectionChange = (eventData: any) => {
-      // Get the current state
-      const { state, timestamp, retryCount } = redisSingleton.getConnectionState();
+    // Clear any existing polling timer
+    if (pollingTimerRef.current) {
+      clearInterval(pollingTimerRef.current);
+      pollingTimerRef.current = null;
+    }
+    
+    // Start polling if suspended or disconnected
+    if (connectionState === ConnectionState.SUSPENDED) {
+      console.log('🔄 Connection suspended, using polling fallback');
       
-      // Update our local state
-      setConnectionState(state);
-      setConnectionStateTimestamp(timestamp);
-      setRetryCount(retryCount);
+      // Set up metrics polling
+      pollingTimerRef.current = setInterval(async () => {
+        try {
+          // Get metrics via GraphQL
+          const result = await fetch('/api/graphql', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              query: `query ProtocolMetrics {
+                protocol {
+                  totalValueLockedUSD
+                  dailyVolumeUSD
+                  weeklyVolumeUSD
+                }
+              }`
+            })
+          }).then(r => r.json());
+          
+          if (result?.data?.protocol) {
+            console.log('📊 Polling: got metrics data');
+            setMetricsLastUpdated(Date.now());
+            
+            // Update store if possible
+            if (environmentRef.current) {
+              applyStoreUpdate('global-metrics', { 
+                metrics: result.data.protocol 
+              }, environmentRef.current);
+            }
+          }
+        } catch (error) {
+          console.error('Error polling metrics:', error);
+        }
+      }, 30000); // Poll every 30 seconds
       
-      // Log connection changes with an appropriate style
-      switch (state) {
-        case ConnectionState.CONNECTED:
-          logWithStyle('✅ Connected to real-time update service', 'success');
-          break;
-        case ConnectionState.CONNECTING:
-          logWithStyle(`🔄 Connecting to real-time service (attempt ${retryCount})`, 'info');
-          break;
-        case ConnectionState.DISCONNECTED:
-          logWithStyle('⚠️ Disconnected from real-time update service', 'warning');
-          break;
-        case ConnectionState.SUSPENDED:
-          logWithStyle('❌ Real-time connection suspended temporarily', 'error');
-          break;
-      }
+      // Clean up on unmount
+      return () => {
+        if (pollingTimerRef.current) {
+          clearInterval(pollingTimerRef.current);
+        }
+      };
+    }
+  }, [connectionState]);
+  
+  // Handle connection state changes
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    
+    const handleConnectionEvent = () => {
+      const currentState = getConnectionState();
+      setConnectionState(currentState);
     };
     
-    // Listen to all connection events
-    redisSingleton.onConnectionEvent(ConnectionEvent.CONNECTED, handleConnectionChange);
-    redisSingleton.onConnectionEvent(ConnectionEvent.DISCONNECTED, handleConnectionChange);
-    redisSingleton.onConnectionEvent(ConnectionEvent.RECONNECTING, handleConnectionChange);
-    redisSingleton.onConnectionEvent(ConnectionEvent.SUSPENDED, handleConnectionChange);
-    redisSingleton.onConnectionEvent(ConnectionEvent.ERROR, handleConnectionChange);
+    // Listen to connection events
+    const emitter = getSubscriberEventEmitter();
+    emitter.on(ConnectionEvent.CONNECTED, handleConnectionEvent);
+    emitter.on(ConnectionEvent.DISCONNECTED, handleConnectionEvent);
+    emitter.on(ConnectionEvent.ERROR, handleConnectionEvent);
+    emitter.on(ConnectionEvent.SUSPENDED, handleConnectionEvent);
     
     // Set initial state
-    const initialState = redisSingleton.getConnectionState();
-    setConnectionState(initialState.state);
-    setConnectionStateTimestamp(initialState.timestamp);
-    setRetryCount(initialState.retryCount);
+    setConnectionState(getConnectionState());
     
-    // Cleanup event listeners
     return () => {
-      eventEmitter.off(ConnectionEvent.CONNECTED, handleConnectionChange);
-      eventEmitter.off(ConnectionEvent.DISCONNECTED, handleConnectionChange);
-      eventEmitter.off(ConnectionEvent.RECONNECTING, handleConnectionChange);
-      eventEmitter.off(ConnectionEvent.SUSPENDED, handleConnectionChange);
-      eventEmitter.off(ConnectionEvent.ERROR, handleConnectionChange);
+      emitter.off(ConnectionEvent.CONNECTED, handleConnectionEvent);
+      emitter.off(ConnectionEvent.DISCONNECTED, handleConnectionEvent);
+      emitter.off(ConnectionEvent.ERROR, handleConnectionEvent);
+      emitter.off(ConnectionEvent.SUSPENDED, handleConnectionEvent);
     };
-  }, [redisSingleton, eventEmitter]);
+  }, []);
   
-  // Initialize subscriber, event handlers, and cleanup - only once
+  // Set up event handlers for real-time updates
   useEffect(() => {
-    // Skip SSR
-    if (typeof window === 'undefined') return;
+    if (typeof window === 'undefined' || initialized.current) return;
     
-    logWithStyle('🚀 Initializing Real-Time Update System...', 'info');
+    console.log('🚀 Initializing real-time update handlers');
+    initialized.current = true;
     
-    // Register as a subscriber - this tracks active subscriptions
-    redisSingleton.registerSubscriber();
+    // Register as a subscriber
+    registerSubscriber();
     
-    // Register all store updaters to handle real-time updates
+    // Initialize Relay updaters
     initializeRelayUpdaters();
     
-    // Mark as initialized to prevent re-initialization
-    isInitializedRef.current = true;
-    
-    // Define handler functions
-    const metricsHandler = (data: any) => {
-      // Skip if connection is suspended
-      if (connectionState === ConnectionState.SUSPENDED) return;
+    // Metrics update handler
+    const handleMetricsUpdate = (data: any) => {
+      console.log('📈 Metrics update received');
       
-      logWithStyle('📈 Received protocol metrics update', 'info');
-      
+      // Try direct store update
       let updated = false;
-      
-      if (environmentRef.current && data.metrics) {
-        // Try to update protocol metrics directly in the store
-        updated = applyStoreUpdate('global-metrics', data.metrics, environmentRef.current);
+      if (environmentRef.current) {
+        updated = applyStoreUpdate('global-metrics', data, environmentRef.current);
         if (updated) {
-          logWithStyle('✅ Applied direct store update for global metrics', 'success');
-          // Track this direct update
-          directUpdatesRef.current['metrics-global'] = Date.now();
+          updatesRef.current['metrics-global'] = Date.now();
         }
       }
       
-      // Only update timestamp if direct update failed or if it's been a while
-      if (!updated || shouldEntityRefresh('metrics', 'global', 15000)) {
-        setMetricsLastUpdated(data.timestamp || Date.now());
-      }
+      // Update timestamp
+      setMetricsLastUpdated(Date.now());
     };
     
-    const pairHandler = (data: any) => {
-      // Skip if connection is suspended
-      if (connectionState === ConnectionState.SUSPENDED) return;
-      
-      // Extract entity ID from the data
+    // Pair update handler
+    const handlePairUpdate = (data: any) => {
       const entityId = data.entityId || data.pairId;
-      if (!entityId) {
-        console.warn('Pair update missing entityId/pairId', data);
-        return;
-      }
+      if (!entityId) return;
       
-      logWithStyle(`🔄 Received pair update for ${entityId.slice(0, 6)}...`, 'info');
-      
+      // Try direct store update
       let updated = false;
-      
       if (environmentRef.current) {
         updated = applyStoreUpdate(`pair-${entityId}`, data, environmentRef.current);
         if (updated) {
-          logWithStyle(`✅ Applied direct store update for pair ${entityId.slice(0, 6)}...`, 'success');
-          // Track this direct update
-          directUpdatesRef.current[`pair-${entityId}`] = Date.now();
+          updatesRef.current[`pair-${entityId}`] = Date.now();
         }
       }
       
-      // Only update timestamps if direct update failed or we need to refresh
-      if (!updated || shouldEntityRefresh('pair', entityId, 10000)) {
-        setPairLastUpdated(prev => ({
-          ...prev,
-          [entityId]: data.timestamp || Date.now()
-        }));
-      }
+      // Update timestamp
+      setPairLastUpdated(prev => ({
+        ...prev,
+        [entityId]: Date.now()
+      }));
     };
     
-    const tokenHandler = (data: any) => {
-      // Skip if connection is suspended
-      if (connectionState === ConnectionState.SUSPENDED) return;
-      
-      // Extract entity ID from the data
+    // Token update handler
+    const handleTokenUpdate = (data: any) => {
       const entityId = data.entityId || data.tokenId;
-      if (!entityId) {
-        console.warn('Token update missing entityId/tokenId', data);
-        return;
-      }
+      if (!entityId) return;
       
-      logWithStyle(`💱 Received token update for ${entityId.slice(0, 6)}...`, 'info');
-      
+      // Try direct store update
       let updated = false;
-      
       if (environmentRef.current) {
         updated = applyStoreUpdate(`token-price-${entityId}`, data, environmentRef.current);
         if (updated) {
-          logWithStyle(`✅ Applied direct store update for token ${entityId.slice(0, 6)}...`, 'success');
-          // Track this direct update
-          directUpdatesRef.current[`token-${entityId}`] = Date.now();
+          updatesRef.current[`token-${entityId}`] = Date.now();
         }
       }
       
-      // Only update token timestamps if direct update failed
-      if (!updated || shouldEntityRefresh('token', entityId)) {
-        setTokenLastUpdated(prev => ({
-          ...prev,
-          [entityId]: data.timestamp || Date.now()
-        }));
-      }
+      // Update timestamp
+      setTokenLastUpdated(prev => ({
+        ...prev,
+        [entityId]: Date.now()
+      }));
     };
     
-    const transactionHandler = (data: any) => {
-      // Skip if connection is suspended
-      if (connectionState === ConnectionState.SUSPENDED) return;
-      
-      // Handle different transaction message formats
+    // Transaction update handler
+    const handleTransactionUpdate = (data: any) => {
       const entityId = data.entityId || data.transactionId;
-      const txHash = data.txHash || '';
-      const timestamp = data.timestamp || Date.now();
+      if (!entityId) return;
       
-      if (entityId) {
-        logWithStyle(`💸 Transaction update: ${txHash ? txHash.slice(0, 8) : entityId.slice(0, 8)}...`, 'info');
-        
-        let updated = false;
-        
-        if (environmentRef.current) {
-          // Normalize the data for store update
-          const normalizedData = { 
-            ...data,
-            entityId: entityId
-          };
-          
-          updated = applyStoreUpdate(`transaction-${entityId}`, normalizedData, environmentRef.current);
-          if (updated) {
-            logWithStyle(`✅ Applied direct update for transaction ${entityId.slice(0, 8)}...`, 'success');
-            // Track this direct update
-            directUpdatesRef.current[`transaction-${entityId}`] = timestamp;
-          }
+      // Try direct store update
+      let updated = false;
+      if (environmentRef.current) {
+        updated = applyStoreUpdate(`transaction-${entityId}`, data, environmentRef.current);
+        if (updated) {
+          updatesRef.current[`transaction-${entityId}`] = Date.now();
         }
-        
-        // Only update transaction timestamps if direct update failed or we need to
-        if (!updated || shouldEntityRefresh('transaction', entityId, 2000)) { 
-          setTransactionLastUpdated(prev => ({
-            ...prev,
-            [entityId]: timestamp
-          }));
-        }
-      } else {
-        console.warn('Transaction update missing entityId/transactionId', data);
       }
+      
+      // Update timestamp
+      setTransactionLastUpdated(prev => ({
+        ...prev,
+        [entityId]: Date.now()
+      }));
     };
     
-    try {
-      // Initialize Redis subscriber through the singleton
-      redisSingleton.initRedisSubscriber(false); // Client mode
-      
-      // Set up event handlers
-      redisSingleton.onMetricsUpdated(metricsHandler);
-      redisSingleton.onPairUpdated(pairHandler);
-      redisSingleton.onTokenUpdated(tokenHandler);
-      redisSingleton.onTransactionUpdated(transactionHandler);
-    } catch (error) {
-      console.error('Error setting up real-time updates:', error);
-    }
+    // Set up event listeners
+    const emitter = getSubscriberEventEmitter();
+    emitter.on(REDIS_CHANNELS.METRICS_UPDATED, handleMetricsUpdate);
+    emitter.on(REDIS_CHANNELS.PAIR_UPDATED, handlePairUpdate);
+    emitter.on(REDIS_CHANNELS.TOKEN_UPDATED, handleTokenUpdate);
+    emitter.on(REDIS_CHANNELS.TRANSACTION_UPDATED, handleTransactionUpdate);
     
-    // Cleanup function
+    // Clean up
     return () => {
-      // Remove event handlers
-      eventEmitter.removeListener('metrics:updated', metricsHandler);
-      eventEmitter.removeListener('pair:updated', pairHandler);
-      eventEmitter.removeListener('token:updated', tokenHandler);
-      eventEmitter.removeListener('transaction:updated', transactionHandler);
+      emitter.off(REDIS_CHANNELS.METRICS_UPDATED, handleMetricsUpdate);
+      emitter.off(REDIS_CHANNELS.PAIR_UPDATED, handlePairUpdate);
+      emitter.off(REDIS_CHANNELS.TOKEN_UPDATED, handleTokenUpdate);
+      emitter.off(REDIS_CHANNELS.TRANSACTION_UPDATED, handleTransactionUpdate);
       
-      // Unregister subscriber
-      if (redisSingleton.unregisterSubscriber()) {
-        logWithStyle('👋 Closing real-time connection as all subscribers are gone', 'info');
-        redisSingleton.closeRedisSubscriber();
-      }
+      unregisterSubscriber();
     };
-  }, []); // Only run once on mount, don't recreate connections unnecessarily
+  }, []);
   
-  // Context value with connection state
-  const value = {
+  // Context value
+  const contextValue = {
     metricsLastUpdated,
     pairLastUpdated,
     tokenLastUpdated,
     transactionLastUpdated,
     connectionState,
-    connectionStateTimestamp,
-    retryCount,
     refreshData,
     shouldEntityRefresh
   };
   
   return (
-    <RedisSubscriberContext.Provider value={value}>
+    <RedisSubscriberContext.Provider value={contextValue}>
       {children}
     </RedisSubscriberContext.Provider>
   );

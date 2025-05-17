@@ -8,7 +8,7 @@ import { View, Text, Skeleton } from 'reshaped'
 import { tokenFragment } from '@/src/components/TokenPair'
 import { useRefreshOnUpdate } from '@/src/hooks/useRefreshOnUpdate'
 import ScrollableTable from '@/src/components/ScrollableTable'
-import { registerSubscriber, unregisterSubscriber } from '@/src/lib/redis/subscriber'
+import { registerRedisConnection, unregisterRedisConnection } from '@/src/lib/redis'
 import { withRelayBoundary } from '@/src/lib/relay/withRelayBoundary'
 
 export const transactionsPageQuery = graphql`
@@ -186,9 +186,9 @@ function TransactionsPageContent() {
   
   // Register for updates
   useEffect(() => {
-    registerSubscriber();
+    registerRedisConnection();
     return () => {
-      unregisterSubscriber();
+      unregisterRedisConnection();
     };
   }, []);
   

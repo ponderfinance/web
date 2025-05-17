@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState, useRef } from 'react';
 import { useRedisSubscriber } from '@/src/providers/RedisSubscriberProvider';
 import { getClientEnvironment } from '@/src/lib/relay/environment';
-import { ConnectionState } from '@/src/lib/redis/singleton';
+import { ConnectionState } from '@/src/lib/redis/eventService';
 
 type EntityType = 'token' | 'pair' | 'transaction' | 'metrics';
 

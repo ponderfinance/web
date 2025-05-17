@@ -1,168 +1,155 @@
-# Redis Usage Guidelines
+# Redis Usage Guide for Ponder DEX
+
+This guide explains how to use Redis for real-time updates in the Ponder DEX application.
 
 ## Overview
 
-This application uses a singleton Redis connection pattern to ensure reliable connections and prevent connection storms. 
-All Redis operations should go through our centralized Redis API to ensure proper connection management.
+Ponder DEX uses Redis for real-time updates to provide a responsive user experience. The implementation:
 
-## Key Principles
+1. Uses a singleton pattern for reliable connection management
+2. Provides graceful fallback to GraphQL polling when Redis is unavailable
+3. Handles connection errors with automatic recovery
+4. Uses Server-Sent Events (SSE) for client-side real-time updates
 
-1. **Never create direct Redis connections**:
-   ```typescript
-   // ❌ BAD: Creating direct connections
-   import Redis from 'ioredis';
-   const redis = new Redis(process.env.REDIS_URL);
-   
-   // ✅ GOOD: Using the shared singleton
-   import { getKey, setKey } from '@/src/lib/redis';
-   const value = await getKey('my-key');
+## Architecture
+
+The Redis implementation follows a robust design:
+
+- **Server-side**: Direct Redis connection with pub/sub for updates
+- **Client-side**: Server-Sent Events (SSE) for real-time updates
+- **Relay Integration**: Updates are applied directly to the Relay store when possible
+
+## Key Components
+
+### Redis Channels
+
+Redis channels are defined in a central location:
+
+```typescript
+// src/constants/redis-channels.ts
+export const REDIS_CHANNELS = {
+  METRICS_UPDATED: 'metrics:updated',
+  PAIR_UPDATED: 'pair:updated',
+  TOKEN_UPDATED: 'token:updated',
+  TRANSACTION_UPDATED: 'transaction:updated'
+};
+```
+
+### EventService
+
+The `eventService.ts` module provides a singleton for managing Redis connections:
+
+```typescript
+// src/lib/redis/eventService.ts
+import { REDIS_CHANNELS } from '@/src/constants/redis-channels';
+
+// Get the singleton event service
+const eventService = getSubscriberClient();
+
+// Register a component that uses real-time updates
+registerSubscriber();
+
+// Listen for updates
+eventService.on(REDIS_CHANNELS.TOKEN_UPDATED, handleTokenUpdate);
+
+// Unregister when component unmounts
+unregisterSubscriber();
+```
+
+### RedisSubscriberProvider
+
+The `RedisSubscriberProvider` component manages real-time updates for the entire application:
+
+```jsx
+// In _app.tsx or layout.tsx
+import { RedisSubscriberProvider } from '@/src/providers/RedisSubscriberProvider';
+
+function App({ Component, pageProps }) {
+  return (
+    <RedisSubscriberProvider>
+      <Component {...pageProps} />
+    </RedisSubscriberProvider>
+  );
+}
+```
+
+### useRefreshOnUpdate Hook
+
+Use this hook in components that need real-time updates:
+
+```jsx
+function TokenDetail({ tokenId }) {
+  const { refresh, connectionState } = useRefreshOnUpdate({
+    entityType: 'token',
+    entityId: tokenId,
+    onUpdate: () => loadQuery({ tokenId })
+  });
+  
+  // Show a message if connection is suspended
+  if (connectionState === ConnectionState.SUSPENDED) {
+    return <div>Using cached data - real-time updates unavailable</div>;
+  }
+  
+  // Rest of component...
+}
+```
+
+## Error Handling & Recovery
+
+The Redis implementation includes robust error handling:
+
+### Connection Error Recovery
+
+- **Exponential Backoff**: Retry intervals increase with each failed attempt
+- **Connection Storm Prevention**: Debouncing of connection attempts
+- **Circuit Breaking**: After multiple failures, suspends reconnection attempts
+- **Heartbeat Detection**: Identifies stale connections and reconnects
+
+### Fallback Mechanism
+
+When Redis is unavailable:
+
+1. Components automatically fall back to GraphQL polling
+2. UI provides feedback about the connection state
+3. When connection is restored, real-time updates resume
+
+## Testing Redis Locally
+
+To test Redis locally:
+
+1. Install Redis: `brew install redis` (macOS) or use Docker
+2. Start Redis: `redis-server` or `docker run -p 6379:6379 redis`
+3. Set the `REDIS_URL` environment variable in `.env.local`:
    ```
-
-2. **Use the Redis helper functions** for common operations:
-   ```typescript
-   import { getKey, setKey, getMultipleKeys, deleteKey } from '@/src/lib/redis';
-   
-   // Get a value
-   const value = await getKey('user:123');
-   
-   // Set a value with optional TTL
-   await setKey('user:123', JSON.stringify(userData), 3600); // 1 hour TTL
-   
-   // Get multiple values
-   const values = await getMultipleKeys(['user:123', 'user:456']);
-   
-   // Delete a key
-   await deleteKey('user:123');
+   REDIS_URL=redis://localhost:6379
    ```
-
-3. **For real-time updates**, use the RedisSubscriberProvider:
-   ```tsx
-   import { useRedisSubscriber } from '@/src/providers/RedisSubscriberProvider';
-   
-   function MyComponent() {
-     const { tokenLastUpdated, connectionState } = useRedisSubscriber();
-     
-     // Check if token was updated
-     useEffect(() => {
-       if (tokenLastUpdated['token-id']) {
-         // Refresh data
-       }
-     }, [tokenLastUpdated]);
-     
-     // Check connection state
-     if (connectionState === 'suspended') {
-       return <div>Connection temporarily unavailable</div>;
-     }
-     
-     return <div>Your component</div>;
-   }
-   ```
-
-## Connection Management
-
-The Redis connection is managed by a singleton in `src/lib/redis/singleton.ts` which handles:
-
-- Connection pooling and reuse
-- Automatic reconnection with exponential backoff
-- Connection state tracking (connected, connecting, disconnected, suspended)
-- ECONNRESET error handling
-- Connection storm prevention
 
 ## Troubleshooting
 
-### Connection Issues
+### ECONNRESET Errors
 
-If you're experiencing connection issues:
+ECONNRESET errors are handled with a controlled reconnection strategy:
 
-1. **Check the connection state**:
-   ```typescript
-   import { ConnectionState } from '@/src/lib/redis';
-   const { connectionState } = useRedisSubscriber();
-   
-   if (connectionState === ConnectionState.SUSPENDED) {
-     // Connection is in a cooldown period after multiple failures
-   }
-   ```
+1. The connection is not immediately reconnected
+2. A delay is introduced before attempting reconnection
+3. The delay increases with each failed attempt
+4. After multiple failures, reconnection is suspended for a longer period
 
-2. **Ensure proper error handling**:
-   ```typescript
-   try {
-     const value = await getKey('my-key');
-     // Use value if available
-     if (value) {
-       // Do something
-     } else {
-       // Handle missing value
-     }
-   } catch (error) {
-     // Handle unexpected errors
-     console.error('Redis operation failed:', error);
-   }
-   ```
+### Connection Suspended
 
-3. **Never implement custom reconnection logic**:
-   The singleton handles reconnection automatically. Adding custom logic can create connection storms.
+If the connection enters the `SUSPENDED` state:
+
+1. Polling fallback automatically activates
+2. User interface shows appropriate messages
+3. After the suspension period, connection attempts resume
+4. Data will remain available, but updates may be delayed
 
 ## Best Practices
 
-1. **Cache sensibly**:
-   - Use appropriate TTLs for different types of data
-   - Consider using the predefined TTL constants:
-     ```typescript
-     import { CACHE_TTLS } from '@/src/lib/redis';
-     
-     // Short-lived cache (1 minute)
-     await setKey('temp-data', data, CACHE_TTLS.SHORT);
-     
-     // Medium-lived cache (5 minutes)
-     await setKey('user-preferences', prefs, CACHE_TTLS.MEDIUM);
-     
-     // Long-lived cache (30 minutes)
-     await setKey('static-data', data, CACHE_TTLS.LONG);
-     ```
+1. Always use the `useRefreshOnUpdate` hook for components needing real-time updates
+2. Import Redis channels from the central constants file
+3. Handle connection state changes in the UI
+4. Provide fallback options when real-time updates are unavailable
+5. Clean up listeners when components unmount
 
-2. **Use consistent key prefixes**:
-   - Use the predefined prefixes for common entity types:
-     ```typescript
-     import { CACHE_PREFIXES } from '@/src/lib/redis';
-     
-     // Token data
-     const tokenKey = `${CACHE_PREFIXES.TOKEN}${tokenId}`;
-     
-     // Pair data
-     const pairKey = `${CACHE_PREFIXES.PAIR}${pairId}`;
-     ```
-
-3. **Handle missing data gracefully**:
-   ```typescript
-   const value = await getKey('my-key');
-   if (!value) {
-     // Fallback to database or API
-     const freshData = await fetchFromDatabase();
-     // Update cache for next time
-     await setKey('my-key', JSON.stringify(freshData), CACHE_TTLS.MEDIUM);
-     return freshData;
-   }
-   return JSON.parse(value);
-   ```
-
-## Architecture Overview
-
-Our Redis implementation follows a layered approach:
-
-1. **Singleton Layer** (`singleton.ts`): 
-   - Core connection management
-   - Handles reconnection, errors, and state tracking
-   - Never import this directly unless needed for advanced use cases
-
-2. **API Layer** (`index.ts`):
-   - Public API with helper functions for common operations
-   - Error handling and logging
-   - This is the primary interface developers should use
-
-3. **Provider Layer** (`RedisSubscriberProvider.tsx`):
-   - Handles real-time updates through SSE
-   - Manages subscription to Redis PubSub channels
-   - Provides React context for connection state and update timestamps
-
-By following these guidelines, we ensure reliable Redis connections and prevent the connection issues that previously affected the application. 
+By following these guidelines, your components will gracefully handle Redis connection issues while maintaining a good user experience. 

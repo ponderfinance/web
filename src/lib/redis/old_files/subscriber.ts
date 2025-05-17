@@ -1,8 +1,12 @@
 import { EventEmitter } from 'events';
 import Redis from 'ioredis';
+import { REDIS_CHANNELS } from '@/src/constants/redis-channels';
+
+// Re-export for compatibility
+export { REDIS_CHANNELS };
 
 // Define Redis channels
-export const REDIS_CHANNELS = {
+export const REDIS_CHANNELS_LOCAL = {
   METRICS_UPDATED: 'metrics:updated',
   PAIR_UPDATED: 'pair:updated',
   TOKEN_UPDATED: 'token:updated',
@@ -263,13 +267,13 @@ export function initRedisSubscriber(): any {
             }
             
             // Route the message to the appropriate event based on type
-            if (data.type === REDIS_CHANNELS.METRICS_UPDATED && data.payload) {
+            if (data.type === REDIS_CHANNELS_LOCAL.METRICS_UPDATED && data.payload) {
               eventEmitter.emit('metrics:updated', data.payload);
-            } else if (data.type === REDIS_CHANNELS.PAIR_UPDATED && data.payload) {
+            } else if (data.type === REDIS_CHANNELS_LOCAL.PAIR_UPDATED && data.payload) {
               eventEmitter.emit('pair:updated', data.payload);
-            } else if (data.type === REDIS_CHANNELS.TOKEN_UPDATED && data.payload) {
+            } else if (data.type === REDIS_CHANNELS_LOCAL.TOKEN_UPDATED && data.payload) {
               eventEmitter.emit('token:updated', data.payload);
-            } else if (data.type === REDIS_CHANNELS.TRANSACTION_UPDATED && data.payload) {
+            } else if (data.type === REDIS_CHANNELS_LOCAL.TRANSACTION_UPDATED && data.payload) {
               logWithStyle(`📊 Received transaction update: ${data.payload.txHash?.slice(0, 8) || 'unknown'}...`, 'info');
               eventEmitter.emit('transaction:updated', data.payload);
             } else {
@@ -414,7 +418,7 @@ export function initRedisSubscriber(): any {
           connectionRetryCount = 0; // Reset retry count on successful connection
           
           // Subscribe to all update channels
-          const channels = Object.values(REDIS_CHANNELS);
+          const channels = Object.values(REDIS_CHANNELS_LOCAL);
           if (redisSubscriber) {
             redisSubscriber.subscribe(...channels);
             console.log('[SERVER] Subscribed to channels:', channels);
@@ -428,13 +432,13 @@ export function initRedisSubscriber(): any {
                 const data = JSON.parse(message);
                 
                 // Emit events based on the channel
-                if (channel === REDIS_CHANNELS.METRICS_UPDATED) {
+                if (channel === REDIS_CHANNELS_LOCAL.METRICS_UPDATED) {
                   eventEmitter.emit('metrics:updated', data);
-                } else if (channel === REDIS_CHANNELS.PAIR_UPDATED) {
+                } else if (channel === REDIS_CHANNELS_LOCAL.PAIR_UPDATED) {
                   eventEmitter.emit('pair:updated', data);
-                } else if (channel === REDIS_CHANNELS.TOKEN_UPDATED) {
+                } else if (channel === REDIS_CHANNELS_LOCAL.TOKEN_UPDATED) {
                   eventEmitter.emit('token:updated', data);
-                } else if (channel === REDIS_CHANNELS.TRANSACTION_UPDATED) {
+                } else if (channel === REDIS_CHANNELS_LOCAL.TRANSACTION_UPDATED) {
                   eventEmitter.emit('transaction:updated', data);
                 }
               } catch (error) {

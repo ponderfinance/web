@@ -21,7 +21,7 @@
  */
 
 import { formatUnits, parseUnits } from 'viem'
-import { getRedisClient } from '@/src/lib/redis/client'
+import { getKey, setKey, getMultipleKeys, getRedisClient } from '@/src/lib/redis'
 import prismaClient from '@/src/lib/db/prisma'
 import { createPublicClient, http } from 'viem'
 import { CURRENT_CHAIN } from '@/src/constants/chains'
@@ -146,12 +146,11 @@ export const TokenPriceService = {
    */
   async getTokenPricesUSDBulk(tokenIds: string[]): Promise<Record<string, string>> {
     try {
-      const redis = getRedisClient()
       const results: Record<string, string> = {}
       
       // Step 1: Try to get all prices from Redis cache in one batch
       const cacheKeys = tokenIds.map(id => `token:${id}:priceUSD`)
-      const cachedPrices = await redis.mget(cacheKeys)
+      const cachedPrices = await getMultipleKeys(cacheKeys)
       
       // Process cached results and identify missing prices
       const missingPriceIds: string[] = []
@@ -388,21 +387,19 @@ export const TokenPriceService = {
    */
   async getCachedTokenPrice(tokenId: string): Promise<number | null> {
     try {
-      const redis = getRedisClient()
       const cacheKey = `token:${tokenId}:priceUSD`
-
-      const cachedValue = await redis.get(cacheKey)
-      if (cachedValue) {
-        const price = parseFloat(cachedValue)
-        // Validate the cached price
-        if (!isNaN(price) && price >= 0) {
+      const cached = await getKey(cacheKey)
+      
+      if (cached) {
+        const price = parseFloat(cached)
+        if (!isNaN(price)) {
           return price
         }
       }
 
       return null
     } catch (error) {
-      console.error(`Error getting cached price for token ${tokenId}:`, error)
+      console.error(`Error getting cached token price for ${tokenId}:`, error)
       return null
     }
   },
@@ -412,17 +409,9 @@ export const TokenPriceService = {
    */
   async cacheTokenPrice(tokenId: string, price: number, ttlSeconds: number = CACHE_TTL_SECONDS): Promise<void> {
     try {
-      const redis = getRedisClient()
-      const cacheKey = `token:${tokenId}:priceUSD`
-
-      // Only cache valid prices
-      if (!isNaN(price) && price > 0 && price < 1e10) {
-        await redis.set(cacheKey, price.toString(), 'EX', ttlSeconds)
-      } else {
-        console.warn(`Invalid price ${price} for token ${tokenId} - not caching`)
-      }
+      await setKey(`token:${tokenId}:priceUSD`, price.toString(), ttlSeconds)
     } catch (error) {
-      console.error(`Error caching price for token ${tokenId}:`, error)
+      console.error(`Error caching token price for ${tokenId}:`, error)
     }
   },
 
@@ -434,20 +423,13 @@ export const TokenPriceService = {
     ttlSeconds: number = CACHE_TTL_SECONDS
   ): Promise<void> {
     try {
-      const redis = getRedisClient()
-      const pipeline = redis.pipeline()
-
-      // Add all prices to the pipeline
-      for (const { tokenId, price } of prices) {
-        const cacheKey = `token:${tokenId}:priceUSD`
-        pipeline.set(cacheKey, price.toString(), 'EX', ttlSeconds)
-      }
-
-      // Execute all commands in the pipeline
-      await pipeline.exec()
+      const promises = prices.map(({ tokenId, price }) => {
+        return this.cacheTokenPrice(tokenId, price, ttlSeconds)
+      })
+      
+      await Promise.all(promises)
     } catch (error) {
       console.error('Error caching token prices in bulk:', error)
-      // Non-blocking - we don't throw here as caching failures shouldn't break the app
     }
   },
 
@@ -1045,15 +1027,21 @@ export const TokenPriceService = {
   },
 
   /**
-   * Clear Redis cache for token prices
+   * Clear all token price caches
    */
   async clearTokenPriceCache(): Promise<void> {
     try {
+      // We would need to list keys with a pattern and delete them
+      // With our high-level API, we can't do this directly
       const redis = getRedisClient()
+      if (redis) {
       const keys = await redis.keys('token:*:priceUSD')
       if (keys.length > 0) {
         await redis.del(...keys)
-        console.log(`Cleared ${keys.length} token price cache entries`)
+          console.log(`Cleared ${keys.length} token price cache keys`)
+        }
+      } else {
+        console.warn('Redis client not available, skipping token price cache clearing')
       }
     } catch (error) {
       console.error('Error clearing token price cache:', error)

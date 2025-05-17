@@ -1,10 +1,9 @@
 /**
- * Standardized Redis Channel Names
+ * Redis Channels
  * 
- * This file contains the standard channel names used across both 
- * the indexer and frontend applications.
- * 
- * DO NOT modify these values without updating the indexer counterpart.
+ * This file defines the Redis channels used for real-time updates.
+ * Import this from any file that needs to use Redis channels to avoid
+ * duplicate declarations.
  */
 
 export const REDIS_CHANNELS = {

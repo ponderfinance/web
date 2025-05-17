@@ -8,8 +8,7 @@
  * - Cache statistics and monitoring
  */
 
-import { Redis } from 'ioredis';
-import { getRedisClient } from '@/src/lib/redis/client';
+import { getKey, setKey, getMultipleKeys, deleteKey, getRedisClient } from '@/src/lib/redis';
 import { createHash } from 'crypto';
 
 // Default TTL values (in seconds)
@@ -162,8 +161,7 @@ export const CacheManager = {
     // Try Redis next
     if (useRedis) {
       try {
-        const redis = getRedisClient();
-        const redisResult = await redis.get(key);
+        const redisResult = await getKey(key);
         
         if (redisResult) {
           stats.hits.redis++;
@@ -226,13 +224,12 @@ export const CacheManager = {
     // Try Redis for the items not found in memory
     if (useRedis) {
       try {
-        const redis = getRedisClient();
         const keys = missedIds.map(id => 
           generateCacheKey(prefix, id, subKey, version)
         );
         
         if (keys.length > 0) {
-          const redisResults = await redis.mget(...keys);
+          const redisResults = await getMultipleKeys(keys);
           
           redisResults.forEach((redisResult, index) => {
             if (redisResult) {
@@ -252,7 +249,7 @@ export const CacheManager = {
           });
         }
       } catch (error) {
-        console.error(`Redis cache bulk get error:`, error);
+        console.error('Redis cache getBulk error:', error);
       }
     }
 
@@ -260,7 +257,7 @@ export const CacheManager = {
   },
 
   /**
-   * Set an item in cache (both memory and Redis by default)
+   * Set an item in cache
    */
   async set<T>(
     prefix: CachePrefix,
@@ -269,7 +266,6 @@ export const CacheManager = {
     subKey?: string,
     config?: Partial<CacheConfig>
   ): Promise<void> {
-    // Use provided TTL or get default based on prefix
     const ttl = config?.ttl || this.getDefaultTTL(prefix);
     const key = generateCacheKey(
       prefix,
@@ -279,19 +275,18 @@ export const CacheManager = {
     );
     const useMemory = config?.useMemory !== false;
     const useRedis = config?.useRedis !== false;
+    const dataString = JSON.stringify(value);
 
-    // Set in memory cache
+    // Set in memory cache if enabled
     if (useMemory) {
       this.setInMemory(key, value, ttl);
       stats.sets.memory++;
     }
 
-    // Set in Redis
+    // Set in Redis if enabled
     if (useRedis) {
       try {
-        const redis = getRedisClient();
-        const serialized = JSON.stringify(value);
-        await redis.set(key, serialized, 'EX', ttl);
+        await setKey(key, dataString, ttl);
         stats.sets.redis++;
       } catch (error) {
         console.error(`Redis cache set error for key ${key}:`, error);
@@ -328,166 +323,60 @@ export const CacheManager = {
     if (useRedis) {
       try {
         const redis = getRedisClient();
+        if (redis) {
         const pipeline = redis.pipeline();
 
         for (const item of items) {
           const key = generateCacheKey(prefix, item.id, subKey, version);
-          const serialized = JSON.stringify(item.value);
-          pipeline.set(key, serialized, 'EX', ttl);
+            pipeline.set(key, JSON.stringify(item.value), 'EX', ttl);
         }
 
         await pipeline.exec();
         stats.sets.redis += items.length;
-      } catch (error) {
-        console.error(`Redis cache bulk set error:`, error);
-      }
-    }
-  },
-
-  /**
-   * Invalidate a specific cache item
-   */
-  async invalidate(
-    prefix: CachePrefix,
-    id: string,
-    subKey?: string,
-    cacheType: CacheType = CacheType.ALL
-  ): Promise<void> {
-    const key = generateCacheKey(prefix, id, subKey);
-
-    // Clear from memory cache
-    if (cacheType === CacheType.ALL || cacheType === CacheType.MEMORY) {
-      if (memoryCache.delete(key)) {
-        stats.invalidations.memory++;
-      }
-    }
-
-    // Clear from Redis
-    if (cacheType === CacheType.ALL || cacheType === CacheType.REDIS) {
-      try {
-        const redis = getRedisClient();
-        await redis.del(key);
-        stats.invalidations.redis++;
-      } catch (error) {
-        console.error(`Redis cache invalidate error for key ${key}:`, error);
-      }
-    }
-  },
-
-  /**
-   * Invalidate multiple cache items at once
-   */
-  async invalidateBulk(
-    prefix: CachePrefix,
-    ids: string[],
-    subKey?: string,
-    cacheType: CacheType = CacheType.ALL
-  ): Promise<void> {
-    if (ids.length === 0) return;
-
-    // Generate all keys
-    const keys = ids.map(id => generateCacheKey(prefix, id, subKey));
-
-    // Clear from memory cache
-    if (cacheType === CacheType.ALL || cacheType === CacheType.MEMORY) {
-      let count = 0;
-      for (const key of keys) {
-        if (memoryCache.delete(key)) {
-          count++;
-        }
-      }
-      stats.invalidations.memory += count;
-    }
-
-    // Clear from Redis using pipeline for efficiency
-    if (cacheType === CacheType.ALL || cacheType === CacheType.REDIS) {
-      try {
-        const redis = getRedisClient();
-        if (keys.length > 0) {
-          await redis.del(...keys);
-          stats.invalidations.redis += keys.length;
         }
       } catch (error) {
-        console.error(`Redis cache bulk invalidate error:`, error);
+        console.error(`Redis cache setBulk error:`, error);
       }
     }
   },
 
   /**
-   * Invalidate all cache items with a specific prefix
-   */
-  async invalidateByPrefix(
-    prefix: CachePrefix,
-    cacheType: CacheType = CacheType.ALL
-  ): Promise<void> {
-    // Clear matching prefix from memory cache
-    if (cacheType === CacheType.ALL || cacheType === CacheType.MEMORY) {
-      let count = 0;
-      for (const key of memoryCache.keys()) {
-        if (key.startsWith(prefix)) {
-          memoryCache.delete(key);
-          count++;
-        }
-      }
-      stats.invalidations.memory += count;
-    }
-
-    // Clear matching prefix from Redis
-    if (cacheType === CacheType.ALL || cacheType === CacheType.REDIS) {
-      try {
-        const redis = getRedisClient();
-        
-        // Find all keys with the prefix and delete them
-        let cursor = '0';
-        let deletedCount = 0;
-        
-        do {
-          // SCAN through Redis keys with the prefix
-          const [nextCursor, keys] = await redis.scan(
-            cursor,
-            'MATCH',
-            `${prefix}*`,
-            'COUNT',
-            1000
-          );
-          
-          cursor = nextCursor;
-          
-          if (keys.length > 0) {
-            await redis.del(...keys);
-            deletedCount += keys.length;
-          }
-        } while (cursor !== '0');
-        
-        stats.invalidations.redis += deletedCount;
-        stats.invalidations.prefixes++;
-      } catch (error) {
-        console.error(`Redis cache invalidate by prefix error for ${prefix}:`, error);
-      }
-    }
-  },
-
-  /**
-   * Clear all caches - USE WITH CAUTION
+   * Clear the entire cache
    */
   async clearAll(cacheType: CacheType = CacheType.ALL): Promise<void> {
     // Clear memory cache
     if (cacheType === CacheType.ALL || cacheType === CacheType.MEMORY) {
-      const count = memoryCache.size;
       memoryCache.clear();
-      stats.invalidations.memory += count;
     }
 
     // Clear Redis cache
     if (cacheType === CacheType.ALL || cacheType === CacheType.REDIS) {
       try {
         const redis = getRedisClient();
-        await redis.flushdb();
-        stats.invalidations.redis++;
+        if (redis) {
+          // Use FLUSHDB with caution - instead get and delete keys in batches
+          const keys = await redis.keys('*');
+          
+          if (keys && keys.length > 0) {
+            // Delete in batches of 1000 to avoid potential issues
+            const batchSize = 1000;
+            for (let i = 0; i < keys.length; i += batchSize) {
+              const batch = keys.slice(i, i + batchSize);
+              await redis.del(...batch);
+            }
+          }
+          
+          console.log('All Redis cache entries cleared');
+        } else {
+          console.warn('Redis client not available for clearAll operation');
+        }
       } catch (error) {
-        console.error('Redis cache clear all error:', error);
+        console.error('Error clearing Redis cache:', error);
       }
     }
+    
+    // Reset stats
+    this.resetStats();
   },
 
   /**
@@ -612,6 +501,88 @@ export const CacheManager = {
     
     if (removedCount > 0) {
       console.log(`Memory cache cleanup: removed ${removedCount} expired items. Current size: ${memoryCache.size}`);
+    }
+  },
+
+  /**
+   * Invalidate multiple cache items at once
+   */
+  async invalidateBulk(
+    prefix: CachePrefix,
+    ids: string[],
+    subKey?: string,
+    cacheType: CacheType = CacheType.ALL
+  ): Promise<void> {
+    if (ids.length === 0) return;
+
+    // Generate all keys
+    const keys = ids.map(id => generateCacheKey(prefix, id, subKey));
+
+    // Clear from memory cache
+    if (cacheType === CacheType.ALL || cacheType === CacheType.MEMORY) {
+      let count = 0;
+      for (const key of keys) {
+        if (memoryCache.delete(key)) {
+          count++;
+        }
+      }
+      stats.invalidations.memory += count;
+    }
+
+    // Clear from Redis using pipeline for efficiency
+    if (cacheType === CacheType.ALL || cacheType === CacheType.REDIS) {
+      try {
+        const redis = getRedisClient();
+        if (redis && keys.length > 0) {
+          await redis.del(...keys);
+          stats.invalidations.redis += keys.length;
+        }
+      } catch (error) {
+        console.error(`Redis cache invalidate bulk error:`, error);
+      }
+    }
+  },
+
+  /**
+   * Invalidate by prefix
+   */
+  async invalidateByPrefix(
+    prefix: CachePrefix,
+    cacheType: CacheType = CacheType.ALL
+  ): Promise<void> {
+    // Clear from memory cache
+    if (cacheType === CacheType.ALL || cacheType === CacheType.MEMORY) {
+      let count = 0;
+      const prefixStr = prefix.toString();
+      for (const [key, _] of memoryCache.entries()) {
+        if (key.startsWith(prefixStr)) {
+          memoryCache.delete(key);
+          count++;
+        }
+      }
+      stats.invalidations.memory += count;
+    }
+
+    // Clear from Redis
+    if (cacheType === CacheType.ALL || cacheType === CacheType.REDIS) {
+      try {
+        const redis = getRedisClient();
+        if (redis) {
+          const pattern = `${prefix}*`;
+          const keys = await redis.keys(pattern);
+          
+          if (keys && keys.length > 0) {
+            await redis.del(...keys);
+            stats.invalidations.redis += keys.length;
+          }
+          
+          stats.invalidations.prefixes++;
+        } else {
+          console.warn(`Redis client not available for invalidateByPrefix: ${prefix}`);
+        }
+      } catch (error) {
+        console.error(`Redis cache invalidate by prefix error for ${prefix}:`, error);
+      }
     }
   }
 }; 

@@ -17,6 +17,10 @@ import { getRedisClient } from '@/src/lib/redis/client';
 import { CacheManager, CachePrefix } from './cacheManager';
 import { TokenPriceService } from './tokenPriceService';
 import { calculatePairTVL } from '@/src/lib/graphql/priceUtils';
+import { Prisma } from '@prisma/client'
+import { getKey, setKey } from '@/src/lib/redis'
+import prismaClient from '@/src/lib/db/prisma'
+import tokenPriceService from './tokenPriceService'
 
 // Constants for cache TTL (in seconds)
 const CACHE_TTL = {

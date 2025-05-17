@@ -1,5 +1,9 @@
 import Redis from 'ioredis';
 import { EventEmitter } from 'events';
+import { REDIS_CHANNELS } from '@/src/constants/redis-channels';
+
+// Re-export for compatibility
+export { REDIS_CHANNELS };
 
 // At the top of the file, add this global declaration
 declare global {
@@ -9,7 +13,7 @@ declare global {
 }
 
 // Define Redis channels
-export const REDIS_CHANNELS = {
+export const REDIS_CHANNELS_LOCAL = {
   METRICS_UPDATED: 'metrics:updated',
   PAIR_UPDATED: 'pair:updated',
   TOKEN_UPDATED: 'token:updated',
@@ -41,6 +45,7 @@ interface RedisConfig {
   keepAliveMs?: number;
   maxSuspensionTimeMs?: number;
   maxRetryAttempts?: number;
+  heartbeatIntervalMs?: number;
 }
 
 // Singleton pattern configuration
@@ -60,6 +65,7 @@ class RedisSingleton {
   private isShuttingDown = false;
   private lastInitTime = 0;
   private activeSubscriptions = 0;
+  private _heartbeatInterval: NodeJS.Timeout | null = null;
 
   // Configuration defaults
   private config: Required<RedisConfig> = {
@@ -69,6 +75,7 @@ class RedisSingleton {
     keepAliveMs: 30000,
     maxSuspensionTimeMs: 60000, // 1 minute suspension
     maxRetryAttempts: 5,
+    heartbeatIntervalMs: 30000, // 30 second heartbeat
   };
 
   // Private constructor for singleton pattern
@@ -180,6 +187,54 @@ class RedisSingleton {
   public hasActiveSubscribers(): boolean {
     return this.activeSubscriptions > 0;
   }
+  
+  // Add heartbeat mechanism to verify connection health
+  private startHeartbeat(): void {
+    // Skip if we already have a heartbeat interval
+    if (this._heartbeatInterval) {
+      clearInterval(this._heartbeatInterval);
+    }
+    
+    // Create heartbeat interval
+    this._heartbeatInterval = setInterval(async () => {
+      // Skip if connection is suspended or shutting down
+      if (this.connectionState === ConnectionState.SUSPENDED || this.isShuttingDown) return;
+      
+      try {
+        // Skip if no client
+        if (!this.redisClient) return;
+        
+        // Ping Redis server
+        const result = await this.redisClient.ping();
+        
+        if (result === 'PONG') {
+          // Connection is healthy
+          if (this.connectionState !== ConnectionState.CONNECTED) {
+            this.updateConnectionState(ConnectionState.CONNECTED);
+          }
+        } else {
+          console.warn(`[REDIS] Unexpected ping response: ${result}`);
+        }
+      } catch (error) {
+        console.error('[REDIS] Heartbeat failed:', error);
+        if (this.connectionState === ConnectionState.CONNECTED) {
+          this.updateConnectionState(ConnectionState.CONNECTING);
+          this.connectionRetryCount++;
+        }
+      }
+    }, this.config.heartbeatIntervalMs);
+    
+    console.log(`[REDIS] Heartbeat started with ${this.config.heartbeatIntervalMs}ms interval`);
+  }
+  
+  // Stop the heartbeat mechanism
+  private stopHeartbeat(): void {
+    if (this._heartbeatInterval) {
+      clearInterval(this._heartbeatInterval);
+      this._heartbeatInterval = null;
+      console.log('[REDIS] Heartbeat stopped');
+    }
+  }
 
   // Initialize Redis client for operations
   public getRedisClient(): Redis | null {
@@ -199,6 +254,20 @@ class RedisSingleton {
         console.error('[REDIS] No Redis URL provided in environment variable REDIS_URL');
         return null;
       }
+
+      // Parse and validate the URL to ensure proper format
+      const urlPattern = /^redis:\/\/(?:([^:]+):([^@]+)@)?([^:]+):(\d+)$/;
+      const match = redisUrl.match(urlPattern);
+      
+      if (!match) {
+        console.error('[REDIS CRITICAL] Invalid Redis URL format. Expected: redis://[username:password@]host:port');
+        return null;
+      }
+      
+      const [, username, , host, port] = match;
+      
+      // Log connection info (without exposing full credentials)
+      console.log(`[REDIS] Connecting to Redis at ${host}:${port} ${username ? 'with authentication' : 'without authentication'}`);
 
       console.log(`[REDIS] Creating new Redis client connection to ${redisUrl.includes('@') ? redisUrl.split('@').pop() : 'redis-server'}`);
       
@@ -221,12 +290,19 @@ class RedisSingleton {
         keepAlive: this.config.keepAliveMs,
         enableReadyCheck: true,
         enableOfflineQueue: true,
+        noDelay: true, // Disable Nagle's algorithm
+        connectionName: 'ponder-dex', // Identify connection in Redis server
         reconnectOnError: (err) => {
           // Special handling for ECONNRESET to avoid connection storms
           if (err.message.includes('ECONNRESET')) {
             console.log('[REDIS] ECONNRESET detected, controlled reconnect');
-            // Don't immediately reconnect on ECONNRESET, let retryStrategy handle it
-            return false;
+            // Add a small delay to prevent connection storms
+            setTimeout(() => {
+              if (!this.isShuttingDown) {
+                console.log('[REDIS] Attempting controlled reconnection after ECONNRESET');
+              }
+            }, 2000);
+            return false; // Don't immediately reconnect, let retryStrategy handle it
           }
           // For other errors, allow automatic reconnection
           return true;
@@ -235,10 +311,31 @@ class RedisSingleton {
 
       this.redisClient.on('connect', () => {
         console.log('[REDIS] Client connected successfully');
+        this.updateConnectionState(ConnectionState.CONNECTED);
+        this.connectionRetryCount = 0;
+        this.startHeartbeat();
       });
 
       this.redisClient.on('error', (err) => {
         console.error('[REDIS] Client connection error:', err);
+        if (this.connectionState === ConnectionState.CONNECTED) {
+          this.updateConnectionState(ConnectionState.CONNECTING);
+          this.connectionRetryCount++;
+        }
+      });
+      
+      this.redisClient.on('close', () => {
+        console.log('[REDIS] Connection closed');
+        if (this.connectionState === ConnectionState.CONNECTED) {
+          this.updateConnectionState(ConnectionState.DISCONNECTED);
+          this.stopHeartbeat();
+        }
+      });
+      
+      this.redisClient.on('end', () => {
+        console.log('[REDIS] Connection ended');
+        this.updateConnectionState(ConnectionState.DISCONNECTED);
+        this.stopHeartbeat();
       });
 
       return this.redisClient;
@@ -333,13 +430,13 @@ class RedisSingleton {
               }
               
               // Route the message to the appropriate event based on type
-              if (data.type === REDIS_CHANNELS.METRICS_UPDATED && data.payload) {
+              if (data.type === REDIS_CHANNELS_LOCAL.METRICS_UPDATED && data.payload) {
                 this.eventEmitter.emit('metrics:updated', data.payload);
-              } else if (data.type === REDIS_CHANNELS.PAIR_UPDATED && data.payload) {
+              } else if (data.type === REDIS_CHANNELS_LOCAL.PAIR_UPDATED && data.payload) {
                 this.eventEmitter.emit('pair:updated', data.payload);
-              } else if (data.type === REDIS_CHANNELS.TOKEN_UPDATED && data.payload) {
+              } else if (data.type === REDIS_CHANNELS_LOCAL.TOKEN_UPDATED && data.payload) {
                 this.eventEmitter.emit('token:updated', data.payload);
-              } else if (data.type === REDIS_CHANNELS.TRANSACTION_UPDATED && data.payload) {
+              } else if (data.type === REDIS_CHANNELS_LOCAL.TRANSACTION_UPDATED && data.payload) {
                 this.eventEmitter.emit('transaction:updated', data.payload);
               } else {
                 console.log(`[REDIS] Received unknown message type: ${data.type}`, data);
@@ -487,7 +584,7 @@ class RedisSingleton {
             this.connectionRetryCount = 0; // Reset retry count on successful connection
             
             // Subscribe to all update channels
-            const channels = Object.values(REDIS_CHANNELS);
+            const channels = Object.values(REDIS_CHANNELS_LOCAL);
             if (this.redisSubscriber) {
               this.redisSubscriber.subscribe(...channels);
               console.log('[REDIS] Subscribed to channels:', channels);
@@ -501,13 +598,13 @@ class RedisSingleton {
                   const data = JSON.parse(message);
                   
                   // Emit events based on the channel
-                  if (channel === REDIS_CHANNELS.METRICS_UPDATED) {
+                  if (channel === REDIS_CHANNELS_LOCAL.METRICS_UPDATED) {
                     this.eventEmitter.emit('metrics:updated', data);
-                  } else if (channel === REDIS_CHANNELS.PAIR_UPDATED) {
+                  } else if (channel === REDIS_CHANNELS_LOCAL.PAIR_UPDATED) {
                     this.eventEmitter.emit('pair:updated', data);
-                  } else if (channel === REDIS_CHANNELS.TOKEN_UPDATED) {
+                  } else if (channel === REDIS_CHANNELS_LOCAL.TOKEN_UPDATED) {
                     this.eventEmitter.emit('token:updated', data);
-                  } else if (channel === REDIS_CHANNELS.TRANSACTION_UPDATED) {
+                  } else if (channel === REDIS_CHANNELS_LOCAL.TRANSACTION_UPDATED) {
                     this.eventEmitter.emit('transaction:updated', data);
                   }
                 } catch (error) {

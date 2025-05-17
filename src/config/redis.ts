@@ -1,65 +1,315 @@
-import { getRedisSingleton } from '@/src/lib/redis/singleton';
-
 /**
- * REDIS CONNECTION MANAGEMENT - APPLICATION CONFIGURATION
- * ------------------------------------------------------
- * This module initializes the Redis singleton with optimal configuration
- * and acts as the central point for Redis connection configuration.
- * 
- * IMPORTANT:
- * - Import this module in app startup to ensure Redis is properly configured
- * - Never create direct Redis connections anywhere else in the code
- * - Always use the Redis API from 'src/lib/redis/index.ts'
- * - The singleton handles reconnection, backoff, and error recovery
+ * UNIVERSAL REDIS CONNECTION MANAGER
+ * --------------------------------
+ * This is the ONLY place Redis connections should be created in the entire application.
+ * All other files should import from this module.
  */
 
+import Redis from 'ioredis';
+import { EventEmitter } from 'events';
+import { ConnectionState, ConnectionEvent } from '../lib/redis/singleton';
+import { REDIS_CHANNELS } from '../constants/redis-channels';
+
+// ========================= GLOBAL SINGLETON STATE =============================
+// These variables ensure that only one Redis client and subscriber exist globally
+let __GLOBAL_REDIS_CLIENT: Redis | null = null;
+let __GLOBAL_REDIS_SUBSCRIBER: Redis | null = null;
+const eventEmitter = new EventEmitter();
+eventEmitter.setMaxListeners(100);
+
+// Connection state tracking
+let lastConnectionAttempt = 0;
+let connectionRetryCount = 0;
+let isShuttingDown = false;
+let activeConnections = 0;
+
+// ========================= CONFIGURATION ====================================
+export const REDIS_CONFIG = {
+  // Connection settings
+  maxRetriesPerRequest: 5,       // Increased from 3 to handle more retries
+  connectTimeoutMs: 15000,       // Increased to 15 seconds
+  keepAliveMs: 60000,            // Increased to 60 seconds to prevent disconnections
+  
+  // Recovery settings
+  maxSuspensionTimeMs: 60000,    // 1 minute suspension after failures
+  maxRetryAttempts: 10,          // Max retry attempts before suspending (increased from 5)
+  retryTimeoutMs: 10000,         // 10 second timeout for operations
+  
+  // Backoff settings
+  initialRetryDelayMs: 1000,     // Start with 1 second delay
+  maxRetryDelayMs: 30000,        // Maximum 30 second delay
+  backoffFactor: 2,              // Exponential backoff factor
+  minReconnectDelay: 3000,       // Minimum time between connection attempts (reduced from 5000)
+  
+  // Heartbeat
+  heartbeatIntervalMs: 15000,    // Reduced to 15 seconds to detect issues earlier
+  
+  // Debug options
+  debugMode: true                // Enable detailed logging for Redis operations
+};
+
 /**
- * Initialize Redis configuration with optimal settings for stability
- * This should be imported at app startup to ensure proper configuration
+ * Get the Redis subscriber instance
+ * Used for PubSub subscriptions
  */
-export function initializeRedisConfig() {
-  const redisSingleton = getRedisSingleton();
-  
-  // Configure with optimized settings for stability
-  redisSingleton.configure({
-    // Connection settings
-    maxRetriesPerRequest: 3,       // Limit retries per operation
-    connectTimeoutMs: 15000,       // 15 seconds connection timeout
-    keepAliveMs: 45000,            // 45 second keepalive to prevent ECONNRESET
-    
-    // Recovery settings
-    maxSuspensionTimeMs: 60000,    // 1 minute suspension after failures
-    maxRetryAttempts: 5,           // Max 5 retry attempts before suspending
-    retryTimeoutMs: 10000          // 10 second timeout for operations
-  });
-  
-  console.log('[CONFIG] Redis singleton configured with optimal stability settings');
-  
-  return redisSingleton;
+export function getRedisSubscriber(): Redis | null {
+  return getRedisClient(true);
 }
 
-// Export configured instance for convenience
-export const redisSingleton = initializeRedisConfig();
+/**
+ * Get event emitter for connection status events
+ */
+export function getRedisEventEmitter(): EventEmitter {
+  return eventEmitter;
+}
 
 /**
- * USAGE GUIDE
- * -----------
- * To use Redis in your application:
- * 
- * 1. Import Redis functions from the main index:
- *    ```
- *    import { getKey, setKey, getMultipleKeys } from '@/src/lib/redis';
- *    ```
- * 
- * 2. Use these functions instead of direct Redis client access:
- *    ```
- *    // Good practice - uses the singleton
- *    const value = await getKey('cache:key');
- *    
- *    // Avoid this - creates potential connection problems
- *    const redis = new Redis(...); // DON'T DO THIS
- *    ```
- * 
- * 3. For subscription functionality, use the RedisSubscriberProvider
- *    This component handles real-time updates through SSE.
- */ 
+ * Register a component as using Redis connections
+ */
+export function registerRedisConnection(): void {
+  activeConnections++;
+  console.log(`[REDIS] Connection registered (total: ${activeConnections})`);
+}
+
+/**
+ * Unregister a component using Redis connections
+ */
+export function unregisterRedisConnection(): boolean {
+  activeConnections = Math.max(0, activeConnections - 1);
+  console.log(`[REDIS] Connection unregistered (remaining: ${activeConnections})`);
+  
+  // Return whether this was the last connection
+  return activeConnections === 0;
+}
+
+/**
+ * Get or create a Redis client instance
+ * ALWAYS use this function instead of creating new Redis instances!
+ */
+export function getRedisClient(forSubscriber = false): Redis | null {
+  if (typeof window !== 'undefined') {
+    console.warn('[REDIS] Direct Redis client not available in browser');
+    return null;
+  }
+  
+  // Return existing client if available and healthy
+  if (!forSubscriber && __GLOBAL_REDIS_CLIENT?.status === 'ready') {
+    if (REDIS_CONFIG.debugMode) {
+      console.log('[REDIS] Using existing client connection');
+    }
+    return __GLOBAL_REDIS_CLIENT;
+  }
+  
+  // Return existing subscriber if available and healthy
+  if (forSubscriber && __GLOBAL_REDIS_SUBSCRIBER?.status === 'ready') {
+    if (REDIS_CONFIG.debugMode) {
+      console.log('[REDIS] Using existing subscriber connection');
+    }
+    return __GLOBAL_REDIS_SUBSCRIBER;
+  }
+  
+  // Prevent connection storms by enforcing a minimum delay between attempts
+  const now = Date.now();
+  if (now - lastConnectionAttempt < REDIS_CONFIG.minReconnectDelay) {
+    console.log(`[REDIS] Throttling connection attempt (${Math.round((now - lastConnectionAttempt)/1000)}s since last attempt)`);
+    return forSubscriber ? __GLOBAL_REDIS_SUBSCRIBER : __GLOBAL_REDIS_CLIENT;
+  }
+  
+  // Update attempt timestamp
+  lastConnectionAttempt = now;
+  
+  const redisUrl = process.env.REDIS_URL;
+  if (!redisUrl) {
+    console.error('[REDIS] No Redis URL provided in environment');
+    return null;
+  }
+  
+  try {
+    console.log(`[REDIS] Creating new ${forSubscriber ? 'subscriber' : 'client'} instance`);
+    
+    // Close existing connection if it exists but is not in READY state
+    if (forSubscriber && __GLOBAL_REDIS_SUBSCRIBER) {
+      if (__GLOBAL_REDIS_SUBSCRIBER.status !== 'ready') {
+        try {
+          __GLOBAL_REDIS_SUBSCRIBER.disconnect();
+          __GLOBAL_REDIS_SUBSCRIBER = null;
+        } catch (err) {
+          console.error('[REDIS] Error disconnecting existing subscriber:', err);
+        }
+      } else {
+        // If it's ready, just return it
+        return __GLOBAL_REDIS_SUBSCRIBER;
+      }
+    } else if (!forSubscriber && __GLOBAL_REDIS_CLIENT) {
+      if (__GLOBAL_REDIS_CLIENT.status !== 'ready') {
+        try {
+          __GLOBAL_REDIS_CLIENT.disconnect();
+          __GLOBAL_REDIS_CLIENT = null;
+        } catch (err) {
+          console.error('[REDIS] Error disconnecting existing client:', err);
+        }
+      } else {
+        // If it's ready, just return it
+        return __GLOBAL_REDIS_CLIENT;
+      }
+    }
+    
+    // Create new connection with improved settings to prevent ECONNRESET issues
+    const redis = new Redis(redisUrl, {
+      retryStrategy: (times) => {
+        connectionRetryCount = times;
+        
+        if (times > REDIS_CONFIG.maxRetryAttempts || isShuttingDown) {
+          console.log(`[REDIS] Max retries (${times}) exceeded`);
+          eventEmitter.emit(ConnectionEvent.SUSPENDED, { timestamp: Date.now() });
+          return null; // Stop retrying
+        }
+        
+        const delay = Math.min(
+          REDIS_CONFIG.initialRetryDelayMs * Math.pow(REDIS_CONFIG.backoffFactor, times),
+          REDIS_CONFIG.maxRetryDelayMs
+        );
+        
+        console.log(`[REDIS] Retry in ${Math.round(delay)}ms (attempt ${times}/${REDIS_CONFIG.maxRetryAttempts})`);
+        return delay;
+      },
+      maxRetriesPerRequest: REDIS_CONFIG.maxRetriesPerRequest,
+      connectTimeout: REDIS_CONFIG.connectTimeoutMs,
+      keepAlive: REDIS_CONFIG.keepAliveMs,
+      enableReadyCheck: true,
+      enableOfflineQueue: true,
+      connectionName: forSubscriber ? 'ponder-subscriber' : 'ponder-client',
+      noDelay: true,
+      reconnectOnError: (err) => {
+        // Always reconnect for ECONNRESET - critical fix
+        if (err.message.includes('ECONNRESET')) {
+          console.warn('[REDIS] ECONNRESET detected, attempting reconnect');
+          return true; // Allow reconnection for ECONNRESET errors
+        }
+        
+        // Check if connection should be closed
+        if (err.message.includes('ENOTFOUND') || err.message.includes('ETIMEDOUT')) {
+          console.error(`[REDIS] Fatal connection error: ${err.message}`);
+          return false; // Don't reconnect on fatal errors
+        }
+        
+        // For other errors, allow automatic reconnection
+        console.error('[REDIS] Connection error with auto-reconnect:', err.message);
+        return true;
+      }
+    });
+    
+    // Set up event handlers
+    redis.on('connect', () => {
+      console.log(`[REDIS] ${forSubscriber ? 'Subscriber' : 'Client'} connected successfully`);
+      connectionRetryCount = 0; // Reset retry count on successful connection
+      eventEmitter.emit(ConnectionEvent.CONNECTED, { timestamp: Date.now() });
+    });
+    
+    redis.on('error', (err) => {
+      console.error(`[REDIS] ${forSubscriber ? 'Subscriber' : 'Client'} connection error:`, err);
+      eventEmitter.emit(ConnectionEvent.ERROR, { error: err.message, timestamp: Date.now() });
+    });
+    
+    redis.on('close', () => {
+      console.log(`[REDIS] ${forSubscriber ? 'Subscriber' : 'Client'} connection closed`);
+      eventEmitter.emit(ConnectionEvent.DISCONNECTED, { timestamp: Date.now() });
+    });
+    
+    // Heartbeat to keep connection alive and detect issues early
+    const heartbeatInterval = setInterval(() => {
+      if (redis.status === 'ready') {
+        redis.ping()
+          .then(() => {
+            if (REDIS_CONFIG.debugMode) {
+              console.log('[REDIS] Heartbeat ping successful');
+            }
+          })
+          .catch(err => {
+            console.error('[REDIS] Heartbeat ping failed:', err);
+            
+            // If connection fails heartbeat, force reconnection
+            if (forSubscriber && __GLOBAL_REDIS_SUBSCRIBER === redis) {
+              __GLOBAL_REDIS_SUBSCRIBER = null;
+            } else if (!forSubscriber && __GLOBAL_REDIS_CLIENT === redis) {
+              __GLOBAL_REDIS_CLIENT = null;
+            }
+          });
+      }
+    }, REDIS_CONFIG.heartbeatIntervalMs);
+    
+    // Clean up heartbeat on close
+    redis.on('end', () => {
+      clearInterval(heartbeatInterval);
+    });
+    
+    // Store in global reference to enforce singleton pattern
+    if (forSubscriber) {
+      __GLOBAL_REDIS_SUBSCRIBER = redis;
+    } else {
+      __GLOBAL_REDIS_CLIENT = redis;
+    }
+    
+    return redis;
+  } catch (error) {
+    console.error(`[REDIS] Error creating ${forSubscriber ? 'subscriber' : 'client'}:`, error);
+    return null;
+  }
+}
+
+/**
+ * Gracefully shut down all Redis connections
+ */
+export function shutdownRedisConnections(): Promise<void> {
+  isShuttingDown = true;
+  
+  return new Promise((resolve) => {
+    const cleanup = async () => {
+      // Clean up subscriber
+      if (__GLOBAL_REDIS_SUBSCRIBER) {
+        try {
+          await __GLOBAL_REDIS_SUBSCRIBER.quit();
+        } catch (err) {
+          console.error('[REDIS] Error closing subscriber:', err);
+        }
+        __GLOBAL_REDIS_SUBSCRIBER = null;
+      }
+      
+      // Clean up client
+      if (__GLOBAL_REDIS_CLIENT) {
+        try {
+          await __GLOBAL_REDIS_CLIENT.quit();
+        } catch (err) {
+          console.error('[REDIS] Error closing client:', err);
+        }
+        __GLOBAL_REDIS_CLIENT = null;
+      }
+      
+      resolve();
+    };
+    
+    // Clean up immediately or after delay if there are active connections
+    if (activeConnections > 0) {
+      console.log(`[REDIS] Waiting for ${activeConnections} connections to close`);
+      setTimeout(cleanup, 3000);
+    } else {
+      cleanup();
+    }
+  });
+}
+
+// Handle process exit gracefully
+if (typeof process !== 'undefined') {
+  process.on('SIGTERM', () => {
+    console.log('[REDIS] SIGTERM received, cleaning up connections');
+    shutdownRedisConnections();
+  });
+  
+  process.on('SIGINT', () => {
+    console.log('[REDIS] SIGINT received, cleaning up connections');
+    shutdownRedisConnections();
+  });
+}
+
+// Initialize Redis on first import
+console.log('[REDIS] Universal connection manager initialized');

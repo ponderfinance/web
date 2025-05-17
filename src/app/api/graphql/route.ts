@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { executeGraphQL } from '@/src/lib/graphql/server'
-import { getRedisClient } from '@/src/lib/redis/client'
+import { getRedisClient } from '@/src/lib/redis'
 import prisma from '@/src/lib/db/prisma'
 
 // Initialize Redis connection on server start

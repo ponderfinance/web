@@ -220,3 +220,17 @@ This document outlines the implementation plan for refactoring the DEX backend t
   - Confirm data consistency
   - Test system resilience
 
+## Redis Integration
+
+The application uses Redis for real-time updates. We've implemented several improvements to ensure reliable connections:
+
+- Singleton pattern for connection management
+- Proper error handling with exponential backoff
+- Fallback to polling when real-time updates are unavailable
+
+For more details on the Redis implementation:
+- [Redis Usage Guide](./REDIS_USAGE_GUIDE.md)
+- [Redis Connection Fix Summary](./REDIS_CONNECTION_FIX_SUMMARY.md)
+
+When working with Redis in this application, always use the provided hooks and utilities rather than creating direct Redis connections.
+

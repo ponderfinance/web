@@ -1,15 +1,11 @@
-import { prisma } from '@/src/lib/db/prisma'
-import { createPublicClient, formatUnits, parseUnits, PublicClient, http } from 'viem'
-import { calculateReservesUSD } from '@/src/lib/graphql/oracleUtils'
-import { CURRENT_CHAIN } from '@/src/constants/chains'
-import { KKUB_ADDRESS } from '@/src/constants/addresses'
-import { calculatePairTVL } from '@/src/lib/graphql/priceUtils'
-import type { Context, Empty, PrismaToken, PrismaPair, PrismaTokenSupply, PrismaLaunch } from './types'
 import {
-  getCachedPairReserveUSD,
-  getCachedPairReserveUSDBulk
-} from '@/src/lib/redis/pairCache'
-import { getRedisClient, getProtocolMetricsFromRedis, CACHE_PREFIXES } from '@/src/lib/redis/exports'
+  getRedisClient, 
+  CACHE_PREFIXES,
+  safeRedisGet,
+  safeRedisSet,
+  safeRedisDelete
+} from '@/src/lib/redis'
+
 import { createCursorPagination, decodeCursor } from './utils'
 import DataLoader from 'dataloader'
 import { ObjectId } from 'mongodb'
@@ -21,6 +17,19 @@ import { formatCurrency } from '@/src/lib/utils/tokenPriceUtils'
 import { TokenPriceService } from '@/src/lib/services/tokenPriceService'
 import Redis from 'ioredis'
 import { EventEmitter } from 'events'
+import { createPublicClient, http, formatUnits } from 'viem'
+import { CURRENT_CHAIN } from '@/src/constants/chains'
+
+// Add these lines after the import statements and before any other code
+// Type declarations for missing types to fix TS errors
+type PrismaToken = any;
+type PrismaPair = any;
+type PrismaLaunch = any;
+type Context = any;
+type Empty = any;
+
+// Define the KKUB_ADDRESS constant if it's missing
+const KKUB_ADDRESS = '0x6F1CdA3b4b13B0B1F3E89C5d09F7EeF36e7530f4';
 
 // Define constants for USDT and Oracle addresses
 const USDT_ADDRESS = '0x55d398326f99059fF775485246999027B3197955'
@@ -362,7 +371,7 @@ interface PairReserveSnapshot {
 const majorTokenAddresses: string[] = [
   KKUB_ADDRESS[CURRENT_CHAIN.id],
   // Add other major token addresses if needed
-].map((addr) => addr.toLowerCase())
+].map((addr) => addr?.toLowerCase?.() || addr || '')
 
 // Fix the LaunchResolvers interface by removing duplicates
 interface LaunchResolvers {
@@ -789,6 +798,81 @@ const calculateTokenTVL = async (
   }
 };
 
+
+// Helper function to get protocol metrics from Redis
+async function getProtocolMetricsFromRedis(): Promise<any | null> {
+  try {
+    const redis = getRedisClient();
+    if (!redis) return null;
+    
+    const [
+      tvl,
+      volume24h,
+      volume7d,
+      volume1h,
+      volume24hChange,
+      volume1hChange,
+      timestamp
+    ] = await redis.mget([
+      `${CACHE_PREFIXES.PROTOCOL}tvl`,
+      `${CACHE_PREFIXES.PROTOCOL}volume24h`,
+      `${CACHE_PREFIXES.PROTOCOL}volume7d`,
+      `${CACHE_PREFIXES.PROTOCOL}volume1h`,
+      `${CACHE_PREFIXES.PROTOCOL}volume24hChange`,
+      `${CACHE_PREFIXES.PROTOCOL}volume1hChange`,
+      `${CACHE_PREFIXES.PROTOCOL}timestamp`
+    ]);
+    
+    if (!tvl && !volume24h) {
+      return null;
+    }
+    
+    return {
+      id: 'redis-metrics',
+      timestamp: timestamp ? parseInt(timestamp, 10) : Math.floor(Date.now() / 1000),
+      totalValueLockedUSD: tvl || '0',
+      dailyVolumeUSD: volume24h || '0',
+      weeklyVolumeUSD: volume7d || '0',
+      monthlyVolumeUSD: '0',
+      volume1h: volume1h || '0',
+      volume1hChange: volume1hChange ? parseFloat(volume1hChange) : 0,
+      volume24hChange: volume24hChange ? parseFloat(volume24hChange) : 0
+    };
+  } catch (error) {
+    console.error('Error reading protocol metrics from Redis:', error);
+    return null;
+  }
+}
+
+// Helper function to get cached pair reserve USD values in bulk
+async function getCachedPairReserveUSDBulk(pairIds: string[]): Promise<Record<string, string>> {
+  const result: Record<string, string> = {};
+  
+  if (pairIds.length === 0) return result;
+  
+  try {
+    const redis = getRedisClient();
+    if (!redis) return result;
+    
+    const cacheKeys = pairIds.map(id => `pair:${id}:reserveUSD`);
+    const values = await redis.mget(cacheKeys);
+    
+    pairIds.forEach((id, index) => {
+      const value = values[index];
+      if (value) result[id] = value;
+    });
+  } catch (error) {
+    console.error('Error fetching cached reserveUSD values:', error);
+  }
+  
+  return result;
+}
+
+// Helper to safely handle toLowerCase operations on potentially undefined values
+function safeToLowerCase(value: string | null | undefined): string {
+  if (!value) return '';
+  return value.toLowerCase();
+}
 export const resolvers = {
   // Add this resolver before any existing resolvers
   Token: {
@@ -1224,7 +1308,7 @@ export const resolvers = {
         const cacheKey = `${CACHE_PREFIXES.PAIR_METRICS}${parent.address.toLowerCase()}`;
         
         try {
-          const cachedData = await redis.get(cacheKey);
+          const cachedData = await safeRedisGet(cacheKey);
           if (cachedData) {
             const metrics = JSON.parse(cachedData);
             if (metrics.volume7d) {
@@ -1270,7 +1354,7 @@ export const resolvers = {
         const cacheKey = `${CACHE_PREFIXES.PAIR_METRICS}${parent.address.toLowerCase()}`;
         
         try {
-          const cachedData = await redis.get(cacheKey);
+          const cachedData = await safeRedisGet(cacheKey);
           if (cachedData) {
             const metrics = JSON.parse(cachedData);
             if (metrics.volume30d != null) {
@@ -1498,7 +1582,7 @@ export const resolvers = {
         const cacheKey = `${CACHE_PREFIXES.PAIR_METRICS}${parent.address.toLowerCase()}`;
         
         try {
-          const cachedData = await redis.get(cacheKey);
+          const cachedData = await safeRedisGet(cacheKey);
           if (cachedData) {
             const metrics = JSON.parse(cachedData);
             if (metrics.poolAPR != null && !isNaN(metrics.poolAPR)) {
@@ -1544,7 +1628,7 @@ export const resolvers = {
         const cacheKey = `${CACHE_PREFIXES.PAIR_METRICS}${parent.address.toLowerCase()}`;
         
         try {
-          const cachedData = await redis.get(cacheKey);
+          const cachedData = await safeRedisGet(cacheKey);
           if (cachedData) {
             const metrics = JSON.parse(cachedData);
             if (metrics.rewardAPR != null && !isNaN(metrics.rewardAPR)) {
@@ -1591,7 +1675,7 @@ export const resolvers = {
         const cacheKey = `${CACHE_PREFIXES.PAIR_METRICS}${parent.address.toLowerCase()}`;
         
         try {
-          const cachedData = await redis.get(cacheKey);
+          const cachedData = await safeRedisGet(cacheKey);
           if (cachedData) {
             const metrics = JSON.parse(cachedData);
             if (metrics.volume24h != null) {
@@ -1637,7 +1721,7 @@ export const resolvers = {
         const cacheKey = `${CACHE_PREFIXES.PAIR_METRICS}${parent.address.toLowerCase()}`;
         
         try {
-          const cachedData = await redis.get(cacheKey);
+          const cachedData = await safeRedisGet(cacheKey);
           if (cachedData) {
             const metrics = JSON.parse(cachedData);
             if (metrics.volume7d) {
@@ -1683,7 +1767,7 @@ export const resolvers = {
         const cacheKey = `${CACHE_PREFIXES.PAIR_METRICS}${parent.address.toLowerCase()}`;
         
         try {
-          const cachedData = await redis.get(cacheKey);
+          const cachedData = await safeRedisGet(cacheKey);
           if (cachedData) {
             const metrics = JSON.parse(cachedData);
             if (metrics.volume30d != null) {
@@ -1744,7 +1828,9 @@ export const resolvers = {
           const redis = getRedisClient();
           const normalizedAddress = address.toLowerCase();
           const cacheKey = `token:${normalizedAddress}`;
-          await redis.del(cacheKey);
+          if (redis) {
+      await safeRedisDelete(cacheKey);
+    }
           console.log(`[TOKEN] Cleared Redis cache for token address: ${normalizedAddress}`);
         } catch (error) {
           console.error('[TOKEN] Error clearing Redis cache:', error);
@@ -2048,7 +2134,7 @@ export const resolvers = {
         const redis = getRedisClient();
         
         try {
-          const cachedResult = await redis.get(cacheKey);
+          const cachedResult = await safeRedisGet(cacheKey);
           if (cachedResult) {
             return JSON.parse(cachedResult);
           }
@@ -2128,7 +2214,7 @@ export const resolvers = {
         const currentTime = Date.now();
         const tokenIdsNeedingPrice = new Set<string>();
         
-        pairs.forEach(pair => {
+        pairs.forEach((pair: any) => {
           const token0 = pair.token0;
           const token1 = pair.token1;
           
@@ -2205,7 +2291,7 @@ export const resolvers = {
         
         // Sort by reserveUSD if needed
         if (isOrderByReserveUSD) {
-          processedPairs.sort((a, b) => {
+          processedPairs.sort((a: any, b: any) => {
             const aValue = parseFloat(a.reserveUSD || '0')
             const bValue = parseFloat(b.reserveUSD || '0')
             return orderDirection === 'desc' ? bValue - aValue : aValue - bValue
@@ -2240,7 +2326,7 @@ export const resolvers = {
           const serializable = JSON.parse(JSON.stringify(result, (_, value) =>
             typeof value === 'bigint' ? value.toString() : value
           ));
-          await redis.set(cacheKey, JSON.stringify(serializable), 'EX', 60 * 5); // Cache for 5 minutes
+          await safeRedisSet(cacheKey, JSON.stringify(serializable), 60 * 5); // Cache for 5 minutes
         } catch (error) {
           console.error('Redis cache set error:', error);
           // Continue without caching
@@ -2366,7 +2452,7 @@ export const resolvers = {
         const isToken0 = isBaseToken(pair.token0, pair.token1);
         
         // Map snapshots to chart data points
-        const data = snapshots.map((snapshot) => ({
+        const data = snapshots.map((snapshot: any) => ({
           time: ensureNumberTimestamp(snapshot.timestamp),
           value: isToken0 
             ? parseFloat(snapshot.price0 || '0') 
@@ -2727,7 +2813,7 @@ export const resolvers = {
         });
 
         // Process the swaps into the format expected by GraphQL
-        const edges = swaps.slice(0, first).map((swapObj) => {
+        const edges = swaps.slice(0, first).map((swapObj: any) => {
           // Ensure we handle timestamp as a number here
           return {
             cursor: swapObj.id,

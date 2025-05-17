@@ -191,19 +191,19 @@ export function createLoaders(prisma: PrismaClient) {
     tokenByAddressLoader: createDataLoader<string, Token | null>(
       async (addresses: readonly string[]) => {
         console.log(`Batch loading ${addresses.length} tokens by address`);
-        const lowerCaseAddresses = addresses.map(a => a.toLowerCase());
+        const lowerCaseAddresses = addresses.map(a => a?.toLowerCase() || '');
         const tokens = await prisma.token.findMany({
           where: { address: { in: lowerCaseAddresses } },
         });
 
         // Map the results back to the requested order
         return addresses.map(address => 
-          tokens.find(token => token.address === address.toLowerCase()) || null
+          tokens.find(token => token.address === (address?.toLowerCase() || '')) || null
         );
       },
       {
         maxBatchSize: BATCH_SIZES.TOKENS,
-        cacheKeyFn: (addr: string) => addr.toLowerCase(),
+        cacheKeyFn: (addr: string) => addr?.toLowerCase() || '',
       }
     ),
 
@@ -249,19 +249,19 @@ export function createLoaders(prisma: PrismaClient) {
     pairByAddressLoader: createDataLoader<string, Pair | null>(
       async (addresses: readonly string[]) => {
         console.log(`Batch loading ${addresses.length} pairs by address`);
-        const lowerCaseAddresses = addresses.map(a => a.toLowerCase());
+        const lowerCaseAddresses = addresses.map(a => a?.toLowerCase() || '');
         const pairs = await prisma.pair.findMany({
           where: { address: { in: lowerCaseAddresses } },
         });
 
         // Map the results back to the requested order
         return addresses.map(address => 
-          pairs.find(pair => pair.address === address.toLowerCase()) || null
+          pairs.find(pair => pair.address === (address?.toLowerCase() || '')) || null
         );
       },
       {
         maxBatchSize: BATCH_SIZES.PAIRS,
-        cacheKeyFn: (addr: string) => addr.toLowerCase(),
+        cacheKeyFn: (addr: string) => addr?.toLowerCase() || '',
       }
     ),
 
@@ -312,7 +312,7 @@ export function createLoaders(prisma: PrismaClient) {
     userStatsLoader: createDataLoader<string, UserStat | null>(
       async (addresses: readonly string[]) => {
         console.log(`Batch loading ${addresses.length} user stats`);
-        const lowerCaseAddresses = addresses.map(a => a.toLowerCase());
+        const lowerCaseAddresses = addresses.map(a => a?.toLowerCase() || '');
         
         const userStats = await prisma.userStat.findMany({
           where: { userAddress: { in: lowerCaseAddresses } },
@@ -320,12 +320,12 @@ export function createLoaders(prisma: PrismaClient) {
 
         // Map the results back to the requested order
         return addresses.map(address => 
-          userStats.find(stat => stat.userAddress === address.toLowerCase()) || null
+          userStats.find(stat => stat.userAddress === (address?.toLowerCase() || '')) || null
         );
       },
       {
         maxBatchSize: BATCH_SIZES.USERS,
-        cacheKeyFn: (addr: string) => addr.toLowerCase(),
+        cacheKeyFn: (addr: string) => addr?.toLowerCase() || '',
         useCacheManager: true,
         cachePrefix: CachePrefix.USER,
         cacheTTL: 60 * 30, // 30 minutes
