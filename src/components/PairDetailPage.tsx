@@ -14,15 +14,23 @@ const PairDetailQuery = graphql`
       address
       reserve0
       reserve1
+      reserveUSD
+      tvl
+      volume24h
+      volumeChange24h
+      poolAPR
+      rewardAPR
       token0 {
         id
         symbol
         address
+        priceUSD
       }
       token1 {
         id
         symbol
         address
+        priceUSD
       }
       ...PriceChartContainer_pair
     }
@@ -34,6 +42,43 @@ const PairDetailQuery = graphql`
     }
   }
 `
+
+// Helper functions for formatting
+function formatValue(value: string | number | null | undefined): string {
+  if (value === null || value === undefined) return '0.00';
+  
+  const num = typeof value === 'string' ? parseFloat(value) : value;
+  if (isNaN(num)) return '0.00';
+  
+  if (num >= 1e9) return (num / 1e9).toFixed(2) + 'B';
+  if (num >= 1e6) return (num / 1e6).toFixed(2) + 'M';
+  if (num >= 1e3) return (num / 1e3).toFixed(2) + 'K';
+  
+  return num.toFixed(2);
+}
+
+function formatPercentage(value: string | number | null | undefined): string {
+  if (value === null || value === undefined) return '0.00%';
+  
+  const num = typeof value === 'string' ? parseFloat(value) : value;
+  if (isNaN(num)) return '0.00%';
+  
+  return num.toFixed(2) + '%';
+}
+
+function formatNumber(value: string | number | null | undefined): string {
+  if (value === null || value === undefined) return '0.00';
+  
+  const num = typeof value === 'string' ? parseFloat(value) : value;
+  if (isNaN(num)) return '0.00';
+  
+  // For very small numbers, use more decimal places
+  if (num < 0.001) return num.toExponential(4);
+  if (num < 0.01) return num.toFixed(6);
+  if (num < 1) return num.toFixed(4);
+  
+  return num.toFixed(2);
+}
 
 export default function PairDetailPage({ params }: { params: { address: string } }) {
   const pairAddress = params.address
@@ -132,7 +177,52 @@ function PairDetailContent({ pairAddress }: { pairAddress: string }) {
 
               <View direction="column" gap={4}>
                 <Text color="neutral">TVL</Text>
-                <Text variant="title-4">$0.00</Text>
+                <Text variant="title-4">
+                  ${formatValue((pair as any)?.tvl || (pair as any)?.reserveUSD)}
+                </Text>
+              </View>
+            </Grid>
+            
+            <Divider />
+            
+            <Grid columns={{ s: 1, m: 3 }} gap={16}>
+              <View direction="column" gap={4}>
+                <Text color="neutral">Volume (24h)</Text>
+                <Text variant="title-4">
+                  ${formatValue((pair as any)?.volume24h)}
+                </Text>
+              </View>
+
+              <View direction="column" gap={4}>
+                <Text color="neutral">Pool APR</Text>
+                <Text variant="title-4" color={(pair as any)?.poolAPR > 0 ? "positive" : "neutral"}>
+                  {formatPercentage((pair as any)?.poolAPR)}
+                </Text>
+              </View>
+
+              <View direction="column" gap={4}>
+                <Text color="neutral">Reward APR</Text>
+                <Text variant="title-4" color={(pair as any)?.rewardAPR > 0 ? "positive" : "neutral"}>
+                  {formatPercentage((pair as any)?.rewardAPR)}
+                </Text>
+              </View>
+            </Grid>
+            
+            <Divider />
+            
+            <Grid columns={{ s: 1, m: 2 }} gap={16}>
+              <View direction="column" gap={4}>
+                <Text color="neutral">Price {pair.token0.symbol} in {pair.token1.symbol}</Text>
+                <Text variant="title-4">
+                  {formatNumber((pair as any)?.token0?.priceUSD / (pair as any)?.token1?.priceUSD)} {pair.token1.symbol}
+                </Text>
+              </View>
+
+              <View direction="column" gap={4}>
+                <Text color="neutral">Price {pair.token1.symbol} in {pair.token0.symbol}</Text>
+                <Text variant="title-4">
+                  {formatNumber((pair as any)?.token1?.priceUSD / (pair as any)?.token0?.priceUSD)} {pair.token0.symbol}
+                </Text>
               </View>
             </Grid>
           </View>

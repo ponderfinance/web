@@ -1,5 +1,5 @@
 /**
- * @generated SignedSource<<5648755785ec38516b531935144be533>>
+ * @generated SignedSource<<f1e57a75427f381d2b75cfcb0d0aa76d>>
  * @lightSyntaxTransform
  * @nogrep
  */
@@ -19,18 +19,26 @@ export type PairDetailPageQuery$data = {
   readonly pairByAddress: {
     readonly address: string;
     readonly id: string;
+    readonly poolAPR: number | null;
     readonly reserve0: string;
     readonly reserve1: string;
+    readonly reserveUSD: string;
+    readonly rewardAPR: number | null;
     readonly token0: {
       readonly address: string;
       readonly id: string;
+      readonly priceUSD: string | null;
       readonly symbol: string | null;
     };
     readonly token1: {
       readonly address: string;
       readonly id: string;
+      readonly priceUSD: string | null;
       readonly symbol: string | null;
     };
+    readonly tvl: number;
+    readonly volume24h: string | null;
+    readonly volumeChange24h: number | null;
     readonly " $fragmentSpreads": FragmentRefs<"PriceChartContainer_pair">;
   } | null;
   readonly pairPriceChart: ReadonlyArray<{
@@ -96,7 +104,49 @@ v7 = {
   "name": "reserve1",
   "storageKey": null
 },
-v8 = [
+v8 = {
+  "alias": null,
+  "args": null,
+  "kind": "ScalarField",
+  "name": "reserveUSD",
+  "storageKey": null
+},
+v9 = {
+  "alias": null,
+  "args": null,
+  "kind": "ScalarField",
+  "name": "tvl",
+  "storageKey": null
+},
+v10 = {
+  "alias": null,
+  "args": null,
+  "kind": "ScalarField",
+  "name": "volume24h",
+  "storageKey": null
+},
+v11 = {
+  "alias": null,
+  "args": null,
+  "kind": "ScalarField",
+  "name": "volumeChange24h",
+  "storageKey": null
+},
+v12 = {
+  "alias": null,
+  "args": null,
+  "kind": "ScalarField",
+  "name": "poolAPR",
+  "storageKey": null
+},
+v13 = {
+  "alias": null,
+  "args": null,
+  "kind": "ScalarField",
+  "name": "rewardAPR",
+  "storageKey": null
+},
+v14 = [
   (v4/*: any*/),
   {
     "alias": null,
@@ -105,29 +155,36 @@ v8 = [
     "name": "symbol",
     "storageKey": null
   },
-  (v5/*: any*/)
+  (v5/*: any*/),
+  {
+    "alias": null,
+    "args": null,
+    "kind": "ScalarField",
+    "name": "priceUSD",
+    "storageKey": null
+  }
 ],
-v9 = {
+v15 = {
   "alias": null,
   "args": null,
   "concreteType": "Token",
   "kind": "LinkedField",
   "name": "token0",
   "plural": false,
-  "selections": (v8/*: any*/),
+  "selections": (v14/*: any*/),
   "storageKey": null
 },
-v10 = {
+v16 = {
   "alias": null,
   "args": null,
   "concreteType": "Token",
   "kind": "LinkedField",
   "name": "token1",
   "plural": false,
-  "selections": (v8/*: any*/),
+  "selections": (v14/*: any*/),
   "storageKey": null
 },
-v11 = [
+v17 = [
   {
     "kind": "Variable",
     "name": "limit",
@@ -144,14 +201,14 @@ v11 = [
     "variableName": "timeframe"
   }
 ],
-v12 = {
+v18 = {
   "alias": null,
   "args": null,
   "kind": "ScalarField",
   "name": "time",
   "storageKey": null
 },
-v13 = {
+v19 = {
   "alias": null,
   "args": null,
   "kind": "ScalarField",
@@ -181,8 +238,14 @@ return {
           (v5/*: any*/),
           (v6/*: any*/),
           (v7/*: any*/),
+          (v8/*: any*/),
           (v9/*: any*/),
           (v10/*: any*/),
+          (v11/*: any*/),
+          (v12/*: any*/),
+          (v13/*: any*/),
+          (v15/*: any*/),
+          (v16/*: any*/),
           {
             "args": null,
             "kind": "FragmentSpread",
@@ -193,7 +256,7 @@ return {
       },
       {
         "alias": null,
-        "args": (v11/*: any*/),
+        "args": (v17/*: any*/),
         "concreteType": "ChartDataPoint",
         "kind": "LinkedField",
         "name": "pairPriceChart",
@@ -209,7 +272,7 @@ return {
       },
       {
         "alias": null,
-        "args": (v11/*: any*/),
+        "args": (v17/*: any*/),
         "concreteType": "VolumeChartData",
         "kind": "LinkedField",
         "name": "pairVolumeChart",
@@ -249,34 +312,40 @@ return {
           (v5/*: any*/),
           (v6/*: any*/),
           (v7/*: any*/),
+          (v8/*: any*/),
           (v9/*: any*/),
-          (v10/*: any*/)
+          (v10/*: any*/),
+          (v11/*: any*/),
+          (v12/*: any*/),
+          (v13/*: any*/),
+          (v15/*: any*/),
+          (v16/*: any*/)
         ],
         "storageKey": null
       },
       {
         "alias": null,
-        "args": (v11/*: any*/),
+        "args": (v17/*: any*/),
         "concreteType": "ChartDataPoint",
         "kind": "LinkedField",
         "name": "pairPriceChart",
         "plural": true,
         "selections": [
-          (v12/*: any*/),
-          (v13/*: any*/)
+          (v18/*: any*/),
+          (v19/*: any*/)
         ],
         "storageKey": null
       },
       {
         "alias": null,
-        "args": (v11/*: any*/),
+        "args": (v17/*: any*/),
         "concreteType": "VolumeChartData",
         "kind": "LinkedField",
         "name": "pairVolumeChart",
         "plural": true,
         "selections": [
-          (v12/*: any*/),
-          (v13/*: any*/),
+          (v18/*: any*/),
+          (v19/*: any*/),
           {
             "alias": null,
             "args": null,
@@ -304,16 +373,16 @@ return {
     ]
   },
   "params": {
-    "cacheID": "9ba939e9ae7d90ee484e7c686330873e",
+    "cacheID": "da0e41334afd8e0c1c235a0cb0526564",
     "id": null,
     "metadata": {},
     "name": "PairDetailPageQuery",
     "operationKind": "query",
-    "text": "query PairDetailPageQuery(\n  $pairAddress: String!\n  $timeframe: String!\n  $limit: Int!\n) {\n  pairByAddress(address: $pairAddress) {\n    id\n    address\n    reserve0\n    reserve1\n    token0 {\n      id\n      symbol\n      address\n    }\n    token1 {\n      id\n      symbol\n      address\n    }\n    ...PriceChartContainer_pair\n  }\n  pairPriceChart(pairAddress: $pairAddress, timeframe: $timeframe, limit: $limit) {\n    ...PriceChartContainer_priceData\n  }\n  pairVolumeChart(pairAddress: $pairAddress, timeframe: $timeframe, limit: $limit) {\n    ...PriceChartContainer_volumeData\n  }\n}\n\nfragment PriceChartContainer_pair on Pair {\n  id\n  address\n  token0 {\n    id\n    symbol\n  }\n  token1 {\n    id\n    symbol\n  }\n}\n\nfragment PriceChartContainer_priceData on ChartDataPoint {\n  time\n  value\n}\n\nfragment PriceChartContainer_volumeData on VolumeChartData {\n  time\n  value\n  volume0\n  volume1\n  count\n}\n"
+    "text": "query PairDetailPageQuery(\n  $pairAddress: String!\n  $timeframe: String!\n  $limit: Int!\n) {\n  pairByAddress(address: $pairAddress) {\n    id\n    address\n    reserve0\n    reserve1\n    reserveUSD\n    tvl\n    volume24h\n    volumeChange24h\n    poolAPR\n    rewardAPR\n    token0 {\n      id\n      symbol\n      address\n      priceUSD\n    }\n    token1 {\n      id\n      symbol\n      address\n      priceUSD\n    }\n    ...PriceChartContainer_pair\n  }\n  pairPriceChart(pairAddress: $pairAddress, timeframe: $timeframe, limit: $limit) {\n    ...PriceChartContainer_priceData\n  }\n  pairVolumeChart(pairAddress: $pairAddress, timeframe: $timeframe, limit: $limit) {\n    ...PriceChartContainer_volumeData\n  }\n}\n\nfragment PriceChartContainer_pair on Pair {\n  id\n  address\n  token0 {\n    id\n    symbol\n  }\n  token1 {\n    id\n    symbol\n  }\n}\n\nfragment PriceChartContainer_priceData on ChartDataPoint {\n  time\n  value\n}\n\nfragment PriceChartContainer_volumeData on VolumeChartData {\n  time\n  value\n  volume0\n  volume1\n  count\n}\n"
   }
 };
 })();
 
-(node as any).hash = "2b415dc2c74b056468f58994aeef2a2d";
+(node as any).hash = "e445a9dfd3c5cc8c06b748d225bd644e";
 
 export default node;

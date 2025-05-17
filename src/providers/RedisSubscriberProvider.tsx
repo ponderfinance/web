@@ -39,6 +39,21 @@ const RedisSubscriberContext = createContext<RedisSubscriberContextType>({
 // Custom hook to use the context
 export const useRedisSubscriber = () => useContext(RedisSubscriberContext)
 
+// Debug helper function that can be called from dev tools
+export function enableRedisDebugMode() {
+  if (typeof window !== 'undefined') {
+    window.__REDIS_DEBUG = true;
+    console.log('Redis debug mode enabled. Events will be logged to the console.');
+    console.log('To disable, run: window.__REDIS_DEBUG = false');
+  }
+}
+
+// Expose the debug helper on window for easy access
+if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
+  // @ts-ignore - Adding to window for debugging
+  window.enableRedisDebugMode = enableRedisDebugMode;
+}
+
 // Provider component
 export function RedisSubscriberProvider({ children }: { children: React.ReactNode }) {
   // Update timestamps

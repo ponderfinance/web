@@ -457,7 +457,7 @@ export function registerTokenPriceUpdater() {
     /^token-price-/,
     (store, data) => {
       // Get token ID from the data
-      const tokenId = data.entityId;
+      const tokenId = data.entityId || data.tokenId;
       if (!tokenId) return;
       
       // Find the token record
@@ -469,6 +469,7 @@ export function registerTokenPriceUpdater() {
         tokenRecord.setValue(data.priceUSD, 'priceUSD');
       }
       
+      // Handle price changes
       if (data.priceChange24h !== undefined) {
         tokenRecord.setValue(data.priceChange24h, 'priceChange24h');
       }
@@ -476,6 +477,31 @@ export function registerTokenPriceUpdater() {
       if (data.priceChange1h !== undefined) {
         tokenRecord.setValue(data.priceChange1h, 'priceChange1h');
       }
+      
+      // Handle volume fields - handle both naming conventions
+      if (data.volumeUSD24h !== undefined) {
+        tokenRecord.setValue(data.volumeUSD24h, 'volumeUSD24h');
+      } else if (data.volume24h !== undefined) {
+        tokenRecord.setValue(data.volume24h, 'volumeUSD24h');
+      }
+      
+      // Handle 1h volume
+      if (data.volume1h !== undefined) {
+        tokenRecord.setValue(data.volume1h, 'volume1h');
+      }
+      
+      // Handle FDV (Fully Diluted Valuation)
+      if (data.fdv !== undefined) {
+        tokenRecord.setValue(data.fdv, 'fdv');
+      }
+      
+      // Handle market cap if available
+      if (data.marketCap !== undefined) {
+        tokenRecord.setValue(data.marketCap, 'marketCap');
+      }
+      
+      // Update timestamp to indicate when this data was last updated
+      tokenRecord.setValue(Date.now(), '__lastUpdated');
       
       // console.log(`Updated token ${tokenId} price in Relay store without refetching`);
     }

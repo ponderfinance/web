@@ -31,6 +31,7 @@ export { REDIS_CHANNELS };
 declare global {
   interface Window {
     __eventSource?: EventSource;
+    __REDIS_DEBUG?: boolean;
   }
 }
 
@@ -51,6 +52,9 @@ class EventService {
   private lastMessageTime = 0;
   private heartbeatInterval: NodeJS.Timeout | null = null;
   private heartbeatTimeoutMs = 30000; // 30 seconds between heartbeats
+  
+  // Development mode helper
+  private _lastEventTypeLogs: Record<string, number> = {};
   
   /**
    * Private constructor (singleton pattern)
@@ -263,6 +267,32 @@ class EventService {
         console.log('[Events] Raw message data:', event.data);
         // Don't propagate parsing errors to prevent component crashes
         return;
+      }
+      
+      // In development, log detailed info about the events (but not in production)
+      if (process.env.NODE_ENV === 'development') {
+        // Only log once per minute per event type to avoid console spam
+        const now = Date.now();
+        const eventType = data.type;
+        const lastLogTimeForType = this._lastEventTypeLogs[eventType] || 0;
+        
+        if (now - lastLogTimeForType > 60000) { // Only log once per minute
+          this._lastEventTypeLogs[eventType] = now;
+          
+          // Log with some details but not full payload
+          const summary = {
+            type: data.type,
+            entityType: data.payload?.entityType || 'unknown',
+            entityId: data.payload?.entityId || 'global',
+            hasFields: data.payload ? Object.keys(data.payload).length : 0,
+            timestamp: new Date().toISOString(),
+          };
+          
+          // Not using console.log to avoid noise in console
+          if (typeof window !== 'undefined' && window.__REDIS_DEBUG) {
+            console.log('[Redis Event]', summary);
+          }
+        }
       }
       
       // Connected message is special
