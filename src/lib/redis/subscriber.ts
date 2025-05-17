@@ -123,8 +123,14 @@ export function initRedisSubscriber(): any {
   // Server environment - use direct Redis connection 
   else if (Redis) {
     if (!redisSubscriber) {
-      const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
-      console.log(`Connecting to Redis subscriber at ${redisUrl.split('@').pop()}`);
+      const redisUrl = process.env.REDIS_URL;
+      
+      if (!redisUrl) {
+        console.error('No Redis URL provided in environment variable REDIS_URL')
+        return eventEmitter; // Return the event emitter if no URL is provided
+      }
+      
+      console.log(`Connecting to Redis subscriber at ${redisUrl.includes('@') ? redisUrl.split('@').pop() : 'redis-server'}`);
 
       // Create a dedicated Redis client for subscriptions
       redisSubscriber = new Redis(redisUrl, {

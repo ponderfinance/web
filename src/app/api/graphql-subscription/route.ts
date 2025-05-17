@@ -15,8 +15,14 @@ let redisClient: Redis | null = null;
 // Initialize Redis connection
 function getRedisClient() {
   if (!redisClient) {
-    const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
-    console.log(`[SSE] Connecting to Redis at ${redisUrl.split('@').pop()}`);
+    const redisUrl = process.env.REDIS_URL;
+    
+    if (!redisUrl) {
+      console.error('[SSE] No Redis URL provided in environment variables (REDIS_URL)');
+      throw new Error('Redis URL not configured');
+    }
+    
+    console.log(`[SSE] Connecting to Redis at ${redisUrl.includes('@') ? redisUrl.split('@').pop() : 'redis-server'}`);
     
     redisClient = new Redis(redisUrl, {
       retryStrategy: (times) => Math.min(times * 50, 2000),

@@ -12,8 +12,14 @@ export async function initServerSubscriptions() {
   if (redisSubscriber) return;
   
   try {
-    const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
-    console.log(`Server: Connecting subscription handler to Redis at ${redisUrl.split('@').pop()}`);
+    const redisUrl = process.env.REDIS_URL;
+    
+    if (!redisUrl) {
+      console.error('No Redis URL provided in environment variable REDIS_URL');
+      throw new Error('Redis URL not configured');
+    }
+    
+    console.log(`Server: Connecting subscription handler to Redis at ${redisUrl.includes('@') ? redisUrl.split('@').pop() : 'redis-server'}`);
     
     // Create Redis client
     redisSubscriber = new Redis(redisUrl, {

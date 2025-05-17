@@ -24,8 +24,15 @@ export const CACHE_TTLS = {
  */
 export function getRedisClient(): Redis {
   if (!redisClient) {
-    const redisUrl = process.env.REDIS_URL || process.env.NEXT_PUBLIC_REDIS_URL || 'redis://localhost:6379'
-    console.log(`Connecting to Redis at ${redisUrl.split('@').pop()}`) // Safe logging without credentials
+    // Use environment variables for Redis connection, without hardcoding
+    const redisUrl = process.env.REDIS_URL
+    
+    if (!redisUrl) {
+      console.error('No Redis URL provided in environment variable REDIS_URL')
+      return createFallbackClient() // Use fallback client if no URL is provided
+    }
+    
+    console.log(`Connecting to Redis at ${redisUrl.includes('@') ? redisUrl.split('@').pop() : 'redis-server'}`) // Safe logging without credentials
 
     connectionAttempts++
     

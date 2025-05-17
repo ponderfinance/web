@@ -29,62 +29,52 @@ export function getEventEmitter(): EventEmitter {
  * Initialize the Redis subscriber for GraphQL subscriptions
  */
 export function initSubscriptionServer(): void {
-  // Only run on client
+  // Only run on client side with EventSource, not direct Redis connection
   if (typeof window === 'undefined') return;
   
-  if (!redisSubscriber) {
-    try {
-      const redisUrl = process.env.NEXT_PUBLIC_REDIS_URL || 'redis://localhost:6379';
-      console.log(`Connecting subscription server to Redis at ${redisUrl.split('@').pop()}`);
+  if (!eventEmitter) {
+    eventEmitter = new EventEmitter();
+    // Set higher limit to avoid memory leaks warnings
+    eventEmitter.setMaxListeners(100);
+  }
+  
+  // For client-side, we'll use SSE instead of direct Redis connection
+  try {
+    console.log('Setting up client-side subscription system via SSE');
       
-      // Create Redis client
-      redisSubscriber = new Redis(redisUrl, {
-        retryStrategy: (times) => {
-          return Math.min(times * 50, 2000);
-        },
-        maxRetriesPerRequest: 3,
-      });
+    // EventSource will connect to our API route that handles Redis subscriptions
+    const eventSource = new EventSource('/api/graphql-subscription');
       
-      // Subscribe to Redis channels
-      redisSubscriber.on('connect', () => {
-        console.log('Subscription server connected to Redis');
-        
-        // Get channels to subscribe to
-        const channels = Object.values(REDIS_CHANNELS);
-        if (redisSubscriber) {
-          redisSubscriber.subscribe(...channels);
-          console.log('Subscription server subscribed to channels:', channels);
+    eventSource.onopen = () => {
+      console.log('SSE connection opened for real-time updates');
+    };
+      
+    eventSource.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        console.log('Received SSE update:', data);
           
-          // Set up message handler
-          redisSubscriber.on('message', (channel, message) => {
-            try {
-              console.log(`Subscription server received message on ${channel}:`, message);
-              const data = JSON.parse(message);
-              
-              // Emit events based on channel
-              if (channel === REDIS_CHANNELS.METRICS_UPDATED) {
-                getEventEmitter().emit('subscription:protocolMetricsUpdated', data);
-              } else if (channel === REDIS_CHANNELS.PAIR_UPDATED) {
-                getEventEmitter().emit(`subscription:pairUpdated:${data.entityId}`, data);
-              } else if (channel === REDIS_CHANNELS.TOKEN_UPDATED) {
-                getEventEmitter().emit(`subscription:tokenUpdated:${data.entityId}`, data);
-              } else if (channel === REDIS_CHANNELS.TRANSACTION_UPDATED) {
-                getEventEmitter().emit('subscription:transactionsUpdated', data);
-              }
-            } catch (error) {
-              console.error('Error processing Redis message:', error);
-            }
-          });
+        // Process message based on type
+        if (data.type === REDIS_CHANNELS.METRICS_UPDATED && data.payload) {
+          getEventEmitter().emit('subscription:protocolMetricsUpdated', data.payload);
+        } else if (data.type === REDIS_CHANNELS.PAIR_UPDATED && data.payload) {
+          getEventEmitter().emit(`subscription:pairUpdated:${data.payload.entityId}`, data.payload);
+        } else if (data.type === REDIS_CHANNELS.TOKEN_UPDATED && data.payload) {
+          getEventEmitter().emit(`subscription:tokenUpdated:${data.payload.entityId}`, data.payload);
+        } else if (data.type === REDIS_CHANNELS.TRANSACTION_UPDATED && data.payload) {
+          getEventEmitter().emit('subscription:transactionsUpdated', data.payload);
         }
-      });
+      } catch (error) {
+        console.error('Error processing SSE message:', error);
+      }
+    };
       
-      // Handle errors
-      redisSubscriber.on('error', (err) => {
-        console.error('Subscription server Redis error:', err);
-      });
-    } catch (error) {
-      console.error('Failed to initialize subscription server:', error);
-    }
+    eventSource.onerror = (error) => {
+      console.error('SSE connection error:', error);
+    };
+    
+  } catch (error) {
+    console.error('Failed to initialize subscription system:', error);
   }
 }
 

@@ -6,8 +6,14 @@ export function getRedisClient() {
     try {
       console.log('Creating new Redis client instance');
       const Redis = require('ioredis');
-      const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
-      console.log(`Connecting to Redis at: ${redisUrl}`); 
+      const redisUrl = process.env.REDIS_URL;
+      
+      if (!redisUrl) {
+        console.error('No Redis URL provided in environment variable REDIS_URL');
+        throw new Error('Redis URL not configured');
+      }
+      
+      console.log(`Connecting to Redis at: ${redisUrl.includes('@') ? redisUrl.split('@').pop() : 'redis-server'}`); 
       redisClient = new Redis(redisUrl);
       
       // Add event listeners to debug connection issues
