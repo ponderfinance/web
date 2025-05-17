@@ -25,6 +25,8 @@ type RedisSubscriberContextType = {
   refreshData: () => void
   // Function to check if an entity should be refreshed
   shouldEntityRefresh: (entityType: string, entityId: string, minInterval?: number) => boolean
+  // Indicate if real-time updates are enabled
+  isRealtimeEnabled: boolean
 }
 
 // Create the context with a default value
@@ -34,7 +36,8 @@ const RedisSubscriberContext = createContext<RedisSubscriberContextType>({
   tokenLastUpdated: {},
   transactionLastUpdated: {},
   refreshData: () => {},
-  shouldEntityRefresh: () => false
+  shouldEntityRefresh: () => false,
+  isRealtimeEnabled: false
 })
 
 // Helper to create styled console logs
@@ -54,11 +57,16 @@ const logWithStyle = (message: string, type: 'success' | 'info' | 'error' | 'war
 // Custom hook to use the Redis subscriber context
 export const useRedisSubscriber = () => useContext(RedisSubscriberContext)
 
-// Provider component - simplified to always use the Relay environment hook directly
+// Provider component - modified to handle the case when Relay environment isn't available yet
 export function RedisSubscriberProvider({ children }: { children: React.ReactNode }) {
-  // This will throw an error if used outside of a RelayEnvironmentProvider
-  // That's what we want - it ensures we only render this when Relay env is ready
-  const environment = useRelayEnvironment();
+  // Try to get the Relay environment, but don't throw if it's not available
+  let environment;
+  try {
+    environment = useRelayEnvironment();
+  } catch (error) {
+    // Environment not available yet, we'll render without real-time updates
+    logWithStyle('⏳ Relay environment not ready yet, rendering without real-time updates', 'warning');
+  }
   
   // State to track last update timestamps
   const [metricsLastUpdated, setMetricsLastUpdated] = useState<number | null>(null)
@@ -86,9 +94,27 @@ export function RedisSubscriberProvider({ children }: { children: React.ReactNod
     setRefreshCounter(prev => prev + 1)
   }
   
+  // If environment is not available, render children with a context that indicates
+  // real-time updates are not enabled
+  if (!environment) {
+    return (
+      <RedisSubscriberContext.Provider value={{
+        metricsLastUpdated: null,
+        pairLastUpdated: {},
+        tokenLastUpdated: {},
+        transactionLastUpdated: {},
+        refreshData: () => {},
+        shouldEntityRefresh: () => false,
+        isRealtimeEnabled: false
+      }}>
+        {children}
+      </RedisSubscriberContext.Provider>
+    );
+  }
+  
   // Register subscriber when provider mounts
   useEffect(() => {
-    if (typeof window !== 'undefined') {
+    if (typeof window !== 'undefined' && environment) {
       // Log that we have access to the Relay environment
       logWithStyle('✅ RedisSubscriber has valid Relay environment', 'success');
       
@@ -100,7 +126,7 @@ export function RedisSubscriberProvider({ children }: { children: React.ReactNod
         unregisterSubscriber();
       };
     }
-  }, []);
+  }, [environment]);
   
   // Initialize subscriber and set up event handlers
   useEffect(() => {
@@ -272,7 +298,8 @@ export function RedisSubscriberProvider({ children }: { children: React.ReactNod
     tokenLastUpdated,
     transactionLastUpdated,
     refreshData,
-    shouldEntityRefresh
+    shouldEntityRefresh,
+    isRealtimeEnabled: true
   }
   
   return (

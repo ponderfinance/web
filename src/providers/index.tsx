@@ -28,7 +28,7 @@ const logWithStyle = (message: string, type: 'success' | 'info' | 'error' | 'war
   console.log(`%c${message}`, styles[type]);
 };
 
-// Improved RelayProvider component with proper initialization and error handling
+// Modified RelayProvider that doesn't block rendering
 function RelayProvider({ children }: { children: React.ReactNode }) {
   const [environment, setEnvironment] = useState<any>(null);
   const initAttemptedRef = useRef(false);
@@ -64,55 +64,16 @@ function RelayProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  // If there was an error initializing the environment, render an error message
-  if (error) {
-    return (
-      <div className="p-4 bg-red-100 text-red-800 rounded">
-        <h3 className="font-bold">Error initializing Relay</h3>
-        <p>{error.message}</p>
-      </div>
-    );
-  }
-
-  // If environment is not yet available, render a skeleton UI matching header structure
-  if (!environment) {
-    return (
-      <>
-        {/* Skeleton header */}
-        <header className="w-full flex items-center justify-between px-4 py-3 border-b border-neutral-800">
-          {/* Logo placeholder */}
-          <div className="flex items-center">
-            <div className="w-32 h-8 bg-neutral-800 rounded animate-pulse"></div>
-          </div>
-          
-          {/* Nav placeholder */}
-          <div className="flex space-x-8">
-            <div className="w-16 h-4 bg-neutral-800 rounded animate-pulse"></div>
-            <div className="w-16 h-4 bg-neutral-800 rounded animate-pulse"></div>
-            <div className="w-16 h-4 bg-neutral-800 rounded animate-pulse"></div>
-          </div>
-          
-          {/* Wallet button placeholder */}
-          <div className="w-32 h-10 bg-neutral-800 rounded-full animate-pulse"></div>
-        </header>
-        
-        {/* Content skeleton */}
-        <div className="max-w-[1032px] mx-auto px-4 pt-6">
-          {/* Metrics skeleton */}
-          <div className="flex justify-between mb-8">
-            <div className="w-32 h-16 bg-neutral-800 rounded animate-pulse"></div>
-            <div className="w-32 h-16 bg-neutral-800 rounded animate-pulse"></div>
-          </div>
-        </div>
-      </>
-    );
-  }
-
-  // Once we have the environment, we can render the RelayEnvironmentProvider
-  return (
+  // If environment is available, provide it, otherwise just render children
+  // This allows non-Relay parts of the app to render normally
+  return environment ? (
     <RelayEnvironmentProvider environment={environment}>
       {children}
     </RelayEnvironmentProvider>
+  ) : (
+    // Just render children without the RelayEnvironmentProvider
+    // Components that need Relay will handle their own loading states
+    <>{children}</>
   );
 }
 

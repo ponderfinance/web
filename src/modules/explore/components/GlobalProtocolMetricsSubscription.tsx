@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { useQueryLoader } from 'react-relay';
 import { GlobalProtocolMetricsQuery } from '@/src/__generated__/GlobalProtocolMetricsQuery.graphql';
-import GlobalProtocolMetrics, { globalProtocolMetricsQuery } from './GlobalProtocolMetrics';
+import GlobalProtocolMetrics, { globalProtocolMetricsQuery, GlobalProtocolMetricsSkeleton } from './GlobalProtocolMetrics';
 import { useRefreshOnUpdate } from '@/src/hooks/useRefreshOnUpdate';
 
 // Helper for console logging
@@ -20,41 +20,56 @@ const logWithStyle = (message: string, type: 'success' | 'info' | 'error' | 'war
 
 // Simplified component using the singleton environment
 export default function GlobalProtocolMetricsWithSubscription() {
-  // We can safely use useQueryLoader here because this component only renders
-  // when the RelayEnvironmentProvider is available (from the parent providers)
-  const [queryRef, loadQuery] = useQueryLoader<GlobalProtocolMetricsQuery>(
-    globalProtocolMetricsQuery
-  );
+  const [isRelayAvailable, setIsRelayAvailable] = useState<boolean>(false);
+  const [queryRef, setQueryRef] = useState<any>(null);
+  const [loadQuery, setLoadQuery] = useState<any>(null);
   
-  const [isLoading, setIsLoading] = useState(true);
-  
-  // Initial load
+  // Safely try to initialize Relay hooks
   useEffect(() => {
-    if (!queryRef) {
-      logWithStyle('🔄 Loading protocol metrics...', 'info');
-      loadQuery({}, { fetchPolicy: 'store-or-network' });
+    try {
+      // Try to use the hook - this will throw if Relay environment isn't available
+      const [qRef, qLoader] = useQueryLoader<GlobalProtocolMetricsQuery>(globalProtocolMetricsQuery);
+      
+      // If we got here, Relay is available
+      setIsRelayAvailable(true);
+      setQueryRef(qRef);
+      setLoadQuery(() => qLoader); // Store the function
+      
+      // Initial data load
+      if (!qRef) {
+        logWithStyle('🔄 Loading protocol metrics...', 'info');
+        qLoader({}, { fetchPolicy: 'store-or-network' });
+      }
+    } catch (error) {
+      // Relay environment not available yet
+      setIsRelayAvailable(false);
+      logWithStyle('⏳ Waiting for Relay environment to be ready...', 'warning');
     }
-    setIsLoading(false);
-  }, [queryRef, loadQuery]);
+  }, []);
   
-  // Handle refreshing when metrics update
-  const handleMetricsUpdate = () => {
-    // Always use store-and-network to prevent skeleton loading states
-    // This shows cached data immediately while fetching fresh data in background
-    loadQuery({}, { fetchPolicy: 'store-and-network' });
-  };
+  // Handle refreshing when metrics update (only if Relay is available)
+  useEffect(() => {
+    if (!isRelayAvailable || !loadQuery) return;
+    
+    const handleMetricsUpdate = () => {
+      // Always use store-and-network to prevent skeleton loading states
+      loadQuery({}, { fetchPolicy: 'store-and-network' });
+    };
+    
+    // Use our custom hook for real-time updates
+    useRefreshOnUpdate({
+      entityType: 'metrics',
+      onUpdate: handleMetricsUpdate,
+      minRefreshInterval: 5000, // 5 seconds minimum between updates
+      shouldRefetch: false // No need to force refetch, loadQuery will handle it
+    });
+    
+    // No cleanup needed - hook manages its own lifecycle
+  }, [isRelayAvailable, loadQuery]);
   
-  // Use our custom hook for real-time updates
-  useRefreshOnUpdate({
-    entityType: 'metrics',
-    onUpdate: handleMetricsUpdate,
-    minRefreshInterval: 5000, // 5 seconds minimum between updates
-    shouldRefetch: false // No need to force refetch, loadQuery will handle it
-  });
-  
-  // Show loading state if query ref is not ready yet
-  if (isLoading || !queryRef) {
-    return <div>Loading protocol metrics...</div>;
+  // Show loading state if Relay is not available yet or query ref is not ready
+  if (!isRelayAvailable || !queryRef) {
+    return <GlobalProtocolMetricsSkeleton />;
   }
   
   // Render the metrics component with the query reference

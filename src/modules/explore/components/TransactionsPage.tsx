@@ -166,21 +166,38 @@ function TransactionsContent({ queryRef }: { queryRef: PreloadedQuery<Transactio
   return <TransactionsDisplay data={data} />
 }
 
-// Main transactions page component
+// Main transactions page component with safe handling of Relay environment
 export const TransactionsPage = () => {
-  // We can safely use useQueryLoader here because this component only renders
-  // when the RelayEnvironmentProvider is available (from the parent providers)
-  const [queryRef, loadQuery] = useQueryLoader<TransactionsPageQuery>(transactionsPageQuery);
+  const [isRelayAvailable, setIsRelayAvailable] = useState<boolean>(false);
+  const [queryRef, setQueryRef] = useState<any>(null);
+  const [loadQuery, setLoadQuery] = useState<any>(null);
   const [refreshKey, setRefreshKey] = useState(0);
   
-  // Initial data load
+  // Safely try to initialize Relay hooks
   useEffect(() => {
-    logWithStyle('🔄 Loading transaction data...', 'info');
-    loadQuery({ first: 15 }, { fetchPolicy: 'network-only' });
-  }, [loadQuery]);
+    try {
+      // Try to use the hook - this will throw if Relay environment isn't available
+      const [qRef, qLoader] = useQueryLoader<TransactionsPageQuery>(transactionsPageQuery);
+      
+      // If we got here, Relay is available
+      setIsRelayAvailable(true);
+      setQueryRef(qRef);
+      setLoadQuery(() => qLoader); // Store the function
+      
+      // Initial data load
+      logWithStyle('🔄 Loading transaction data...', 'info');
+      qLoader({ first: 15 }, { fetchPolicy: 'network-only' });
+    } catch (error) {
+      // Relay environment not available yet
+      setIsRelayAvailable(false);
+      logWithStyle('⏳ Waiting for Relay environment to be ready...', 'warning');
+    }
+  }, []);
   
   // Register this component as a real-time update subscriber
   useEffect(() => {
+    if (!isRelayAvailable) return;
+    
     // Register as a transaction subscriber
     registerSubscriber();
     
@@ -188,29 +205,38 @@ export const TransactionsPage = () => {
     return () => {
       unregisterSubscriber();
     };
-  }, []);
+  }, [isRelayAvailable]);
   
   // Set up real-time update hook for transactions
-  useRefreshOnUpdate({
-    entityType: 'transaction',
-    onUpdate: () => {
-      logWithStyle('🔄 Refreshing transactions due to real-time update', 'info');
-      // Reload query
-      loadQuery({ first: 15 }, { fetchPolicy: 'network-only' });
-      // Force re-render by changing key
-      setRefreshKey(prev => prev + 1);
-    },
-    minRefreshInterval: 1000,
-    shouldRefetch: true,
-  });
+  useEffect(() => {
+    if (!isRelayAvailable || !loadQuery) return;
+    
+    useRefreshOnUpdate({
+      entityType: 'transaction',
+      onUpdate: () => {
+        logWithStyle('🔄 Refreshing transactions due to real-time update', 'info');
+        // Reload query
+        loadQuery({ first: 15 }, { fetchPolicy: 'network-only' });
+        // Force re-render by changing key
+        setRefreshKey(prev => prev + 1);
+      },
+      minRefreshInterval: 1000,
+      shouldRefetch: true,
+    });
+  }, [isRelayAvailable, loadQuery]);
 
   // Create a key that changes when the refresh counter changes
   const contentKey = `transactions-content-${refreshKey}`;
   
+  // Show a loading/skeleton UI if Relay or query ref is not available
+  if (!isRelayAvailable || !queryRef) {
+    return <TransactionsLoading />;
+  }
+  
   return (
     <View gap={6}>
       <Suspense fallback={<TransactionsLoading />}>
-        {queryRef && <TransactionsContent key={contentKey} queryRef={queryRef} />}
+        <TransactionsContent key={contentKey} queryRef={queryRef} />
       </Suspense>
     </View>
   );
