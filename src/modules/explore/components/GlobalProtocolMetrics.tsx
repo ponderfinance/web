@@ -66,10 +66,10 @@ export const GlobalProtocolMetricsSkeleton = () => {
 
 // Component props type
 type GlobalProtocolMetricsProps = {
-  queryRef?: PreloadedQuery<GlobalProtocolMetricsQuery>
+  queryRef: PreloadedQuery<GlobalProtocolMetricsQuery>
 }
 
-// Component that accepts an optional queryRef
+// Component that accepts a queryRef
 export default function GlobalProtocolMetrics({ queryRef }: GlobalProtocolMetricsProps) {
   // Initialize metrics state
   const [metrics, setMetrics] = useState<{
@@ -79,40 +79,11 @@ export default function GlobalProtocolMetrics({ queryRef }: GlobalProtocolMetric
     volume24hChange: number | null;
   } | null>(null)
   
-  // Get query reference for Relay if not provided
-  const [localQueryRef, loadQuery] = useQueryLoader<GlobalProtocolMetricsQuery>(globalProtocolMetricsQuery)
-  
-  // Handle refreshing when metrics are updated
-  const handleMetricsUpdate = () => {
-    if (!queryRef) {
-      loadQuery({}, { fetchPolicy: 'network-only' })
-    }
-  }
-  
-  // Use our custom hook for real-time updates
-  const { lastUpdated } = useRefreshOnUpdate({
-    entityType: 'metrics',
-    onUpdate: handleMetricsUpdate,
-    minRefreshInterval: 15000, // 15 seconds minimum between updates
-    shouldRefetch: !queryRef // Only refetch if we don't have a queryRef
-  })
-  
-  // If queryRef is provided, use usePreloadedQuery, otherwise use useLazyLoadQuery
-  let data: any;
-  if (queryRef) {
-    data = usePreloadedQuery<GlobalProtocolMetricsQuery>(globalProtocolMetricsQuery, queryRef);
-  } else {
-    data = useLazyLoadQuery<GlobalProtocolMetricsQuery>(
-      globalProtocolMetricsQuery,
-      {},
-      {
-        fetchPolicy: 'store-or-network',
-        networkCacheConfig: {
-          force: false
-        }
-      }
-    );
-  }
+  // Use preloaded query data
+  const data = usePreloadedQuery<GlobalProtocolMetricsQuery>(
+    globalProtocolMetricsQuery, 
+    queryRef
+  );
   
   // Update metrics state when data changes
   useEffect(() => {

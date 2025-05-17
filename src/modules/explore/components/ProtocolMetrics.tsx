@@ -5,6 +5,7 @@ import { View, Text, Skeleton } from 'reshaped'
 import { graphql, useLazyLoadQuery } from 'react-relay'
 import { ProtocolMetricsQuery } from '@/src/__generated__/ProtocolMetricsQuery.graphql'
 import { useRefreshOnUpdate } from '@/src/hooks/useRefreshOnUpdate'
+import { withRelayBoundary } from '@/src/lib/relay/withRelayBoundary'
 
 // Define the GraphQL query
 export const protocolMetricsQuery = graphql`
@@ -58,7 +59,7 @@ const formatCurrency = (value: string | null | undefined) => {
 }
 
 // ProtocolMetrics component
-const ProtocolMetrics = () => {
+const ProtocolMetricsContent = () => {
   // Use our custom hook for real-time updates
   const { refresh, lastUpdated } = useRefreshOnUpdate({
     entityType: 'metrics',
@@ -112,4 +113,6 @@ const ProtocolMetrics = () => {
   )
 }
 
-export default ProtocolMetrics 
+// Export the component wrapped with Relay boundary
+const ProtocolMetrics = withRelayBoundary(ProtocolMetricsContent, ProtocolMetricsLoading);
+export default ProtocolMetrics; 

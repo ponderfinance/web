@@ -8,6 +8,7 @@ import { View, Text, Skeleton } from 'reshaped'
 import { tokenFragment } from '@/src/components/TokenPair'
 import ScrollableTable from '@/src/components/ScrollableTable'
 import { useRefreshOnUpdate } from '@/src/hooks/useRefreshOnUpdate'
+import { withRelayBoundary } from '@/src/lib/relay/withRelayBoundary'
 
 export const poolsPageQuery = graphql`
   query PoolsPageQuery(
@@ -185,8 +186,8 @@ function PoolsContent({
   )
 }
 
-// Exported page component
-export const PoolsPage = () => {
+// Main component content with Relay hooks
+const PoolsPageContent = () => {
   const [orderBy, setOrderBy] = useState<string>('reserveUSD')
   const [orderDirection, setOrderDirection] = useState<string>('desc')
   const [mounted, setMounted] = useState(false)
@@ -257,3 +258,6 @@ export const PoolsPage = () => {
     </View>
   )
 }
+
+// Export the component wrapped with Relay boundary
+export const PoolsPage = withRelayBoundary(PoolsPageContent, PoolsLoading)

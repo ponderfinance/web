@@ -8,6 +8,7 @@ import { View, Text, Skeleton } from 'reshaped'
 import { tokenFragment } from '@/src/components/TokenPair'
 import ScrollableTable from '@/src/components/ScrollableTable'
 import { useRefreshOnUpdate } from '@/src/hooks/useRefreshOnUpdate'
+import { withRelayBoundary } from '@/src/lib/relay/withRelayBoundary'
 
 export const tokensPageQuery = graphql`
   query TokensPageQuery(
@@ -173,8 +174,8 @@ function TokensContent({
   )
 }
 
-// Exported page component
-export const TokensPage = () => {
+// Exported page component without direct Relay hooks
+const TokensPageContent = () => {
   const [orderBy, setOrderBy] = useState<string>('volumeUSD24h')
   const [orderDirection, setOrderDirection] = useState<string>('desc')
   const [mounted, setMounted] = useState(false)
@@ -241,3 +242,6 @@ export const TokensPage = () => {
     </View>
   )
 }
+
+// Use the RelayBoundary HOC with a custom loading component
+export const TokensPage = withRelayBoundary(TokensPageContent, TokensLoading)

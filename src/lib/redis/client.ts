@@ -1,9 +1,10 @@
-import Redis from 'ioredis'
+import { getRedisSingleton } from './singleton';
+import type Redis from 'ioredis';
 
-// Single Redis client instance
-let redisClient: Redis | null = null
-let connectionAttempts = 0
-const MAX_CONNECTION_ATTEMPTS = 3
+/**
+ * @deprecated This module is deprecated - use the redis/index.ts API instead
+ * All code here is refactored to use the singleton pattern to avoid connection problems
+ */
 
 // Constants for cache prefixes and TTLs - must match indexer
 export const CACHE_PREFIXES = {
@@ -20,98 +21,31 @@ export const CACHE_TTLS = {
 };
 
 /**
- * Get or create a Redis client - ensures a singleton pattern
+ * Get a Redis client - ensures we use the singleton pattern
+ * @deprecated Use the redis/index.ts API instead
  */
 export function getRedisClient(): Redis {
-  if (!redisClient) {
-    // Use environment variables for Redis connection, without hardcoding
-    const redisUrl = process.env.REDIS_URL
-    
-    if (!redisUrl) {
-      console.error('No Redis URL provided in environment variable REDIS_URL')
-      return createFallbackClient() // Use fallback client if no URL is provided
-    }
-    
-    console.log(`Connecting to Redis at ${redisUrl.includes('@') ? redisUrl.split('@').pop() : 'redis-server'}`) // Safe logging without credentials
-
-    connectionAttempts++
-    
-    try {
-    redisClient = new Redis(redisUrl, {
-      retryStrategy: (times) => {
-        // Retry connection with exponential backoff
-        return Math.min(times * 50, 2000)
-      },
-      maxRetriesPerRequest: 3,
-        connectTimeout: 10000, // 10 seconds
-        enableOfflineQueue: true,
-        enableReadyCheck: true,
-    })
-
-    redisClient.on('error', (err) => {
-      console.error('Redis connection error:', err)
-        
-        // Reset client on critical errors to force reconnection on next access
-        if (err.message.includes('ECONNREFUSED') || 
-            err.message.includes('Connection timed out') ||
-            err.message.includes('Redis connection lost')) {
-          _resetRedisClient()
-        }
-    })
-
-    redisClient.on('connect', () => {
-      console.log('Successfully connected to Redis')
-        // Reset connection attempts on successful connection
-        connectionAttempts = 0
-      })
-      
-      redisClient.on('reconnecting', () => {
-        console.log('Reconnecting to Redis...')
-    })
-
-    // Verify connection with a ping
-    redisClient
-      .ping()
-      .then((response) => {
-        console.log(`Redis ping response: ${response}`)
-      })
-      .catch((err) => {
-        console.error('Redis ping failed:', err)
-      })
-    } catch (error) {
-      console.error('Error creating Redis client:', error)
-      // Return a dummy Redis client that gracefully fails for all operations
-      if (connectionAttempts >= MAX_CONNECTION_ATTEMPTS) {
-        console.error(`Failed to connect to Redis after ${connectionAttempts} attempts. Using fallback client.`)
-        return createFallbackClient()
-      }
-      throw error
-    }
+  console.warn('[REDIS] Using legacy client.ts getRedisClient is deprecated - use redis/index.ts API instead');
+  const redis = getRedisSingleton().getRedisClient();
+  if (!redis) {
+    return createFallbackClient();
   }
-
-  return redisClient
+  return redis;
 }
 
 /**
  * Reset the Redis client - forces reconnection on next getRedisClient call
- * This function is used by the recovery module
+ * @deprecated This function is no longer needed with the singleton pattern
  */
 export function _resetRedisClient(): void {
-  if (redisClient) {
-    try {
-      redisClient.disconnect()
-    } catch (error) {
-      console.error('Error disconnecting Redis client:', error)
-    }
-    redisClient = null
-  }
+  console.warn('[REDIS] _resetRedisClient() is deprecated - the singleton manages connections');
+  // No-op - the singleton handles this
 }
 
 /**
  * Create a fallback Redis client for use when Redis is unavailable
- * This implements a minimal subset of the Redis interface to prevent application crashes
  */
-function createFallbackClient(): Redis {
+function createFallbackClient(): any {
   // Create a mock object that implements the Redis interface
   const fallback = {
     get: async () => null,
@@ -120,15 +54,15 @@ function createFallbackClient(): Redis {
     ping: async () => 'DUMMY',
     on: () => fallback,
     disconnect: () => {},
-  } as unknown as Redis
+  };
   
-  console.warn('Using Redis fallback client - data will not be cached!')
-  return fallback
+  console.warn('[REDIS] Using Redis fallback client - data will not be cached!');
+  return fallback;
 }
 
 /**
  * Read protocol metrics from Redis in a consistent way
- * This handles the fetching and type conversion for all metrics
+ * @deprecated Use the redis/index.ts API instead
  */
 export async function getProtocolMetricsFromRedis(): Promise<any | null> {
   try {
@@ -176,17 +110,18 @@ export async function getProtocolMetricsFromRedis(): Promise<any | null> {
   }
 }
 
-// For testing and development - close the connection
+/**
+ * For testing and development - close the connection
+ * @deprecated Use closeRedisConnection from redis/index.ts instead
+ */
 export function closeRedisConnection() {
-  if (redisClient) {
-    redisClient.disconnect()
-    redisClient = null
-  }
+  console.warn('[REDIS] Using legacy closeRedisConnection is deprecated');
+  getRedisSingleton().closeRedisSubscriber();
 }
 
 /**
  * Clear all protocol metrics from Redis cache
- * This can be used to fix stale data issues 
+ * @deprecated Use the redis/index.ts API instead
  */
 export async function clearProtocolMetricsCache(): Promise<void> {
   try {

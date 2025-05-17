@@ -1,10 +1,11 @@
 'use client'
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useCallback } from 'react';
 import { useQueryLoader } from 'react-relay';
 import { GlobalProtocolMetricsQuery } from '@/src/__generated__/GlobalProtocolMetricsQuery.graphql';
 import GlobalProtocolMetrics, { globalProtocolMetricsQuery, GlobalProtocolMetricsSkeleton } from './GlobalProtocolMetrics';
 import { useRefreshOnUpdate } from '@/src/hooks/useRefreshOnUpdate';
+import { withRelayBoundary } from '@/src/lib/relay/withRelayBoundary';
 
 // Helper for console logging
 const logWithStyle = (message: string, type: 'success' | 'info' | 'error' | 'warning' = 'info') => {
@@ -18,60 +19,46 @@ const logWithStyle = (message: string, type: 'success' | 'info' | 'error' | 'war
   console.log(`%c${message}`, styles[type]);
 };
 
-// Simplified component using the singleton environment
-export default function GlobalProtocolMetricsWithSubscription() {
-  const [isRelayAvailable, setIsRelayAvailable] = useState<boolean>(false);
-  const [queryRef, setQueryRef] = useState<any>(null);
-  const [loadQuery, setLoadQuery] = useState<any>(null);
+// Simple component with minimal error handling
+function GlobalProtocolMetricsContent() {
+  // Use Relay hooks directly - the withRelayBoundary HOC will protect us
+  const [queryRef, loadQuery] = useQueryLoader<GlobalProtocolMetricsQuery>(globalProtocolMetricsQuery);
   
-  // Safely try to initialize Relay hooks
+  // Callback for refreshing data
+  const refreshData = useCallback(() => {
+    console.log('Refreshing protocol metrics');
+    try {
+      loadQuery({}, { fetchPolicy: 'store-and-network' });
+    } catch (err) {
+      console.error('Error refreshing metrics', err);
+    }
+  }, [loadQuery]);
+  
+  // Initial load
   useEffect(() => {
     try {
-      // Try to use the hook - this will throw if Relay environment isn't available
-      const [qRef, qLoader] = useQueryLoader<GlobalProtocolMetricsQuery>(globalProtocolMetricsQuery);
-      
-      // If we got here, Relay is available
-      setIsRelayAvailable(true);
-      setQueryRef(qRef);
-      setLoadQuery(() => qLoader); // Store the function
-      
-      // Initial data load
-      if (!qRef) {
-        logWithStyle('🔄 Loading protocol metrics...', 'info');
-        qLoader({}, { fetchPolicy: 'store-or-network' });
-      }
-    } catch (error) {
-      // Relay environment not available yet
-      setIsRelayAvailable(false);
-      logWithStyle('⏳ Waiting for Relay environment to be ready...', 'warning');
+      console.log('Loading initial protocol metrics');
+      loadQuery({}, { fetchPolicy: 'store-or-network' });
+    } catch (err) {
+      console.error('Error loading initial metrics', err);
     }
-  }, []);
+  }, [loadQuery]);
   
-  // Handle refreshing when metrics update (only if Relay is available)
-  useEffect(() => {
-    if (!isRelayAvailable || !loadQuery) return;
-    
-    const handleMetricsUpdate = () => {
-      // Always use store-and-network to prevent skeleton loading states
-      loadQuery({}, { fetchPolicy: 'store-and-network' });
-    };
-    
-    // Use our custom hook for real-time updates
-    useRefreshOnUpdate({
-      entityType: 'metrics',
-      onUpdate: handleMetricsUpdate,
-      minRefreshInterval: 5000, // 5 seconds minimum between updates
-      shouldRefetch: false // No need to force refetch, loadQuery will handle it
-    });
-    
-    // No cleanup needed - hook manages its own lifecycle
-  }, [isRelayAvailable, loadQuery]);
+  // Set up real-time updates
+  useRefreshOnUpdate({
+    entityType: 'metrics',
+    onUpdate: refreshData,
+    minRefreshInterval: 5000
+  });
   
-  // Show loading state if Relay is not available yet or query ref is not ready
-  if (!isRelayAvailable || !queryRef) {
+  // Show loading skeleton if data isn't loaded yet
+  if (!queryRef) {
     return <GlobalProtocolMetricsSkeleton />;
   }
   
-  // Render the metrics component with the query reference
+  // Render with data
   return <GlobalProtocolMetrics queryRef={queryRef} />;
-} 
+}
+
+// Export with protection via withRelayBoundary
+export default withRelayBoundary(GlobalProtocolMetricsContent, GlobalProtocolMetricsSkeleton); 

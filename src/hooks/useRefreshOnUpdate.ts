@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState, useRef } from 'react';
 import { useRedisSubscriber } from '@/src/providers/RedisSubscriberProvider';
-import { useRelayEnvironment } from 'react-relay';
+import { getClientEnvironment } from '@/src/lib/relay/environment';
+import { ConnectionState } from '@/src/lib/redis/singleton';
 
 type EntityType = 'token' | 'pair' | 'transaction' | 'metrics';
 
@@ -12,6 +13,7 @@ type RedisSubscriberContextType = {
   transactionLastUpdated: Record<string, number>;
   refreshData: () => void;
   shouldEntityRefresh: (entityType: string, entityId: string, minInterval?: number) => boolean;
+  connectionState: ConnectionState;
 };
 
 interface RefreshOnUpdateOptions {
@@ -43,36 +45,30 @@ export function useRefreshOnUpdate({
   shouldRefetch = false, // Whether to force a refetch
   debug = entityType === 'transaction' // Default to true for transactions
 }: RefreshOnUpdateOptions) {
-  // Try to access the Relay environment, but don't crash if it's not available
-  let environment: any = undefined;
-  try {
-    environment = useRelayEnvironment();
-  } catch (error) {
-    if (debug) {
-      console.log(`[useRefreshOnUpdate] Relay environment not available yet`);
-    }
-    // Environment will be undefined, and we'll handle that case
-  }
+  // Don't try to use Relay hooks directly - instead get the environment safely
+  const environmentRef = useRef<any>(null);
   
-  // We need to try/catch the subscriber hook too since it may depend on the environment
-  let subscriberContext: RedisSubscriberContextType | undefined;
-  try {
-    subscriberContext = useRedisSubscriber();
-  } catch (error) {
-    if (debug) {
-      console.log(`[useRefreshOnUpdate] Redis subscriber context not available yet`);
+  // Initialize the environment reference once
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    
+    try {
+      environmentRef.current = getClientEnvironment();
+      if (debug && environmentRef.current) {
+        console.log('[useRefreshOnUpdate] Got Relay environment reference');
+      }
+    } catch (error) {
+      if (debug) {
+        console.warn('[useRefreshOnUpdate] Failed to get Relay environment', error);
+      }
     }
-    // We'll set default values below
-  }
+  }, [debug]);
   
-  // Safely extract values from the subscriber context
-  const { 
-    metricsLastUpdated = null, 
-    tokenLastUpdated = {}, 
-    pairLastUpdated = {}, 
-    transactionLastUpdated = {},
-    shouldEntityRefresh = () => true
-  } = subscriberContext || {};
+  // Use the Redis subscriber context to get updates and connection state
+  const redisSubscriber = useRedisSubscriber();
+  
+  // Get connection state from subscriber
+  const { connectionState } = redisSubscriber;
   
   const [lastUpdated, setLastUpdated] = useState<number | null>(null);
   const lastRefreshTimeRef = useRef<number>(0);
@@ -80,25 +76,30 @@ export function useRefreshOnUpdate({
   
   // Track when the entity was last updated
   useEffect(() => {
-    // Skip if no environment or subscriber context
-    if (!environment || !subscriberContext) return;
+    // Skip if connection is suspended
+    if (connectionState === ConnectionState.SUSPENDED) {
+      if (debug) {
+        console.log(`[useRefreshOnUpdate] Connection suspended - skipping updates for ${entityType}`);
+      }
+      return;
+    }
     
+    // Get the appropriate timestamp based on entity type
     let timestamp: number | null = null;
     let hasSignificantChange = false;
     
-    // Get the appropriate timestamp based on entity type
     switch (entityType) {
       case 'metrics':
-        timestamp = metricsLastUpdated;
+        timestamp = redisSubscriber.metricsLastUpdated;
         break;
       case 'token':
-        timestamp = tokenLastUpdated[entityId] || null;
+        timestamp = redisSubscriber.tokenLastUpdated[entityId] || null;
         break;
       case 'pair':
-        timestamp = pairLastUpdated[entityId] || null;
+        timestamp = redisSubscriber.pairLastUpdated[entityId] || null;
         break;
       case 'transaction':
-        timestamp = transactionLastUpdated[entityId] || null;
+        timestamp = redisSubscriber.transactionLastUpdated[entityId] || null;
         hasSignificantChange = true; // Transactions are always significant updates
         break;
     }
@@ -110,7 +111,7 @@ export function useRefreshOnUpdate({
         timestamp,
         lastUpdated,
         timeSinceLastUpdate: lastUpdated ? timestamp - lastUpdated : null,
-        allTransactionUpdates: transactionLastUpdated
+        connectionState
       });
     }
     
@@ -136,7 +137,7 @@ export function useRefreshOnUpdate({
         consecutiveUpdatesRef.current = 0;
       }
       
-      // If we have rapid consecutive updates, be more aggressive
+      // If we have rapid consecutive updates, be more aggressive with refreshing
       const shouldRefreshNow = 
         timeSinceLastRefresh > effectiveMinInterval || 
         hasSignificantChange || 
@@ -148,7 +149,8 @@ export function useRefreshOnUpdate({
             timeSinceLastRefresh,
             effectiveMinInterval,
             hasSignificantChange,
-            consecutiveUpdates: consecutiveUpdatesRef.current
+            consecutiveUpdates: consecutiveUpdatesRef.current,
+            connectionState
           });
         }
         
@@ -159,8 +161,8 @@ export function useRefreshOnUpdate({
           onUpdate();
         }
         
-        // Force a refetch if requested
-        if (shouldRefetch && environment) {
+        // Force a refetch if requested and environment is available
+        if (shouldRefetch && environmentRef.current) {
           if (debug) {
             console.log(`[useRefreshOnUpdate] Forcing store invalidation for ${entityType} ${entityId}`);
           }
@@ -169,7 +171,7 @@ export function useRefreshOnUpdate({
           if (entityType === 'transaction' || consecutiveUpdatesRef.current >= 3) {
             // For transactions, we need to be more aggressive with the store invalidation
             try {
-              environment.getStore().notify();
+              environmentRef.current.getStore().notify();
             } catch (err) {
               console.error('Error invalidating store:', err);
             }
@@ -178,31 +180,36 @@ export function useRefreshOnUpdate({
       } else if (debug) {
         console.log(`[useRefreshOnUpdate] Skipping refresh for ${entityType} ${entityId} (too soon)`, {
           timeSinceLastRefresh,
-          effectiveMinInterval
+          effectiveMinInterval,
+          connectionState
         });
       }
     }
   }, [
     entityType, 
     entityId, 
-    metricsLastUpdated, 
-    tokenLastUpdated, 
-    pairLastUpdated, 
-    transactionLastUpdated,
+    redisSubscriber.metricsLastUpdated, 
+    redisSubscriber.tokenLastUpdated, 
+    redisSubscriber.pairLastUpdated, 
+    redisSubscriber.transactionLastUpdated,
+    connectionState,
     onUpdate,
-    environment,
     lastUpdated,
     minRefreshInterval,
     shouldRefetch,
     debug,
-    subscriberContext
+    redisSubscriber
   ]);
   
   // Manual refresh function
   const refresh = useCallback(() => {
-    if (!subscriberContext) return;
+    // Skip if connection is suspended
+    if (connectionState === ConnectionState.SUSPENDED) {
+      console.log(`[useRefreshOnUpdate] Cannot refresh while connection is suspended`);
+      return;
+    }
     
-    if (shouldEntityRefresh(entityType, entityId, minRefreshInterval)) {
+    if (redisSubscriber.shouldEntityRefresh(entityType, entityId, minRefreshInterval)) {
       if (debug) {
         console.log(`[useRefreshOnUpdate] Manual refresh for ${entityType} ${entityId}`);
       }
@@ -211,9 +218,9 @@ export function useRefreshOnUpdate({
         onUpdate();
       }
       
-      if (shouldRefetch && environment) {
+      if (shouldRefetch && environmentRef.current) {
         try {
-          environment.getStore().notify();
+          environmentRef.current.getStore().notify();
         } catch (err) {
           console.error('Error invalidating store:', err);
         }
@@ -221,10 +228,20 @@ export function useRefreshOnUpdate({
       
       lastRefreshTimeRef.current = Date.now();
     }
-  }, [entityType, entityId, environment, shouldRefetch, onUpdate, shouldEntityRefresh, minRefreshInterval, debug, subscriberContext]);
+  }, [
+    entityType, 
+    entityId, 
+    shouldRefetch, 
+    onUpdate, 
+    redisSubscriber.shouldEntityRefresh, 
+    minRefreshInterval, 
+    debug, 
+    connectionState
+  ]);
   
   return {
     refresh,
-    lastUpdated
+    lastUpdated,
+    connectionState
   };
 } 

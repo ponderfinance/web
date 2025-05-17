@@ -1,5 +1,8 @@
 'use client'
 
+// Import Redis singleton configuration
+import '@/src/config/redis';
+
 import { privyConfig, wagmiConfig } from '@/config'
 import { PrivyProvider } from '@privy-io/react-auth'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -28,53 +31,49 @@ const logWithStyle = (message: string, type: 'success' | 'info' | 'error' | 'war
   console.log(`%c${message}`, styles[type]);
 };
 
-// Modified RelayProvider that doesn't block rendering
+// Proper Relay Provider using established patterns
 function RelayProvider({ children }: { children: React.ReactNode }) {
-  const [environment, setEnvironment] = useState<any>(null);
-  const initAttemptedRef = useRef(false);
-  const [error, setError] = useState<Error | null>(null);
+  // Store environment in ref to prevent unnecessary re-renders
+  const envRef = useRef<any>(null);
+  const [isReady, setIsReady] = useState(false);
   
-  // Initialize environment in useEffect to ensure client-side only
+  // Initialize the environment once on mount
   useEffect(() => {
-    // Skip on server
+    // Skip in SSR
     if (typeof window === 'undefined') return;
-    
-    // Only try to initialize once
-    if (initAttemptedRef.current) return;
-    
-    // Mark that we've attempted initialization
-    initAttemptedRef.current = true;
+    if (envRef.current) return; // Already initialized
     
     try {
       logWithStyle('🔄 Initializing Relay environment...', 'info');
+      
+      // Get the singleton environment instance
       const env = getClientEnvironment();
       
       if (env) {
-        setEnvironment(env);
+        envRef.current = env;
+        setIsReady(true);
         logWithStyle('✅ Relay environment initialized successfully', 'success');
       } else {
-        const err = new Error('Failed to create Relay environment');
-        setError(err);
+        console.error('Failed to create Relay environment');
         logWithStyle('⚠️ Failed to create Relay environment', 'warning');
       }
     } catch (err) {
-      setError(err as Error);
+      console.error('Error creating Relay environment:', err);
       logWithStyle('❌ Error creating Relay environment:', 'error');
-      console.error(err);
     }
   }, []);
-
-  // If environment is available, provide it, otherwise just render children
-  // This allows non-Relay parts of the app to render normally
-  return environment ? (
-    <RelayEnvironmentProvider environment={environment}>
-      {children}
-    </RelayEnvironmentProvider>
-  ) : (
-    // Just render children without the RelayEnvironmentProvider
-    // Components that need Relay will handle their own loading states
-    <>{children}</>
-  );
+  
+  // If environment is ready, provide it to children
+  if (isReady && envRef.current) {
+    return (
+      <RelayEnvironmentProvider environment={envRef.current}>
+        {children}
+      </RelayEnvironmentProvider>
+    );
+  }
+  
+  // Return null until environment is ready - don't render children prematurely
+  return null;
 }
 
 // SDK Provider using wallet hook

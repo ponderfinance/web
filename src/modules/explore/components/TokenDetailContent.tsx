@@ -21,6 +21,7 @@ import { SwapInterface } from '@/src/components/Swap'
 import { CURRENT_CHAIN } from '@/src/constants/chains'
 import { formatNumber } from '@/src/utils/numbers'
 import { useRefreshOnUpdate } from '@/src/hooks/useRefreshOnUpdate'
+import { withRelayBoundary } from '@/src/lib/relay/withRelayBoundary'
 
 // For the missing constants and utilities, let's define them here
 const NATIVE_KUB_ADDRESS = '0x0000000000000000000000000000000000000000' as const
@@ -225,20 +226,83 @@ function PriceDisplay({
   )
 }
 
-// Wrapper component that loads the query
-export function TokenDetailContentWithRelay({ tokenAddress, initialTimeframe = '1m' }: { tokenAddress: string, initialTimeframe?: string }) {
+// Component with proper hooks that will be wrapped with boundary
+function TokenDetailContentWrapper({ tokenAddress, initialTimeframe = '1m' }: { tokenAddress: string, initialTimeframe?: string }) {
   const [queryRef, loadQuery] = useQueryLoader<TokenDetailContentQuery>(TokenDetailQuery)
   const [currentTimeframe, setCurrentTimeframe] = useState(initialTimeframe)
   const [isRefetching, setIsRefetching] = useState(false)
+  const [error, setError] = useState<Error | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const retryCountRef = useRef(0)
   
-  // Load data with the current timeframe
+  // Load data with the current timeframe - with proper error handling
   useEffect(() => {
-    loadQuery({
-      tokenAddress,
-      timeframe: currentTimeframe,
-      limit: 100
-    })
-  }, [loadQuery, tokenAddress]) // Remove currentTimeframe dependency to prevent full page reloads
+    setIsLoading(true);
+    setError(null);
+    
+    try {
+      console.log(`[TokenDetailContent] Loading token data for ${tokenAddress}`)
+      
+      // Perform the query load
+      loadQuery({
+        tokenAddress,
+        timeframe: currentTimeframe,
+        limit: 100
+      }, { fetchPolicy: 'network-only' }); // Force network fetch to ensure fresh data
+      
+      // Since Relay's loadQuery doesn't have callbacks, we'll use a timeout to check for success
+      // This isn't ideal but works as a basic error detection
+      const successTimer = setTimeout(() => {
+        setIsLoading(false);
+      }, 1000);
+      
+      return () => clearTimeout(successTimer);
+    } catch (err) {
+      console.error(`[TokenDetailContent] Exception during query setup:`, err);
+      setError(err instanceof Error ? err : new Error('Failed to load token data'));
+      setIsLoading(false);
+    }
+  }, [loadQuery, tokenAddress, currentTimeframe]);
+
+  // Add an error listener effect to detect fetch errors
+  useEffect(() => {
+    // Helper function to check if we have a network error
+    const checkForErrors = () => {
+      // Only run the check if we're loading and don't already have an error
+      if (!isLoading || error) return;
+      
+      // If we don't have a queryRef after a reasonable time, assume there was an error
+      if (!queryRef && retryCountRef.current < 3) {
+        console.error(`[TokenDetailContent] Query failed to load - retry attempt ${retryCountRef.current + 1}`);
+        
+        // Implement retry logic with exponential backoff
+        const delay = Math.pow(2, retryCountRef.current) * 1000;
+        retryCountRef.current++;
+        
+        setTimeout(() => {
+          try {
+            loadQuery({
+              tokenAddress,
+              timeframe: currentTimeframe,
+              limit: 100
+            }, { fetchPolicy: 'network-only' });
+          } catch (err) {
+            console.error(`[TokenDetailContent] Retry attempt failed:`, err);
+            setError(err instanceof Error ? err : new Error('Failed to load token data'));
+            setIsLoading(false);
+          }
+        }, delay);
+      } else if (!queryRef && retryCountRef.current >= 3) {
+        // After 3 retries, give up and show error
+        setError(new Error('Failed to load token data after multiple attempts'));
+        setIsLoading(false);
+      }
+    };
+    
+    // Run the error check after a delay
+    const errorTimer = setTimeout(checkForErrors, 3000);
+    return () => clearTimeout(errorTimer);
+  }, [queryRef, isLoading, error, loadQuery, tokenAddress, currentTimeframe]);
 
   const everHadDataRef = useRef(false)
 
@@ -248,15 +312,27 @@ export function TokenDetailContentWithRelay({ tokenAddress, initialTimeframe = '
     setCurrentTimeframe(newTimeframe)
   }, [])
 
-  // Handle refreshing when token data updates
+  // Handle refreshing when token data updates - with simplified error handling
   const handleTokenUpdate = useCallback(() => {
+    if (isRefetching) return; // Prevent concurrent refreshes
+    
     console.log(`[TokenDetailContent] Refreshing token data for ${tokenAddress}`)
-    loadQuery({
-      tokenAddress,
-      timeframe: currentTimeframe,
-      limit: 100
-    }, { fetchPolicy: 'store-and-network' })
-  }, [loadQuery, tokenAddress, currentTimeframe])
+    setIsRefetching(true);
+    
+    try {
+      loadQuery({
+        tokenAddress,
+        timeframe: currentTimeframe,
+        limit: 100
+      }, { fetchPolicy: 'store-and-network' });
+      
+      // Reset refetching state after a delay
+      setTimeout(() => setIsRefetching(false), 1000);
+    } catch (err) {
+      console.error(`[TokenDetailContent] Exception during refresh:`, err);
+      setIsRefetching(false);
+    }
+  }, [loadQuery, tokenAddress, currentTimeframe, isRefetching]);
   
   // Use our custom hook for real-time updates
   useRefreshOnUpdate({
@@ -265,157 +341,131 @@ export function TokenDetailContentWithRelay({ tokenAddress, initialTimeframe = '
     onUpdate: handleTokenUpdate,
     minRefreshInterval: 10000, // 10 seconds minimum between updates
     shouldRefetch: false // Let handleTokenUpdate handle the refresh
-  })
+  });
 
-  if (!queryRef) {
+  // Error state - render an error view with link back to tokens list
+  if (error) {
     return (
-      <View direction="column" gap={6}>
-        <View direction="row" align="center" gap={1.5}>
-          <Link href="/explore" attributes={{ style: { textDecoration: 'none' } }}>
-            <Text variant="body-2" color="neutral-faded">
-              Explore
-            </Text>
-          </Link>
-          <Text color="neutral-faded">›</Text>
-          <Link href="/explore/tokens" attributes={{ style: { textDecoration: 'none' } }}>
-            <Text variant="body-2" color="neutral-faded">
-              Tokens
-            </Text>
-          </Link>
-          <Text color="neutral-faded">›</Text>
-          <Skeleton width={4} height={0.75} borderRadius="medium" />
-        </View>
-        
-        <View direction="row" justify="space-between" align="center">
-          <View direction="row" gap={3} align="center">
-            <View width={8} height={8} overflow="hidden" borderRadius="large">
-              <Skeleton width="100%" height="100%" />
-            </View>
-            <Skeleton width={56} height={4} borderRadius="medium" />
-          </View>
-        </View>
-        
-        <View direction="row" align="center" gap={2}>
-          <Skeleton width={12} height={4} borderRadius="medium" />
-          <Skeleton width={8} height={3} borderRadius="medium" />
-        </View>
-        
-        <View direction="row" gap={6} width="100%" justify="space-between">
-          <View direction="column" gap={6} attributes={{ 
-            style: { flex: '3', width: '100%' } 
-          }}>
-            <View attributes={{ style: { height: '400px', width: '100%' } }}>
-              <Skeleton height="100%" width="100%" borderRadius="small" />
-            </View>
-            
-            <View direction="row" gap={2} justify="start">
-              {['1H', '1D', '1W', '1M', '1Y'].map((tf) => (
-                <Skeleton key={tf} height={6} width={8} borderRadius="small" />
-              ))}
-            </View>
-            
-            <View direction="column" gap={4}>
-              <Skeleton width={12} height={4} borderRadius="medium" />
-              <View direction="row" wrap={true} gap={8} justify="space-between">
-                {[1, 2, 3, 4].map((i) => (
-                  <View key={i} direction="column" gap={2}>
-                    <Skeleton width={8} height={2} borderRadius="medium" />
-                    <Skeleton width={12} height={3} borderRadius="medium" />
-                  </View>
-                ))}
-              </View>
-            </View>
-          </View>
-          
-          <View attributes={{ style: { flex: '2', width: '100%' } }}>
-            <View height={100} width="100%">
-              <Skeleton height="100%" width="100%" borderRadius="medium" />
-            </View>
-          </View>
-        </View>
+      <View padding={8} direction="column" gap={4} align="center">
+        <Text variant="featured-1" weight="medium" color="critical">Error</Text>
+        <Text>Failed to load token details. Please try again later.</Text>
+        <Link href="/explore/tokens">
+          <Text color="primary">Return to tokens list</Text>
+        </Link>
+        <Button 
+          variant="outline" 
+          color="primary" 
+          onClick={() => {
+            setError(null);
+            setIsLoading(true);
+            retryCountRef.current = 0;
+            loadQuery({
+              tokenAddress,
+              timeframe: currentTimeframe,
+              limit: 100
+            });
+          }}
+        >
+          Retry
+        </Button>
       </View>
-    )
+    );
   }
 
+  // Loading state
+  if (isLoading || !queryRef) {
+    return <TokenDetailSkeleton />
+  }
+
+  // Success state with data
   return (
-    <Suspense fallback={
-      <View direction="column" gap={6}>
-        <View direction="row" align="center" gap={1.5}>
-          <Link href="/explore" attributes={{ style: { textDecoration: 'none' } }}>
-            <Text variant="body-2" color="neutral-faded">
-              Explore
-            </Text>
-          </Link>
-          <Text color="neutral-faded">›</Text>
-          <Link href="/explore/tokens" attributes={{ style: { textDecoration: 'none' } }}>
-            <Text variant="body-2" color="neutral-faded">
-              Tokens
-            </Text>
-          </Link>
-          <Text color="neutral-faded">›</Text>
-          <Skeleton width={4} height={0.75} borderRadius="medium" />
-        </View>
-        
-        <View direction="row" justify="space-between" align="center">
-          <View direction="row" gap={3} align="center">
-            <View width={8} height={8} overflow="hidden" borderRadius="large">
-              <Skeleton width="100%" height="100%" />
-            </View>
-            <Skeleton width={56} height={4} borderRadius="medium" />
+    <TokenDetailContent 
+      queryRef={queryRef} 
+      everHadDataRef={everHadDataRef}
+      currentTimeframe={currentTimeframe}
+      onTimeframeChange={handleTimeframeChange}
+      isRefetching={isRefetching}
+      tokenAddress={tokenAddress}
+    />
+  );
+}
+
+// Token detail skeleton component for better code reuse
+function TokenDetailSkeleton() {
+  return (
+    <View direction="column" gap={6}>
+      <View direction="row" align="center" gap={1.5}>
+        <Link href="/explore" attributes={{ style: { textDecoration: 'none' } }}>
+          <Text variant="body-2" color="neutral-faded">
+            Explore
+          </Text>
+        </Link>
+        <Text color="neutral-faded">›</Text>
+        <Link href="/explore/tokens" attributes={{ style: { textDecoration: 'none' } }}>
+          <Text variant="body-2" color="neutral-faded">
+            Tokens
+          </Text>
+        </Link>
+        <Text color="neutral-faded">›</Text>
+        <Skeleton width={4} height={0.75} borderRadius="medium" />
+      </View>
+      
+      <View direction="row" justify="space-between" align="center">
+        <View direction="row" gap={3} align="center">
+          <View width={8} height={8} overflow="hidden" borderRadius="large">
+            <Skeleton width="100%" height="100%" />
           </View>
+          <Skeleton width={56} height={4} borderRadius="medium" />
         </View>
-        
-        <View direction="row" align="center" gap={2}>
-          <Skeleton width={12} height={4} borderRadius="medium" />
-          <Skeleton width={8} height={3} borderRadius="medium" />
-        </View>
-        
-        <View direction="row" gap={6} width="100%" justify="space-between">
-          <View direction="column" gap={6} attributes={{ 
-            style: { flex: '3', width: '100%' } 
-          }}>
-            <View attributes={{ style: { height: '400px', width: '100%' } }}>
-              <Skeleton height="100%" width="100%" borderRadius="small" />
-            </View>
-            
-            <View direction="row" gap={2} justify="start">
-              {['1H', '1D', '1W', '1M', '1Y'].map((tf) => (
-                <Skeleton key={tf} height={6} width={8} borderRadius="small" />
-              ))}
-            </View>
-            
-            <View direction="column" gap={4}>
-              <Skeleton width={12} height={4} borderRadius="medium" />
-              <View direction="row" wrap={true} gap={8} justify="space-between">
-                {[1, 2, 3, 4].map((i) => (
-                  <View key={i} direction="column" gap={2}>
-                    <Skeleton width={8} height={2} borderRadius="medium" />
-                    <Skeleton width={12} height={3} borderRadius="medium" />
-                  </View>
-                ))}
-              </View>
-            </View>
+      </View>
+      
+      <View direction="row" align="center" gap={2}>
+        <Skeleton width={12} height={4} borderRadius="medium" />
+        <Skeleton width={8} height={3} borderRadius="medium" />
+      </View>
+      
+      <View direction="row" gap={6} width="100%" justify="space-between">
+        <View direction="column" gap={6} attributes={{ 
+          style: { flex: '3', width: '100%' } 
+        }}>
+          <View attributes={{ style: { height: '400px', width: '100%' } }}>
+            <Skeleton height="100%" width="100%" borderRadius="small" />
           </View>
           
-          <View attributes={{ style: { flex: '2', width: '100%' } }}>
-            <View height={100} width="100%">
-              <Skeleton height="100%" width="100%" borderRadius="medium" />
+          <View direction="row" gap={2} justify="start">
+            {['1H', '1D', '1W', '1M', '1Y'].map((tf) => (
+              <Skeleton key={tf} height={6} width={8} borderRadius="small" />
+            ))}
+          </View>
+          
+          <View direction="column" gap={4}>
+            <Skeleton width={12} height={4} borderRadius="medium" />
+            <View direction="row" wrap={true} gap={8} justify="space-between">
+              {[1, 2, 3, 4].map((i) => (
+                <View key={i} direction="column" gap={2}>
+                  <Skeleton width={8} height={2} borderRadius="medium" />
+                  <Skeleton width={12} height={3} borderRadius="medium" />
+                </View>
+              ))}
             </View>
+          </View>
+        </View>
+        
+        <View attributes={{ style: { flex: '2', width: '100%' } }}>
+          <View height={100} width="100%">
+            <Skeleton height="100%" width="100%" borderRadius="medium" />
           </View>
         </View>
       </View>
-    }>
-      <TokenDetailContent 
-        queryRef={queryRef} 
-        everHadDataRef={everHadDataRef}
-        currentTimeframe={currentTimeframe}
-        onTimeframeChange={handleTimeframeChange}
-        isRefetching={isRefetching}
-        tokenAddress={tokenAddress}
-      />
-    </Suspense>
+    </View>
   )
 }
+
+// Wrap the component with RelayBoundary and export
+export const TokenDetailContentWithRelay = withRelayBoundary(
+  TokenDetailContentWrapper, 
+  TokenDetailSkeleton
+);
 
 // Main content component
 function TokenDetailContent({ 
@@ -792,4 +842,5 @@ function ChartSkeleton() {
     );
 }
 
-export default TokenDetailContentWithRelay
+// Add default export at the end
+export default TokenDetailContentWithRelay;
