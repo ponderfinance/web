@@ -195,8 +195,8 @@ export const TokensDisplay: React.FC<TokensDisplayProps> = ({
                   <div className="flex items-center">
                     <Image
                       src={getIpfsGateway(node.imageURI ?? '/tokens/coin.svg')}
-                      height={7}
-                      width={7}
+                      width={8}
+                      height={8}
                       alt={node.symbol || 'Token'}
                     />
                   </div>

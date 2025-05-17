@@ -149,27 +149,27 @@ export const PoolsDisplay: React.FC<PoolsDisplayProps> = ({
             </View.Item>
             
             <View.Item columns={2}>
-              <Text variant="body-2">{formatCurrency(node.tvl || node.reserveUSD)}</Text>
+              <Text variant="body-3">{formatCurrency(node.tvl || node.reserveUSD)}</Text>
             </View.Item>
             
             <View.Item columns={1}>
-              <Text variant="body-2" color={node.poolAPR && node.poolAPR > 0 ? "positive" : "neutral"}>
+              <Text variant="body-3" color={node.poolAPR && node.poolAPR > 0 ? "positive" : "neutral"}>
                 {formatPercentage(node.poolAPR)}
               </Text>
             </View.Item>
             
             <View.Item columns={2}>
-              <Text variant="body-2" color={node.rewardAPR && node.rewardAPR > 0 ? "positive" : "neutral"}>
+              <Text variant="body-3" color={node.rewardAPR && node.rewardAPR > 0 ? "positive" : "neutral"}>
                 {formatPercentage(node.rewardAPR)}
               </Text>
             </View.Item>
             
             <View.Item columns={1}>
-              <Text variant="body-2">{formatCurrency(node.volume24h)}</Text>
+              <Text variant="body-3">{formatCurrency(node.volume24h)}</Text>
             </View.Item>
             
             <View.Item columns={2}>
-              <Text variant="body-2">{formatCurrency(node.volume30d)}</Text>
+              <Text variant="body-3">{formatCurrency(node.volume30d)}</Text>
             </View.Item>
           </View>
         ))}

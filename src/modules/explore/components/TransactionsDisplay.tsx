@@ -139,7 +139,7 @@ export const TransactionsDisplay: React.FC<TransactionsDisplayProps> = ({ data }
               width="100%"
             >
               <View.Item columns={2}>
-                <Text color="primary">
+                <Text variant="body-3" color="primary">
                   <a href={`https://kubscan.com/tx/${node.txHash}`} target="_blank">
                     {formatTimeAgo(node.timestamp)}
                   </a>
@@ -147,7 +147,7 @@ export const TransactionsDisplay: React.FC<TransactionsDisplayProps> = ({ data }
               </View.Item>
 
               <View.Item columns={1}>
-                <Text>Swap</Text>
+                <Text variant="body-3">Swap</Text>
               </View.Item>
 
               <View.Item columns={4}>
@@ -155,20 +155,20 @@ export const TransactionsDisplay: React.FC<TransactionsDisplayProps> = ({ data }
                   {node.token0 && node.token1 && (
                     <TokenPair tokenA={node.token0} tokenB={node.token1} size="small" />
                   )}
-                  <Text>{swapDescription}</Text>
+                  <Text variant="body-3">{swapDescription}</Text>
                 </View>
               </View.Item>
 
               <View.Item columns={2}>
-                <Text>{fromTokenAmount}</Text>
+                <Text variant="body-3">{fromTokenAmount}</Text>
               </View.Item>
 
               <View.Item columns={2}>
-                <Text>{toTokenAmount}</Text>
+                <Text variant="body-3">{toTokenAmount}</Text>
               </View.Item>
 
               <View.Item columns={1}>
-                <Text>{formatCurrency(node.valueUSD)}</Text>
+                <Text variant="body-3">{formatCurrency(node.valueUSD)}</Text>
               </View.Item>
             </View>
           )

@@ -193,10 +193,10 @@ function PriceDisplay({
   isLoadingPrice: boolean
 }) {
   const formatTokenPrice = (price: number): string => {
-    if (price < 0.001) return formatCurrency(price, { maximumFractionDigits: 10 })
-    if (price < 0.01) return formatCurrency(price, { maximumFractionDigits: 6 })
-    if (price < 1) return formatCurrency(price, { maximumFractionDigits: 4 })
-    return formatCurrency(price)
+    if (price < 0.001) return formatCurrency(price, { maximumFractionDigits: 7 })
+    if (price < 0.01) return formatCurrency(price, { maximumFractionDigits: 7 })
+    if (price < 1) return formatCurrency(price, { maximumFractionDigits: 7 })
+    return formatCurrency(price, { maximumFractionDigits: 7 })
   }
 
   if (isLoadingPrice) {

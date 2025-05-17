@@ -106,7 +106,9 @@ function TokensLoading() {
             width="100%"
           >
             <View.Item columns={1}>
-              <Skeleton width="20px" height="24px" />
+              <Text color="neutral-faded" weight="medium">
+                {index + 1}
+              </Text>
             </View.Item>
             <View.Item columns={3}>
               <View direction="row" gap={2} align="center">
