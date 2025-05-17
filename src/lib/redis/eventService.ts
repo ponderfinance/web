@@ -267,7 +267,7 @@ class EventService {
       
       // Connected message is special
       if (data.type === 'connected') {
-        console.log('[Events] Connected to real-time updates server', data);
+        // console.log('[Events] Connected to real-time updates server', data);
         this.updateState(ConnectionState.CONNECTED);
         this.emitter.emit(ConnectionEvent.CONNECTED, data);
         return;
@@ -314,7 +314,7 @@ class EventService {
    * Handle connection error
    */
   private handleError(error: any): void {
-    console.error('[Events] Connection error', error);
+    // console.error('[Events] Connection error', error);
     
     // Update state
     const prevState = this.state;
@@ -348,7 +348,7 @@ class EventService {
       30000 // max 30 second delay
     );
     
-    console.log(`[Events] Will reconnect in ${Math.round(delay / 1000)}s (attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
+    // console.log(`[Events] Will reconnect in ${Math.round(delay / 1000)}s (attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
     
     // Schedule reconnection
     if (this.reconnectTimer) {

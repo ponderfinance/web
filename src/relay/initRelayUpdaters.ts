@@ -21,7 +21,7 @@ export function initializeRelayUpdaters() {
   // Register metrics updater
   registerMetricsUpdater();
   
-  console.log('All Relay store updaters registered successfully');
+  // console.log('All Relay store updaters registered successfully');
 }
 
 /**
@@ -108,8 +108,6 @@ function registerMetricsUpdater() {
         if (data.volume24hChange !== undefined) {
           metricsRecord.setValue(data.volume24hChange, 'volume24hChange');
         }
-        
-        console.log('Updated protocol metrics in Relay store without refetching');
       } catch (error) {
         console.error('Error updating metrics in store:', error);
       }

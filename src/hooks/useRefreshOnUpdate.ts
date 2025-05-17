@@ -118,7 +118,7 @@ export function useRefreshOnUpdate({
     // Check if we have an update and it's newer than the last one we processed
     if (timestamp && (!lastUpdated || timestamp > lastUpdated)) {
       if (debug) {
-        console.log(`[useRefreshOnUpdate] ${entityType} update detected at ${timestamp}`);
+        // console.log(`[useRefreshOnUpdate] ${entityType} update detected at ${timestamp}`);
       }
       
       setLastUpdated(timestamp);
@@ -145,13 +145,13 @@ export function useRefreshOnUpdate({
       
       if (shouldRefreshNow) {
         if (debug) {
-          console.log(`[useRefreshOnUpdate] Refreshing ${entityType} ${entityId}`, {
-            timeSinceLastRefresh,
-            effectiveMinInterval,
-            hasSignificantChange,
-            consecutiveUpdates: consecutiveUpdatesRef.current,
-            connectionState
-          });
+          // console.log(`[useRefreshOnUpdate] Refreshing ${entityType} ${entityId}`, {
+          //   timeSinceLastRefresh,
+          //   effectiveMinInterval,
+          //   hasSignificantChange,
+          //   consecutiveUpdates: consecutiveUpdatesRef.current,
+          //   connectionState
+          // });
         }
         
         lastRefreshTimeRef.current = now;
@@ -164,7 +164,7 @@ export function useRefreshOnUpdate({
         // Force a refetch if requested and environment is available
         if (shouldRefetch && environmentRef.current) {
           if (debug) {
-            console.log(`[useRefreshOnUpdate] Forcing store invalidation for ${entityType} ${entityId}`);
+            // console.log(`[useRefreshOnUpdate] Forcing store invalidation for ${entityType} ${entityId}`);
           }
           
           // If it's a transaction or we've had multiple updates, do a more aggressive refresh
@@ -178,11 +178,11 @@ export function useRefreshOnUpdate({
           }
         }
       } else if (debug) {
-        console.log(`[useRefreshOnUpdate] Skipping refresh for ${entityType} ${entityId} (too soon)`, {
-          timeSinceLastRefresh,
-          effectiveMinInterval,
-          connectionState
-        });
+        // console.log(`[useRefreshOnUpdate] Skipping refresh for ${entityType} ${entityId} (too soon)`, {
+        //   timeSinceLastRefresh,
+        //   effectiveMinInterval,
+        //   connectionState
+        // });
       }
     }
   }, [
@@ -205,13 +205,13 @@ export function useRefreshOnUpdate({
   const refresh = useCallback(() => {
     // Skip if connection is suspended
     if (connectionState === ConnectionState.SUSPENDED) {
-      console.log(`[useRefreshOnUpdate] Cannot refresh while connection is suspended`);
+      // console.log(`[useRefreshOnUpdate] Cannot refresh while connection is suspended`);
       return;
     }
     
     if (redisSubscriber.shouldEntityRefresh(entityType, entityId, minRefreshInterval)) {
       if (debug) {
-        console.log(`[useRefreshOnUpdate] Manual refresh for ${entityType} ${entityId}`);
+        // console.log(`[useRefreshOnUpdate] Manual refresh for ${entityType} ${entityId}`);
       }
       
       if (onUpdate) {

@@ -477,7 +477,7 @@ export function registerTokenPriceUpdater() {
         tokenRecord.setValue(data.priceChange1h, 'priceChange1h');
       }
       
-      console.log(`Updated token ${tokenId} price in Relay store without refetching`);
+      // console.log(`Updated token ${tokenId} price in Relay store without refetching`);
     }
   );
 } 

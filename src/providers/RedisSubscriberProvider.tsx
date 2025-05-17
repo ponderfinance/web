@@ -169,7 +169,7 @@ export function RedisSubscriberProvider({ children }: { children: React.ReactNod
   useEffect(() => {
     if (typeof window === 'undefined' || initialized.current) return;
     
-    console.log('🚀 Initializing real-time update handlers');
+    // console.log('🚀 Initializing real-time update handlers');
     initialized.current = true;
     
     // Register as a subscriber
@@ -180,7 +180,7 @@ export function RedisSubscriberProvider({ children }: { children: React.ReactNod
     
     // Metrics update handler
     const handleMetricsUpdate = (data: any) => {
-      console.log('📈 Metrics update received');
+      // console.log('📈 Metrics update received');
       
       // Try direct store update
       let updated = false;
