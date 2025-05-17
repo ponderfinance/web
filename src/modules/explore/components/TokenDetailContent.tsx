@@ -12,6 +12,7 @@ import {
 import { graphql, useLazyLoadQuery, PreloadedQuery, usePreloadedQuery, useQueryLoader } from 'react-relay'
 import TokenPriceChartContainer from './TokenPriceChartContainer'
 import { TokenDetailContentQuery } from '@/src/__generated__/TokenDetailContentQuery.graphql'
+import { TokenDetailContentChartQuery } from '@/src/__generated__/TokenDetailContentChartQuery.graphql'
 import { getIpfsGateway } from '@/src/utils/ipfs'
 import { isAddress } from 'viem'
 import { useRedisSubscriber } from '@/src/providers/RedisSubscriberProvider'
@@ -73,7 +74,7 @@ function formatBlockchainValue(value: any, decimals: number = 18): number {
   }
 }
 
-// Define the Relay fragment
+// Define the Relay fragment - split into two parts
 export const TokenDetailQuery = graphql`
   query TokenDetailContentQuery($tokenAddress: String!, $timeframe: String!, $limit: Int!) {
     tokenByAddress(address: $tokenAddress) {
@@ -91,6 +92,15 @@ export const TokenDetailQuery = graphql`
       imageURI
       ...TokenPriceChartContainer_token
     }
+    tokenPriceChart(tokenAddress: $tokenAddress, timeframe: $timeframe, limit: $limit) {
+      ...TokenPriceChartContainer_priceChart
+    }
+  }
+`
+
+// Define a separate query for just the chart data
+const ChartDataQuery = graphql`
+  query TokenDetailContentChartQuery($tokenAddress: String!, $timeframe: String!, $limit: Int!) {
     tokenPriceChart(tokenAddress: $tokenAddress, timeframe: $timeframe, limit: $limit) {
       ...TokenPriceChartContainer_priceChart
     }
@@ -217,29 +227,25 @@ function PriceDisplay({
 // Wrapper component that loads the query
 export function TokenDetailContentWithRelay({ tokenAddress, initialTimeframe = '1m' }: { tokenAddress: string, initialTimeframe?: string }) {
   const [queryRef, loadQuery] = useQueryLoader<TokenDetailContentQuery>(TokenDetailQuery)
-  const [timeframe, setTimeframe] = useState(initialTimeframe)
-
-  // Convert UI timeframe format to API format
-  const getApiTimeframe = (tf: string): string => {
-    switch (tf.toUpperCase()) {
-      case '1H': return '1h'
-      case '1D': return '1d'
-      case '1W': return '1w'
-      case '1M': return '1m'
-      case '1Y': return '1y'
-      default: return '1m'
-    }
-  }
-
+  const [currentTimeframe, setCurrentTimeframe] = useState(initialTimeframe)
+  const [isRefetching, setIsRefetching] = useState(false)
+  
+  // Load data with the current timeframe
   useEffect(() => {
     loadQuery({
       tokenAddress,
-      timeframe: getApiTimeframe(timeframe),
+      timeframe: currentTimeframe,
       limit: 100
     })
-  }, [loadQuery, tokenAddress, timeframe])
+  }, [loadQuery, tokenAddress]) // Remove currentTimeframe dependency to prevent full page reloads
 
   const everHadDataRef = useRef(false)
+
+  // Function to update timeframe that can be passed to child components
+  const handleTimeframeChange = useCallback((newTimeframe: string) => {
+    console.log(`[TokenDetailContent] Changing timeframe to ${newTimeframe}`)
+    setCurrentTimeframe(newTimeframe)
+  }, [])
 
   // Listen for Redis token updates
   const { tokenLastUpdated } = useRedisSubscriber()
@@ -254,15 +260,15 @@ export function TokenDetailContentWithRelay({ tokenAddress, initialTimeframe = '
       
       // Use intelligent throttling with high priority for detail page
       if (shouldRefresh(`token-detail-${normalizedAddress}`, 'high')) {
-        // Refresh data
+        // Refresh data with current timeframe
         loadQuery({
           tokenAddress,
-          timeframe: getApiTimeframe(timeframe),
+          timeframe: currentTimeframe,
           limit: 100
         })
       }
     }
-  }, [tokenLastUpdated, tokenAddress, loadQuery, timeframe])
+  }, [tokenLastUpdated, tokenAddress, loadQuery, currentTimeframe])
 
   if (!queryRef) {
     return (
@@ -402,7 +408,14 @@ export function TokenDetailContentWithRelay({ tokenAddress, initialTimeframe = '
         </View>
       </View>
     }>
-      <TokenDetailContent queryRef={queryRef} onTimeframeChange={setTimeframe} everHadDataRef={everHadDataRef} />
+      <TokenDetailContent 
+        queryRef={queryRef} 
+        everHadDataRef={everHadDataRef}
+        currentTimeframe={currentTimeframe}
+        onTimeframeChange={handleTimeframeChange}
+        isRefetching={isRefetching}
+        tokenAddress={tokenAddress}
+      />
     </Suspense>
   )
 }
@@ -410,17 +423,22 @@ export function TokenDetailContentWithRelay({ tokenAddress, initialTimeframe = '
 // Main content component
 function TokenDetailContent({ 
   queryRef, 
+  everHadDataRef,
+  currentTimeframe,
   onTimeframeChange,
-  everHadDataRef
+  isRefetching,
+  tokenAddress
 }: { 
   queryRef: PreloadedQuery<TokenDetailContentQuery>, 
-  onTimeframeChange: (tf: string) => void,
-  everHadDataRef: React.MutableRefObject<boolean>
+  everHadDataRef: React.MutableRefObject<boolean>,
+  currentTimeframe: string,
+  onTimeframeChange: (newTimeframe: string) => void,
+  isRefetching: boolean,
+  tokenAddress: string
 }) {
   // Check for mobile view
   const [isMobile, setIsMobile] = useState(false)
   const brandColor = '#94E0FE'
-  const [activeTimeframe, setActiveTimeframe] = useState<string>('1d')
   
   const checkIfMobile = useCallback(() => {
     setIsMobile(window.innerWidth < 768)
@@ -433,30 +451,30 @@ function TokenDetailContent({
   }, [checkIfMobile])
   
   const data = usePreloadedQuery(
-      TokenDetailQuery,
+    TokenDetailQuery,
     queryRef
   )
     
-    // Mark that we've had data
+  // Mark that we've had data
   if (data.tokenByAddress) {
     everHadDataRef.current = true
   }
   
   // Format metrics
-    const formatLargeNumber = (value: string | null | undefined): string => {
-      if (!value) return '$0'
-      const formattedNum = parseFloat(value)
+  const formatLargeNumber = (value: string | null | undefined): string => {
+    if (!value) return '$0'
+    const formattedNum = parseFloat(value)
 
-      if (formattedNum >= 1e9) {
-        return `$${(formattedNum / 1e9).toFixed(1)}B`
-      } else if (formattedNum >= 1e6) {
-        return `$${(formattedNum / 1e6).toFixed(1)}M`
-      } else if (formattedNum >= 1e3) {
-        return `$${(formattedNum / 1e3).toFixed(1)}K`
-      } else {
-        return `$${formattedNum.toFixed(2)}`
-      }
+    if (formattedNum >= 1e9) {
+      return `$${(formattedNum / 1e9).toFixed(1)}B`
+    } else if (formattedNum >= 1e6) {
+      return `$${(formattedNum / 1e6).toFixed(1)}M`
+    } else if (formattedNum >= 1e3) {
+      return `$${(formattedNum / 1e3).toFixed(1)}K`
+    } else {
+      return `$${formattedNum.toFixed(2)}`
     }
+  }
 
   // Format tooltip for price chart
   const formatTooltip = (value: number) => {
@@ -470,31 +488,14 @@ function TokenDetailContent({
       return `$${value.toFixed(4)}`
     }
     return formatCurrency(value)
-    }
-
-    // Handle timeframe change
-    const handleTimeframeChange = (tf: string) => {
-    setActiveTimeframe(tf)
-
-    // Convert API timeframe format back to UI format
-    let uiTimeframe = '1M'
-    switch (tf) {
-      case '1h': uiTimeframe = '1H'; break;
-      case '1d': uiTimeframe = '1D'; break;
-      case '1w': uiTimeframe = '1W'; break;
-      case '1m': uiTimeframe = '1M'; break;
-      case '1y': uiTimeframe = '1Y'; break;
-    }
-    
-    onTimeframeChange(uiTimeframe)
   }
-  
+
   // Determine swap tokens
   const isKKUBPage = data.tokenByAddress?.address.toLowerCase() === KKUB_ADDRESS[CURRENT_CHAIN.id].toLowerCase()
   
-  // Render the token detail UI with the exact same layout as before
-    return (
-      <View direction="column" gap={6}>
+  // Render the token detail UI with the chart container
+  return (
+    <View direction="column" gap={6}>
       {/* Breadcrumb Navigation */}
       <View direction="row" align="center" gap={1.5}>
         <Link href="/explore" attributes={{ style: { textDecoration: 'none' } }}>
@@ -512,7 +513,7 @@ function TokenDetailContent({
         <Text variant="body-2" color="neutral">
           {data.tokenByAddress?.symbol || data.tokenByAddress?.address.slice(0, 6) || ''}
         </Text>
-        </View>
+      </View>
 
       {/* Token header with logo and name */}
       <View direction="row" justify="space-between" align="center">
@@ -540,15 +541,15 @@ function TokenDetailContent({
         isLoadingPrice={false}
       />
 
-      {/* Main content area - responsive layout */}
+      {/* Main content area - use ChartContainer for the chart section */}
       <View 
         direction={isMobile ? "column" : "row"} 
         gap={6}
         width="100%"
         justify="space-between"
       >
-          <View
-            direction="column"
+        <View
+          direction="column"
           gap={6}
           attributes={{ 
             style: { 
@@ -557,72 +558,19 @@ function TokenDetailContent({
             } 
           }}
         >
-          {/* Chart section */}
-          <View>
-            {/* Never show loading state once we have data */}
-            <Suspense fallback={
-              everHadDataRef.current ? null : (
-              <View height={400} width="100%" attributes={{
-                style: {
-                  backgroundColor: 'rgba(30, 30, 30, 0.6)',
-                  borderRadius: 4
-                }
-              }} />
-              )
-            }>
-              {data.tokenByAddress && data.tokenPriceChart ? (
-              <TokenPriceChartContainer 
-                  tokenRef={data.tokenByAddress}
-                  priceChartRef={data.tokenPriceChart}
-                  initialTimeframe={queryRef.variables.timeframe as string}
-                initialDisplayType="area"
-                  onTimeframeChange={(tf) => {
-                    // Convert API timeframe format back to UI format
-                    let uiTimeframe = '1M'
-                    switch (tf) {
-                      case '1h': uiTimeframe = '1H'; break;
-                      case '1d': uiTimeframe = '1D'; break;
-                      case '1w': uiTimeframe = '1W'; break;
-                      case '1m': uiTimeframe = '1M'; break;
-                      case '1y': uiTimeframe = '1Y'; break;
-                    }
-                    
-                    onTimeframeChange(uiTimeframe)
-                  }}
-                />
-              ) : (
-                <View height={400} align="center" justify="center">
-                  <Text>No price data available</Text>
-                </View>
-              )}
-            </Suspense>
-
-          {/* Timeframe controls */}
-          <View direction="row" justify="space-between" padding={4} gap={2}>
-            <View direction="row" gap={2}>
-                {['1h', '1d', '1w', '1m', '1y'].map((timeframe) => (
-                <Button
-                  key={timeframe}
-                  variant={activeTimeframe === timeframe ? 'solid' : 'ghost'}
-                  color={activeTimeframe === timeframe ? 'primary' : 'neutral'}
-                  onClick={() => handleTimeframeChange(timeframe)}
-                  size="small"
-                  attributes={{
-                    style: {
-                      backgroundColor:
-                        activeTimeframe === timeframe
-                          ? 'rgba(148, 224, 254, 0.2)'
-                          : 'transparent',
-                      color: activeTimeframe === timeframe ? brandColor : '#999999',
-                    },
-                  }}
-                >
-                    {timeframe.toUpperCase()}
-                </Button>
-              ))}
+          {/* Use our improved chart container with separate Suspense boundary */}
+          {data.tokenByAddress ? (
+            <SuspenseChartContainer 
+              tokenAddress={data.tokenByAddress.address}
+              tokenRef={data.tokenByAddress}
+              initialTimeframe={currentTimeframe}
+              onTimeframeChange={onTimeframeChange}
+            />
+          ) : (
+            <View height={100} align="center" justify="center">
+              <Text>No data available</Text>
             </View>
-          </View>
-        </View>
+          )}
 
           {/* Stats Section - now aligned with chart */}
           <View direction="column" gap={4}>
@@ -645,7 +593,7 @@ function TokenDetailContent({
                 <Text variant="featured-3" weight="medium" color="neutral">
                   {formatLargeNumber(data.tokenByAddress?.marketCap)}
                 </Text>
-            </View>
+              </View>
               <View direction="column" gap={1}>
                 <Text variant="body-2" color="neutral-faded">
                   FDV
@@ -653,7 +601,7 @@ function TokenDetailContent({
                 <Text variant="featured-3" weight="medium" color="neutral">
                   {formatLargeNumber(data.tokenByAddress?.fdv)}
                 </Text>
-            </View>
+              </View>
               <View direction="column" gap={1}>
                 <Text variant="body-2" color="neutral-faded">
                   24h volume
@@ -661,7 +609,7 @@ function TokenDetailContent({
                 <Text variant="featured-3" weight="medium" color="neutral">
                   {formatLargeNumber(data.tokenByAddress?.volumeUSD24h)}
                 </Text>
-            </View>
+              </View>
             </View>
           </View>
         </View>
@@ -677,16 +625,174 @@ function TokenDetailContent({
         >
           {/* Swap interface with no heading */}
           <SwapInterface
-            defaultTokenIn={(isKKUBPage && data.tokenByAddress 
-              ? NATIVE_KUB_ADDRESS 
+            defaultTokenIn={NATIVE_KUB_ADDRESS as `0x${string}`}
+            defaultTokenOut={(!isKKUBPage
+              ? data.tokenByAddress?.address?.toLowerCase()
               : KKUB_ADDRESS[CURRENT_CHAIN.id]) as `0x${string}`}
-            defaultTokenOut={(data.tokenByAddress?.address?.toLowerCase() || '') as `0x${string}`}
             defaultWidth="100%"
           />
         </View>
       </View>
     </View>
   )
+}
+
+// Improved chart container with proper Suspense boundary
+function SuspenseChartContainer({
+  tokenAddress,
+  tokenRef,
+  initialTimeframe,
+  onTimeframeChange
+}: {
+  tokenAddress: string
+  tokenRef: any
+  initialTimeframe: string
+  onTimeframeChange: (timeframe: string) => void
+}) {
+  // This local state controls the timeframe for this chart
+  const [currentTimeframe, setCurrentTimeframe] = useState(initialTimeframe)
+  
+  // Load chart data query
+  const [chartQueryRef, loadChartQuery] = useQueryLoader<TokenDetailContentChartQuery>(ChartDataQuery)
+  // Only need one loading state for chart data
+  const [isChartLoading, setIsChartLoading] = useState(false)
+  const brandColor = '#94E0FE'
+  
+  // Load chart data on mount and when timeframe changes
+  useEffect(() => {
+    setIsChartLoading(true)
+    loadChartQuery({
+      tokenAddress,
+      timeframe: currentTimeframe,
+      limit: 100
+    })
+    
+    // Reset loading state after a delay
+    const timer = setTimeout(() => setIsChartLoading(false), 300)
+    return () => clearTimeout(timer)
+  }, [tokenAddress, currentTimeframe, loadChartQuery])
+  
+  // Handle timeframe button clicks
+  const handleTimeframeChange = (newTimeframe: string, event?: React.SyntheticEvent) => {
+    if (event) {
+      // Ensure we're properly preventing the default behavior
+      event.preventDefault()
+      event.stopPropagation()
+    }
+    
+    // Update the local timeframe state
+    setCurrentTimeframe(newTimeframe)
+    
+    // Also notify the parent component
+    onTimeframeChange(newTimeframe)
+  }
+  
+  return (
+    <View direction="column">
+      {/* Chart with Suspense boundary */}
+      <View height={100}>
+        {isChartLoading ? (
+          <View height="100%" width="100%">
+            <ChartSkeleton />
+          </View>
+        ) : chartQueryRef ? (
+          <Suspense fallback={
+            <View height="100%" width="100%">
+              <ChartSkeleton />
+            </View>
+          }>
+            <ChartContent
+              queryRef={chartQueryRef}
+              tokenRef={tokenRef}
+            />
+          </Suspense>
+        ) : (
+          <View height="100%" width="100%" align="center" justify="center">
+            <Text>No chart data available</Text>
+          </View>
+        )}
+      </View>
+      
+      {/* Timeframe controls - outside of Suspense boundary */}
+      <View direction="row" justify="space-between" padding={2} gap={2} attributes={{ style: { marginTop: '8px' } }}>
+        <View direction="row" gap={2}>
+          {['1h', '1d', '1w', '1m', '1y'].map((tf) => (
+            <Button
+              key={tf}
+              variant={currentTimeframe === tf ? 'solid' : 'ghost'}
+              color={currentTimeframe === tf ? 'primary' : 'neutral'}
+              onClick={(event) => handleTimeframeChange(tf, event)}
+              size="small"
+              attributes={{
+                style: {
+                  backgroundColor:
+                    currentTimeframe === tf
+                      ? 'rgba(148, 224, 254, 0.2)'
+                      : 'transparent',
+                  color: currentTimeframe === tf ? brandColor : '#999999',
+                },
+              }}
+            >
+              {tf.toUpperCase()}
+            </Button>
+          ))}
+        </View>
+      </View>
+    </View>
+  )
+}
+
+// Chart content component - handles the actual data rendering
+function ChartContent({
+  queryRef,
+  tokenRef
+}: {
+  queryRef: PreloadedQuery<TokenDetailContentChartQuery>
+  tokenRef: any
+}) {
+  // Load the data with usePreloadedQuery
+  const data = usePreloadedQuery(ChartDataQuery, queryRef)
+  
+  return (
+    <TokenPriceChartContainer 
+      tokenRef={tokenRef}
+      priceChartRef={data.tokenPriceChart}
+      initialDisplayType="area"
+    />
+  )
+}
+
+// Define a chart skeleton for loading states
+function ChartSkeleton() {
+  return (
+    <View direction="column" gap={2} height={100}>
+      <View grow={true} position="relative">
+        <View position="absolute" width="100%" height="100%">
+          <View height="100%" width="100%" direction="column" justify="space-between">
+            {/* Y-axis labels */}
+            <View direction="row" width="100%" justify="space-between">
+              <Skeleton width={15} height={4} borderRadius="circular" />
+              <Skeleton width={10} height={4} borderRadius="circular" />
+            </View>
+            
+            {/* Chart lines */}
+            <View height={0.25} width="100%" backgroundColor="neutral-faded" />
+            <View height={0.25} width="100%" backgroundColor="neutral-faded" />
+            <View height={0.25} width="100%" backgroundColor="neutral-faded" />
+            <View height={0.25} width="100%" backgroundColor="neutral-faded" />
+            
+            {/* X-axis labels */}
+            <View direction="row" width="100%" justify="space-between">
+              <Skeleton width={12} height={4} borderRadius="circular" />
+              <Skeleton width={12} height={4} borderRadius="circular" />
+              <Skeleton width={12} height={4} borderRadius="circular" />
+              <Skeleton width={12} height={4} borderRadius="circular" />
+            </View>
+          </View>
+        </View>
+      </View>
+    </View>
+  );
 }
 
 export default TokenDetailContentWithRelay

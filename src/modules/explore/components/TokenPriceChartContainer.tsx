@@ -54,7 +54,7 @@ interface TokenPriceChartContainerProps {
 export default function TokenPriceChartContainer({
   tokenRef,
   priceChartRef,
-  initialTimeframe = '1m',
+  initialTimeframe = '1d',
   initialDisplayType = 'area',
   onTimeframeChange,
 }: TokenPriceChartContainerProps) {
@@ -161,6 +161,8 @@ function TokenPriceChartRenderer({
     readonly value: number
   }>
 }) {
+  const chartTitle = `${tokenSymbol} Price (USD)`
+
   // Create a clean copy of the data to avoid readonly issues
   let processedData = priceData.map(point => {
     // Always normalize values using the token's decimals (or default to 18)
@@ -222,6 +224,7 @@ function TokenPriceChartRenderer({
     <PriceChart
       data={processedData}
       type={displayType}
+      title={chartTitle}
       height={400}
       autoSize={true}
       yAxisLabel="Price (USD)"
