@@ -1,12 +1,12 @@
 'use client'
 
 import React from 'react'
-import { View, Text } from 'reshaped'
-import { TransactionsPageQuery } from '@/src/__generated__/TransactionsPageQuery.graphql'
+import { View, Text, Loader } from 'reshaped'
 import { TokenPair } from '@/src/components/TokenPair'
 import { formatCryptoVal } from '@/src/utils/numbers'
 import Link from 'next/link'
 import ScrollableTable from '@/src/components/ScrollableTable'
+import { TransactionsPageQuery } from '@/src/__generated__/TransactionsPageQuery.graphql'
 
 // Helper to format currency values
 const formatCurrency = (value: string | null | undefined): string => {
@@ -48,12 +48,62 @@ const abbreviateAddress = (address: string): string => {
   return `${address.slice(0, 6)}...${address.slice(-4)}`
 }
 
-// Define the component props
+// Define the component props with proper types from Relay
 interface TransactionsDisplayProps {
-  data: TransactionsPageQuery['response']
+  data: {
+    recentTransactions: {
+      edges: ReadonlyArray<{
+        readonly node: {
+          readonly id: string;
+          readonly txHash: string;
+          readonly timestamp: number;
+          readonly userAddress: string;
+          readonly token0: {
+            readonly id: string;
+            readonly address: string;
+            readonly symbol: string | null;
+            readonly " $fragmentSpreads": any;
+          } | null;
+          readonly token1: {
+            readonly id: string;
+            readonly address: string;
+            readonly symbol: string | null;
+            readonly " $fragmentSpreads": any;
+          } | null;
+          readonly amountIn0: string;
+          readonly amountIn1: string;
+          readonly amountOut0: string;
+          readonly amountOut1: string;
+          readonly valueUSD: string | null;
+        };
+      }>;
+      pageInfo: {
+        readonly hasNextPage: boolean;
+        readonly endCursor: string | null;
+      };
+      totalCount: number;
+    };
+  } | null;
+  hasMore?: boolean;
+  isLoading?: boolean;
+  loaderRef?: React.RefObject<HTMLDivElement>;
 }
 
-export const TransactionsDisplay: React.FC<TransactionsDisplayProps> = ({ data }) => {
+export const TransactionsDisplay: React.FC<TransactionsDisplayProps> = ({ 
+  data, 
+  hasMore = false, 
+  isLoading = false, 
+  loaderRef 
+}) => {
+  // Early return if there's no data
+  if (!data || !data.recentTransactions || !data.recentTransactions.edges) {
+    return (
+      <View padding={4} align="center">
+        <Text>No transactions found</Text>
+      </View>
+    );
+  }
+
   return (
     <ScrollableTable minWidth="1000px">
       {/* Table Header */}
@@ -173,6 +223,26 @@ export const TransactionsDisplay: React.FC<TransactionsDisplayProps> = ({ data }
             </View>
           )
         })}
+        
+        {/* Loading indicator row */}
+        {hasMore && (
+          <View
+            direction="row"
+            gap={0}
+            padding={4}
+            className={'border-0 border-neutral-faded'}
+            align="center"
+            width="100%"
+          >
+            <View.Item columns={12}>
+              <View align="center" width="100%">
+                <div ref={loaderRef}>
+                  <Loader size="medium" />
+                </div>
+              </View>
+            </View.Item>
+          </View>
+        )}
       </View>
     </ScrollableTable>
   )

@@ -1,22 +1,45 @@
 'use client'
 
-import React, { Suspense, useState, useEffect, useCallback, useRef } from 'react'
-import { graphql, useLazyLoadQuery, useQueryLoader } from 'react-relay'
-import { PoolsPageQuery } from '@/src/__generated__/PoolsPageQuery.graphql'
+import React, { Suspense, useEffect, useCallback } from 'react'
+import { graphql, useQueryLoader, usePaginationFragment, useLazyLoadQuery } from 'react-relay'
+import { PoolsPageQuery, PairOrderBy, OrderDirection } from '@/src/__generated__/PoolsPageQuery.graphql'
+import { PoolsPage_pairs$key } from '@/src/__generated__/PoolsPage_pairs.graphql'
 import { PoolsDisplay } from '@/src/modules/explore/components/PoolsDisplay'
-import { View, Text, Skeleton } from 'reshaped'
+import { View, Text, Skeleton, Button, Loader } from 'reshaped'
 import { tokenFragment } from '@/src/components/TokenPair'
 import ScrollableTable from '@/src/components/ScrollableTable'
 import { useRefreshOnUpdate } from '@/src/hooks/useRefreshOnUpdate'
 import { withRelayBoundary } from '@/src/lib/relay/withRelayBoundary'
 
+// Define main query for pools
 export const poolsPageQuery = graphql`
   query PoolsPageQuery(
     $first: Int!
+    $after: String
     $orderBy: PairOrderBy!
     $orderDirection: OrderDirection!
   ) {
-    pairs(first: $first, orderBy: $orderBy, orderDirection: $orderDirection) {
+    ...PoolsPage_pairs @arguments(
+      first: $first
+      after: $after
+      orderBy: $orderBy
+      orderDirection: $orderDirection
+    )
+  }
+`;
+
+// Define a refetchable fragment for pagination
+export const poolsPageFragment = graphql`
+  fragment PoolsPage_pairs on Query 
+  @refetchable(queryName: "PoolsPagePaginationQuery")
+  @argumentDefinitions(
+    first: { type: "Int!" }
+    after: { type: "String" }
+    orderBy: { type: "PairOrderBy!" }
+    orderDirection: { type: "OrderDirection!" }
+  ) {
+    pairs(first: $first, after: $after, orderBy: $orderBy, orderDirection: $orderDirection)
+    @connection(key: "PoolsPage__pairs", filters: ["orderBy", "orderDirection"]) {
       edges {
         node {
           id
@@ -50,7 +73,7 @@ export const poolsPageQuery = graphql`
       totalCount
     }
   }
-`
+`;
 
 // Loading component for suspense
 function PoolsLoading() {
@@ -148,117 +171,205 @@ function PoolsLoading() {
   )
 }
 
-// Main content component that fetches data
-function PoolsContent({
+// Paginated pools with sorting
+interface PaginatedPoolsProps {
+  fragmentRef: PoolsPage_pairs$key;
+  onSortChange: (orderBy: PairOrderBy, orderDirection: OrderDirection) => void;
+  currentOrderBy: PairOrderBy;
+  currentOrderDirection: OrderDirection;
+}
+
+function PaginatedPools({ 
+  fragmentRef, 
+  onSortChange,
+  currentOrderBy,
+  currentOrderDirection
+}: PaginatedPoolsProps) {
+  const { data, loadNext, hasNext, isLoadingNext } = usePaginationFragment(
+    poolsPageFragment,
+    fragmentRef
+  );
+  const loaderRef = React.useRef<HTMLDivElement>(null);
+
+  // Handle sorting
+  const handleSort = useCallback((column: string) => {
+    const orderBy = column as PairOrderBy;
+    const orderDirection = 
+      orderBy === currentOrderBy && currentOrderDirection === 'desc' 
+        ? 'asc' as OrderDirection 
+        : 'desc' as OrderDirection;
+    
+    onSortChange(orderBy, orderDirection);
+  }, [currentOrderBy, currentOrderDirection, onSortChange]);
+
+  // Load more handler
+  const loadMoreItems = useCallback(() => {
+    if (hasNext && !isLoadingNext) {
+      loadNext(10);
+    }
+  }, [hasNext, isLoadingNext, loadNext]);
+
+  // Setup intersection observer to detect when the user scrolls to the bottom
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasNext && !isLoadingNext) {
+          loadMoreItems();
+        }
+      },
+      { threshold: 0.1 }
+    );
+
+    const currentRef = loaderRef.current;
+    if (currentRef) {
+      observer.observe(currentRef);
+    }
+
+    return () => {
+      if (currentRef) {
+        observer.unobserve(currentRef);
+      }
+    };
+  }, [hasNext, isLoadingNext, loadMoreItems]);
+
+  return (
+    <PoolsDisplay
+      data={data}
+      orderBy={currentOrderBy}
+      orderDirection={currentOrderDirection}
+      setOrderBy={handleSort}
+      setOrderDirection={() => {}} // Handled in handleSort
+      hasMore={hasNext}
+      isLoading={isLoadingNext}
+      loaderRef={loaderRef}
+    />
+  );
+}
+
+// Component that consumes the query and passes the fragment reference
+function PoolsQueryRenderer({
+  queryReference,
   orderBy,
   orderDirection,
-  setOrderBy,
-  setOrderDirection,
-  queryRef,
-  refreshData,
+  onSortChange
 }: {
-  orderBy: string
-  orderDirection: string
-  setOrderBy: (value: string) => void
-  setOrderDirection: (value: string) => void
-  queryRef: any
-  refreshData: () => void
+  queryReference: any;
+  orderBy: PairOrderBy;
+  orderDirection: OrderDirection;
+  onSortChange: (orderBy: PairOrderBy, orderDirection: OrderDirection) => void;
 }) {
   const data = useLazyLoadQuery<PoolsPageQuery>(
     poolsPageQuery,
     {
       first: 20,
-      orderBy: orderBy as any,
-      orderDirection: orderDirection as any,
+      after: null,
+      orderBy,
+      orderDirection
     },
-    {
-      fetchPolicy: 'store-and-network',
-      fetchKey: orderBy + orderDirection,
-    }
-  )
+    { fetchPolicy: 'store-or-network', fetchKey: queryReference }
+  );
 
   return (
-    <PoolsDisplay
-      data={data}
-      orderBy={orderBy}
-      orderDirection={orderDirection}
-      setOrderBy={setOrderBy}
-      setOrderDirection={setOrderDirection}
+    <PaginatedPools
+      fragmentRef={data}
+      onSortChange={onSortChange}
+      currentOrderBy={orderBy}
+      currentOrderDirection={orderDirection}
     />
-  )
+  );
 }
 
-// Main component content with Relay hooks
+// Exported page component
 const PoolsPageContent = () => {
-  const [orderBy, setOrderBy] = useState<string>('reserveUSD')
-  const [orderDirection, setOrderDirection] = useState<string>('desc')
-  const [mounted, setMounted] = useState(false)
-  const [refreshCounter, setRefreshCounter] = useState(0)
-  
-  // Add query loader
-  const [queryRef, loadQuery] = useQueryLoader<PoolsPageQuery>(poolsPageQuery)
-  
-  // Function to refresh data
-  const handlePoolUpdate = useCallback(() => {
-    loadQuery(
-      {
+  // Get sort parameters from URL if available
+  const getInitialSortParams = () => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const orderBy = params.get('orderBy') as PairOrderBy || 'reserveUSD';
+      const orderDirection = params.get('orderDirection') as OrderDirection || 'desc';
+      return { orderBy, orderDirection };
+    }
+    return { orderBy: 'reserveUSD' as PairOrderBy, orderDirection: 'desc' as OrderDirection };
+  };
+
+  const [sortParams, setSortParams] = React.useState(getInitialSortParams);
+  const [mounted, setMounted] = React.useState(false);
+  const [queryRef, loadQuery] = useQueryLoader<PoolsPageQuery>(poolsPageQuery);
+  // Use a counter to force re-render of the query renderer
+  const [queryRefreshCounter, setQueryRefreshCounter] = React.useState(0);
+
+  // Sync URL params with state
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const handleRouteChange = () => {
+        setSortParams(getInitialSortParams());
+      };
+      
+      window.addEventListener('popstate', handleRouteChange);
+      setMounted(true);
+      
+      return () => {
+        window.removeEventListener('popstate', handleRouteChange);
+      };
+    }
+  }, []);
+
+  // Initial data load
+  useEffect(() => {
+    if (mounted) {
+      loadQuery({
         first: 20,
-        orderBy: orderBy as any,
-        orderDirection: orderDirection as any,
-      },
-      { 
-        fetchPolicy: 'store-and-network'
-      }
-    )
-    // Force re-render with counter increment
-    setRefreshCounter(prev => prev + 1)
-  }, [loadQuery, orderBy, orderDirection])
-  
+        after: null,
+        orderBy: sortParams.orderBy,
+        orderDirection: sortParams.orderDirection
+      });
+      setQueryRefreshCounter(prev => prev + 1); // Increment to trigger re-render
+    }
+  }, [mounted, loadQuery, sortParams]);
+
+  // Handle sort change
+  const handleSortChange = useCallback((orderBy: PairOrderBy, orderDirection: OrderDirection) => {
+    window.history.pushState(
+      {}, 
+      '', 
+      `?orderBy=${orderBy}&orderDirection=${orderDirection}`
+    );
+    setSortParams({ orderBy, orderDirection });
+  }, []);
+
   // Use our custom hook for real-time updates
   useRefreshOnUpdate({
     entityType: 'pair',
-    onUpdate: handlePoolUpdate,
+    onUpdate: () => {
+      loadQuery({
+        first: 20,
+        after: null,
+        orderBy: sortParams.orderBy,
+        orderDirection: sortParams.orderDirection
+      });
+      setQueryRefreshCounter(prev => prev + 1); // Increment to trigger re-render
+    },
     minRefreshInterval: 5000,
     shouldRefetch: true
-  })
-  
-  // Only render the query component after mounting on the client
-  useEffect(() => {
-    setMounted(true)
-    
-    // Initial data load
-    loadQuery({
-      first: 20,
-      orderBy: orderBy as any,
-      orderDirection: orderDirection as any,
-    }, {
-      fetchPolicy: 'network-only'
-    })
-  }, [loadQuery, orderBy, orderDirection])
+  });
 
-  // Create a key that changes when refreshCounter changes to force re-mount
-  const contentKey = `pools-content-${refreshCounter}`
-
-  if (!mounted || !queryRef) {
-    return <PoolsLoading />
+  if (!mounted) {
+    return <PoolsLoading />;
   }
 
   return (
     <View gap={6}>
       <Suspense fallback={<PoolsLoading />}>
-        <PoolsContent
-          key={contentKey}
-          orderBy={orderBy}
-          orderDirection={orderDirection}
-          setOrderBy={setOrderBy}
-          setOrderDirection={setOrderDirection}
-          queryRef={queryRef}
-          refreshData={handlePoolUpdate}
+        <PoolsQueryRenderer
+          queryReference={queryRefreshCounter}
+          orderBy={sortParams.orderBy}
+          orderDirection={sortParams.orderDirection}
+          onSortChange={handleSortChange}
         />
       </Suspense>
     </View>
-  )
-}
+  );
+};
 
 // Export the component wrapped with Relay boundary
-export const PoolsPage = withRelayBoundary(PoolsPageContent, PoolsLoading)
+export const PoolsPage = withRelayBoundary(PoolsPageContent, PoolsLoading);

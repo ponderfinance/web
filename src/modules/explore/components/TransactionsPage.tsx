@@ -1,19 +1,34 @@
 'use client'
 
-import React, { useEffect, useCallback } from 'react'
-import { graphql, useLazyLoadQuery, useQueryLoader, PreloadedQuery } from 'react-relay'
+import React, { Suspense, useEffect, useCallback } from 'react'
+import { graphql, useQueryLoader, usePaginationFragment, useLazyLoadQuery } from 'react-relay'
 import { TransactionsPageQuery } from '@/src/__generated__/TransactionsPageQuery.graphql'
+import { TransactionsPage_transactions$key } from '@/src/__generated__/TransactionsPage_transactions.graphql'
 import { TransactionsDisplay } from '@/src/modules/explore/components/TransactionsDisplay'
-import { View, Text, Skeleton } from 'reshaped'
+import { View, Text, Skeleton, Button, Loader } from 'reshaped'
 import { tokenFragment } from '@/src/components/TokenPair'
 import { useRefreshOnUpdate } from '@/src/hooks/useRefreshOnUpdate'
-import ScrollableTable from '@/src/components/ScrollableTable'
 import { registerRedisConnection, unregisterRedisConnection } from '@/src/lib/redis'
 import { withRelayBoundary } from '@/src/lib/relay/withRelayBoundary'
+import ScrollableTable from '@/src/components/ScrollableTable'
 
+// Define our main query
 export const transactionsPageQuery = graphql`
-  query TransactionsPageQuery($first: Int!) {
-    recentTransactions(first: $first) {
+  query TransactionsPageQuery($first: Int!, $after: String) {
+    ...TransactionsPage_transactions @arguments(first: $first, after: $after)
+  }
+`;
+
+// Define a refetchable fragment for pagination
+export const transactionsPageFragment = graphql`
+  fragment TransactionsPage_transactions on Query
+  @refetchable(queryName: "TransactionsPagePaginationQuery")
+  @argumentDefinitions(
+    first: { type: "Int!" }
+    after: { type: "String" }
+  ) {
+    recentTransactions(first: $first, after: $after)
+    @connection(key: "TransactionsPage__recentTransactions") {
       edges {
         node {
           id
@@ -46,7 +61,7 @@ export const transactionsPageQuery = graphql`
       totalCount
     }
   }
-`
+`;
 
 // Loading component
 function TransactionsLoading() {
@@ -144,34 +159,86 @@ function TransactionsLoading() {
   )
 }
 
-// Component for displaying transactions data
-function TransactionsContent({ queryRef }: { queryRef: PreloadedQuery<TransactionsPageQuery> }) {
+// Paginated transactions component
+function PaginatedTransactions({ 
+  fragmentRef 
+}: { 
+  fragmentRef: TransactionsPage_transactions$key 
+}) {
+  const { data, loadNext, hasNext, isLoadingNext } = usePaginationFragment(
+    transactionsPageFragment, 
+    fragmentRef
+  );
+  const loaderRef = React.useRef<HTMLDivElement>(null);
+
+  // Load more function
+  const loadMoreItems = useCallback(() => {
+    if (hasNext && !isLoadingNext) {
+      loadNext(10);
+    }
+  }, [hasNext, isLoadingNext, loadNext]);
+
+  // Setup intersection observer to detect when the user scrolls to the bottom
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasNext && !isLoadingNext) {
+          loadMoreItems();
+        }
+      },
+      { threshold: 0.1 }
+    );
+
+    const currentRef = loaderRef.current;
+    if (currentRef) {
+      observer.observe(currentRef);
+    }
+
+    return () => {
+      if (currentRef) {
+        observer.unobserve(currentRef);
+      }
+    };
+  }, [hasNext, isLoadingNext, loadMoreItems]);
+
+  return (
+    <TransactionsDisplay 
+      data={{ recentTransactions: data.recentTransactions }} 
+      hasMore={hasNext}
+      isLoading={isLoadingNext}
+      loaderRef={loaderRef}
+    />
+  );
+}
+
+// Component that consumes the query and passes the fragment reference
+function TransactionsQueryRenderer({
+  queryReference
+}: {
+  queryReference: any;
+}) {
   const data = useLazyLoadQuery<TransactionsPageQuery>(
     transactionsPageQuery,
     {
       first: 15,
+      after: null
     },
-    {
-      fetchPolicy: 'store-and-network',
-    }
-  )
+    { fetchPolicy: 'store-or-network', fetchKey: queryReference }
+  );
 
-  return <TransactionsDisplay data={data} />
+  return <PaginatedTransactions fragmentRef={data} />;
 }
 
 // Main component with Relay hooks
 function TransactionsPageContent() {
-  // All hooks at the top level
   const [queryRef, loadQuery] = useQueryLoader<TransactionsPageQuery>(transactionsPageQuery);
-  
-  // Callback for refreshing data
-  const refreshData = useCallback(() => {
-    loadQuery({ first: 15 }, { fetchPolicy: 'network-only' });
-  }, [loadQuery]);
+  // Use a counter to force re-render of the query renderer
+  const [queryRefreshCounter, setQueryRefreshCounter] = React.useState(0);
   
   // Initial data load
   useEffect(() => {
-    loadQuery({ first: 15 }, { fetchPolicy: 'network-only' });
+    loadQuery({ first: 15, after: null });
+    setQueryRefreshCounter(prev => prev + 1); // Increment to trigger re-render
   }, [loadQuery]);
   
   // Register for updates
@@ -185,17 +252,19 @@ function TransactionsPageContent() {
   // Set up real-time updates
   useRefreshOnUpdate({
     entityType: 'transaction',
-    onUpdate: refreshData,
+    onUpdate: () => {
+      loadQuery({ first: 15, after: null });
+      setQueryRefreshCounter(prev => prev + 1); // Increment to trigger re-render
+    },
     minRefreshInterval: 1000,
     shouldRefetch: true,
   });
   
-  // Simple conditional rendering
-  if (!queryRef) {
-    return <TransactionsLoading />;
-  }
-  
-  return <TransactionsContent queryRef={queryRef} />;
+  return (
+    <Suspense fallback={<TransactionsLoading />}>
+      <TransactionsQueryRenderer queryReference={queryRefreshCounter} />
+    </Suspense>
+  );
 }
 
 // Export wrapped component with Relay boundary

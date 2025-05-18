@@ -1,5 +1,5 @@
 /**
- * @generated SignedSource<<33fa557d38fd76d087a1e4e428cb1c31>>
+ * @generated SignedSource<<03a23a5f0b6026d1b6f9131a43208ad0>>
  * @lightSyntaxTransform
  * @nogrep
  */
@@ -11,41 +11,11 @@
 import { ConcreteRequest, Query } from 'relay-runtime';
 import { FragmentRefs } from "relay-runtime";
 export type TransactionsPageQuery$variables = {
+  after?: string | null;
   first: number;
 };
 export type TransactionsPageQuery$data = {
-  readonly recentTransactions: {
-    readonly edges: ReadonlyArray<{
-      readonly node: {
-        readonly amountIn0: string;
-        readonly amountIn1: string;
-        readonly amountOut0: string;
-        readonly amountOut1: string;
-        readonly id: string;
-        readonly timestamp: number;
-        readonly token0: {
-          readonly address: string;
-          readonly id: string;
-          readonly symbol: string | null;
-          readonly " $fragmentSpreads": FragmentRefs<"TokenPairFragment">;
-        } | null;
-        readonly token1: {
-          readonly address: string;
-          readonly id: string;
-          readonly symbol: string | null;
-          readonly " $fragmentSpreads": FragmentRefs<"TokenPairFragment">;
-        } | null;
-        readonly txHash: string;
-        readonly userAddress: string;
-        readonly valueUSD: string | null;
-      };
-    }>;
-    readonly pageInfo: {
-      readonly endCursor: string | null;
-      readonly hasNextPage: boolean;
-    };
-    readonly totalCount: number;
-  };
+  readonly " $fragmentSpreads": FragmentRefs<"TransactionsPage_transactions">;
 };
 export type TransactionsPageQuery = {
   response: TransactionsPageQuery$data;
@@ -53,143 +23,51 @@ export type TransactionsPageQuery = {
 };
 
 const node: ConcreteRequest = (function(){
-var v0 = [
+var v0 = {
+  "defaultValue": null,
+  "kind": "LocalArgument",
+  "name": "after"
+},
+v1 = {
+  "defaultValue": null,
+  "kind": "LocalArgument",
+  "name": "first"
+},
+v2 = [
   {
-    "defaultValue": null,
-    "kind": "LocalArgument",
-    "name": "first"
-  }
-],
-v1 = [
+    "kind": "Variable",
+    "name": "after",
+    "variableName": "after"
+  },
   {
     "kind": "Variable",
     "name": "first",
     "variableName": "first"
   }
 ],
-v2 = {
+v3 = {
   "alias": null,
   "args": null,
   "kind": "ScalarField",
   "name": "id",
   "storageKey": null
 },
-v3 = {
-  "alias": null,
-  "args": null,
-  "kind": "ScalarField",
-  "name": "txHash",
-  "storageKey": null
-},
-v4 = {
-  "alias": null,
-  "args": null,
-  "kind": "ScalarField",
-  "name": "timestamp",
-  "storageKey": null
-},
-v5 = {
-  "alias": null,
-  "args": null,
-  "kind": "ScalarField",
-  "name": "userAddress",
-  "storageKey": null
-},
-v6 = {
-  "alias": null,
-  "args": null,
-  "kind": "ScalarField",
-  "name": "address",
-  "storageKey": null
-},
-v7 = {
-  "alias": null,
-  "args": null,
-  "kind": "ScalarField",
-  "name": "symbol",
-  "storageKey": null
-},
-v8 = [
-  (v2/*: any*/),
-  (v6/*: any*/),
-  (v7/*: any*/),
+v4 = [
+  (v3/*: any*/),
   {
+    "alias": null,
     "args": null,
-    "kind": "FragmentSpread",
-    "name": "TokenPairFragment"
-  }
-],
-v9 = {
-  "alias": null,
-  "args": null,
-  "kind": "ScalarField",
-  "name": "amountIn0",
-  "storageKey": null
-},
-v10 = {
-  "alias": null,
-  "args": null,
-  "kind": "ScalarField",
-  "name": "amountIn1",
-  "storageKey": null
-},
-v11 = {
-  "alias": null,
-  "args": null,
-  "kind": "ScalarField",
-  "name": "amountOut0",
-  "storageKey": null
-},
-v12 = {
-  "alias": null,
-  "args": null,
-  "kind": "ScalarField",
-  "name": "amountOut1",
-  "storageKey": null
-},
-v13 = {
-  "alias": null,
-  "args": null,
-  "kind": "ScalarField",
-  "name": "valueUSD",
-  "storageKey": null
-},
-v14 = {
-  "alias": null,
-  "args": null,
-  "concreteType": "PageInfo",
-  "kind": "LinkedField",
-  "name": "pageInfo",
-  "plural": false,
-  "selections": [
-    {
-      "alias": null,
-      "args": null,
-      "kind": "ScalarField",
-      "name": "hasNextPage",
-      "storageKey": null
-    },
-    {
-      "alias": null,
-      "args": null,
-      "kind": "ScalarField",
-      "name": "endCursor",
-      "storageKey": null
-    }
-  ],
-  "storageKey": null
-},
-v15 = {
-  "alias": null,
-  "args": null,
-  "kind": "ScalarField",
-  "name": "totalCount",
-  "storageKey": null
-},
-v16 = [
-  (v2/*: any*/),
-  (v6/*: any*/),
-  (v7/*: any*/),
+    "kind": "ScalarField",
+    "name": "address",
+    "storageKey": null
+  },
+  {
+    "alias": null,
+    "args": null,
+    "kind": "ScalarField",
+    "name": "symbol",
+    "storageKey": null
+  },
   {
     "alias": null,
     "args": null,
@@ -214,74 +92,18 @@ v16 = [
 ];
 return {
   "fragment": {
-    "argumentDefinitions": (v0/*: any*/),
+    "argumentDefinitions": [
+      (v0/*: any*/),
+      (v1/*: any*/)
+    ],
     "kind": "Fragment",
     "metadata": null,
     "name": "TransactionsPageQuery",
     "selections": [
       {
-        "alias": null,
-        "args": (v1/*: any*/),
-        "concreteType": "SwapConnection",
-        "kind": "LinkedField",
-        "name": "recentTransactions",
-        "plural": false,
-        "selections": [
-          {
-            "alias": null,
-            "args": null,
-            "concreteType": "SwapEdge",
-            "kind": "LinkedField",
-            "name": "edges",
-            "plural": true,
-            "selections": [
-              {
-                "alias": null,
-                "args": null,
-                "concreteType": "Swap",
-                "kind": "LinkedField",
-                "name": "node",
-                "plural": false,
-                "selections": [
-                  (v2/*: any*/),
-                  (v3/*: any*/),
-                  (v4/*: any*/),
-                  (v5/*: any*/),
-                  {
-                    "alias": null,
-                    "args": null,
-                    "concreteType": "Token",
-                    "kind": "LinkedField",
-                    "name": "token0",
-                    "plural": false,
-                    "selections": (v8/*: any*/),
-                    "storageKey": null
-                  },
-                  {
-                    "alias": null,
-                    "args": null,
-                    "concreteType": "Token",
-                    "kind": "LinkedField",
-                    "name": "token1",
-                    "plural": false,
-                    "selections": (v8/*: any*/),
-                    "storageKey": null
-                  },
-                  (v9/*: any*/),
-                  (v10/*: any*/),
-                  (v11/*: any*/),
-                  (v12/*: any*/),
-                  (v13/*: any*/)
-                ],
-                "storageKey": null
-              }
-            ],
-            "storageKey": null
-          },
-          (v14/*: any*/),
-          (v15/*: any*/)
-        ],
-        "storageKey": null
+        "args": (v2/*: any*/),
+        "kind": "FragmentSpread",
+        "name": "TransactionsPage_transactions"
       }
     ],
     "type": "Query",
@@ -289,13 +111,16 @@ return {
   },
   "kind": "Request",
   "operation": {
-    "argumentDefinitions": (v0/*: any*/),
+    "argumentDefinitions": [
+      (v1/*: any*/),
+      (v0/*: any*/)
+    ],
     "kind": "Operation",
     "name": "TransactionsPageQuery",
     "selections": [
       {
         "alias": null,
-        "args": (v1/*: any*/),
+        "args": (v2/*: any*/),
         "concreteType": "SwapConnection",
         "kind": "LinkedField",
         "name": "recentTransactions",
@@ -317,10 +142,28 @@ return {
                 "name": "node",
                 "plural": false,
                 "selections": [
-                  (v2/*: any*/),
                   (v3/*: any*/),
-                  (v4/*: any*/),
-                  (v5/*: any*/),
+                  {
+                    "alias": null,
+                    "args": null,
+                    "kind": "ScalarField",
+                    "name": "txHash",
+                    "storageKey": null
+                  },
+                  {
+                    "alias": null,
+                    "args": null,
+                    "kind": "ScalarField",
+                    "name": "timestamp",
+                    "storageKey": null
+                  },
+                  {
+                    "alias": null,
+                    "args": null,
+                    "kind": "ScalarField",
+                    "name": "userAddress",
+                    "storageKey": null
+                  },
                   {
                     "alias": null,
                     "args": null,
@@ -328,7 +171,7 @@ return {
                     "kind": "LinkedField",
                     "name": "token0",
                     "plural": false,
-                    "selections": (v16/*: any*/),
+                    "selections": (v4/*: any*/),
                     "storageKey": null
                   },
                   {
@@ -338,38 +181,121 @@ return {
                     "kind": "LinkedField",
                     "name": "token1",
                     "plural": false,
-                    "selections": (v16/*: any*/),
+                    "selections": (v4/*: any*/),
                     "storageKey": null
                   },
-                  (v9/*: any*/),
-                  (v10/*: any*/),
-                  (v11/*: any*/),
-                  (v12/*: any*/),
-                  (v13/*: any*/)
+                  {
+                    "alias": null,
+                    "args": null,
+                    "kind": "ScalarField",
+                    "name": "amountIn0",
+                    "storageKey": null
+                  },
+                  {
+                    "alias": null,
+                    "args": null,
+                    "kind": "ScalarField",
+                    "name": "amountIn1",
+                    "storageKey": null
+                  },
+                  {
+                    "alias": null,
+                    "args": null,
+                    "kind": "ScalarField",
+                    "name": "amountOut0",
+                    "storageKey": null
+                  },
+                  {
+                    "alias": null,
+                    "args": null,
+                    "kind": "ScalarField",
+                    "name": "amountOut1",
+                    "storageKey": null
+                  },
+                  {
+                    "alias": null,
+                    "args": null,
+                    "kind": "ScalarField",
+                    "name": "valueUSD",
+                    "storageKey": null
+                  },
+                  {
+                    "alias": null,
+                    "args": null,
+                    "kind": "ScalarField",
+                    "name": "__typename",
+                    "storageKey": null
+                  }
                 ],
+                "storageKey": null
+              },
+              {
+                "alias": null,
+                "args": null,
+                "kind": "ScalarField",
+                "name": "cursor",
                 "storageKey": null
               }
             ],
             "storageKey": null
           },
-          (v14/*: any*/),
-          (v15/*: any*/)
+          {
+            "alias": null,
+            "args": null,
+            "concreteType": "PageInfo",
+            "kind": "LinkedField",
+            "name": "pageInfo",
+            "plural": false,
+            "selections": [
+              {
+                "alias": null,
+                "args": null,
+                "kind": "ScalarField",
+                "name": "hasNextPage",
+                "storageKey": null
+              },
+              {
+                "alias": null,
+                "args": null,
+                "kind": "ScalarField",
+                "name": "endCursor",
+                "storageKey": null
+              }
+            ],
+            "storageKey": null
+          },
+          {
+            "alias": null,
+            "args": null,
+            "kind": "ScalarField",
+            "name": "totalCount",
+            "storageKey": null
+          }
         ],
         "storageKey": null
+      },
+      {
+        "alias": null,
+        "args": (v2/*: any*/),
+        "filters": null,
+        "handle": "connection",
+        "key": "TransactionsPage__recentTransactions",
+        "kind": "LinkedHandle",
+        "name": "recentTransactions"
       }
     ]
   },
   "params": {
-    "cacheID": "b1c64d9f5338bfa7c582cd9d95dd9259",
+    "cacheID": "d20cd4b79a4850b0361e78d97f4a7487",
     "id": null,
     "metadata": {},
     "name": "TransactionsPageQuery",
     "operationKind": "query",
-    "text": "query TransactionsPageQuery(\n  $first: Int!\n) {\n  recentTransactions(first: $first) {\n    edges {\n      node {\n        id\n        txHash\n        timestamp\n        userAddress\n        token0 {\n          id\n          address\n          symbol\n          ...TokenPairFragment\n        }\n        token1 {\n          id\n          address\n          symbol\n          ...TokenPairFragment\n        }\n        amountIn0\n        amountIn1\n        amountOut0\n        amountOut1\n        valueUSD\n      }\n    }\n    pageInfo {\n      hasNextPage\n      endCursor\n    }\n    totalCount\n  }\n}\n\nfragment TokenPairFragment on Token {\n  id\n  address\n  name\n  symbol\n  decimals\n  imageURI\n}\n"
+    "text": "query TransactionsPageQuery(\n  $first: Int!\n  $after: String\n) {\n  ...TransactionsPage_transactions_2HEEH6\n}\n\nfragment TokenPairFragment on Token {\n  id\n  address\n  name\n  symbol\n  decimals\n  imageURI\n}\n\nfragment TransactionsPage_transactions_2HEEH6 on Query {\n  recentTransactions(first: $first, after: $after) {\n    edges {\n      node {\n        id\n        txHash\n        timestamp\n        userAddress\n        token0 {\n          id\n          address\n          symbol\n          ...TokenPairFragment\n        }\n        token1 {\n          id\n          address\n          symbol\n          ...TokenPairFragment\n        }\n        amountIn0\n        amountIn1\n        amountOut0\n        amountOut1\n        valueUSD\n        __typename\n      }\n      cursor\n    }\n    pageInfo {\n      hasNextPage\n      endCursor\n    }\n    totalCount\n  }\n}\n"
   }
 };
 })();
 
-(node as any).hash = "3cffdf8a182e6cef8d661cead2d36add";
+(node as any).hash = "0800078b184e5de558dee58889b81743";
 
 export default node;

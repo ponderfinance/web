@@ -1,5 +1,5 @@
 /**
- * @generated SignedSource<<70509cf977e0f0a91ec531ce6e6c1b95>>
+ * @generated SignedSource<<d4cdf258e8cfe2ad6ae56f6ac99a3c61>>
  * @lightSyntaxTransform
  * @nogrep
  */
@@ -11,43 +11,45 @@
 import { ConcreteRequest, Query } from 'relay-runtime';
 import { FragmentRefs } from "relay-runtime";
 export type OrderDirection = "asc" | "desc" | "%future added value";
-export type PairOrderBy = "createdAt" | "reserveUSD" | "volumeUSD" | "%future added value";
-export type PoolsPageQuery$variables = {
+export type TokenOrderBy = "createdAt" | "name" | "priceChange24h" | "priceUSD" | "symbol" | "volumeUSD24h" | "%future added value";
+export type TokensPagePaginationQuery$variables = {
   after?: string | null;
   first: number;
-  orderBy: PairOrderBy;
+  orderBy: TokenOrderBy;
   orderDirection: OrderDirection;
 };
-export type PoolsPageQuery$data = {
-  readonly " $fragmentSpreads": FragmentRefs<"PoolsPage_pairs">;
+export type TokensPagePaginationQuery$data = {
+  readonly " $fragmentSpreads": FragmentRefs<"TokensPage_tokens">;
 };
-export type PoolsPageQuery = {
-  response: PoolsPageQuery$data;
-  variables: PoolsPageQuery$variables;
+export type TokensPagePaginationQuery = {
+  response: TokensPagePaginationQuery$data;
+  variables: TokensPagePaginationQuery$variables;
 };
 
 const node: ConcreteRequest = (function(){
-var v0 = {
-  "defaultValue": null,
-  "kind": "LocalArgument",
-  "name": "after"
-},
-v1 = {
-  "defaultValue": null,
-  "kind": "LocalArgument",
-  "name": "first"
-},
-v2 = {
-  "defaultValue": null,
-  "kind": "LocalArgument",
-  "name": "orderBy"
-},
-v3 = {
-  "defaultValue": null,
-  "kind": "LocalArgument",
-  "name": "orderDirection"
-},
-v4 = [
+var v0 = [
+  {
+    "defaultValue": null,
+    "kind": "LocalArgument",
+    "name": "after"
+  },
+  {
+    "defaultValue": null,
+    "kind": "LocalArgument",
+    "name": "first"
+  },
+  {
+    "defaultValue": null,
+    "kind": "LocalArgument",
+    "name": "orderBy"
+  },
+  {
+    "defaultValue": null,
+    "kind": "LocalArgument",
+    "name": "orderDirection"
+  }
+],
+v1 = [
   {
     "kind": "Variable",
     "name": "after",
@@ -68,69 +70,18 @@ v4 = [
     "name": "orderDirection",
     "variableName": "orderDirection"
   }
-],
-v5 = {
-  "alias": null,
-  "args": null,
-  "kind": "ScalarField",
-  "name": "id",
-  "storageKey": null
-},
-v6 = {
-  "alias": null,
-  "args": null,
-  "kind": "ScalarField",
-  "name": "address",
-  "storageKey": null
-},
-v7 = [
-  (v5/*: any*/),
-  (v6/*: any*/),
-  {
-    "alias": null,
-    "args": null,
-    "kind": "ScalarField",
-    "name": "symbol",
-    "storageKey": null
-  },
-  {
-    "alias": null,
-    "args": null,
-    "kind": "ScalarField",
-    "name": "decimals",
-    "storageKey": null
-  },
-  {
-    "alias": null,
-    "args": null,
-    "kind": "ScalarField",
-    "name": "name",
-    "storageKey": null
-  },
-  {
-    "alias": null,
-    "args": null,
-    "kind": "ScalarField",
-    "name": "imageURI",
-    "storageKey": null
-  }
 ];
 return {
   "fragment": {
-    "argumentDefinitions": [
-      (v0/*: any*/),
-      (v1/*: any*/),
-      (v2/*: any*/),
-      (v3/*: any*/)
-    ],
+    "argumentDefinitions": (v0/*: any*/),
     "kind": "Fragment",
     "metadata": null,
-    "name": "PoolsPageQuery",
+    "name": "TokensPagePaginationQuery",
     "selections": [
       {
-        "args": (v4/*: any*/),
+        "args": (v1/*: any*/),
         "kind": "FragmentSpread",
-        "name": "PoolsPage_pairs"
+        "name": "TokensPage_tokens"
       }
     ],
     "type": "Query",
@@ -138,27 +89,22 @@ return {
   },
   "kind": "Request",
   "operation": {
-    "argumentDefinitions": [
-      (v1/*: any*/),
-      (v0/*: any*/),
-      (v2/*: any*/),
-      (v3/*: any*/)
-    ],
+    "argumentDefinitions": (v0/*: any*/),
     "kind": "Operation",
-    "name": "PoolsPageQuery",
+    "name": "TokensPagePaginationQuery",
     "selections": [
       {
         "alias": null,
-        "args": (v4/*: any*/),
-        "concreteType": "PairConnection",
+        "args": (v1/*: any*/),
+        "concreteType": "TokenConnection",
         "kind": "LinkedField",
-        "name": "pairs",
+        "name": "tokens",
         "plural": false,
         "selections": [
           {
             "alias": null,
             "args": null,
-            "concreteType": "PairEdge",
+            "concreteType": "TokenEdge",
             "kind": "LinkedField",
             "name": "edges",
             "plural": true,
@@ -166,73 +112,93 @@ return {
               {
                 "alias": null,
                 "args": null,
-                "concreteType": "Pair",
+                "concreteType": "Token",
                 "kind": "LinkedField",
                 "name": "node",
                 "plural": false,
                 "selections": [
-                  (v5/*: any*/),
-                  (v6/*: any*/),
                   {
                     "alias": null,
                     "args": null,
-                    "concreteType": "Token",
-                    "kind": "LinkedField",
-                    "name": "token0",
-                    "plural": false,
-                    "selections": (v7/*: any*/),
-                    "storageKey": null
-                  },
-                  {
-                    "alias": null,
-                    "args": null,
-                    "concreteType": "Token",
-                    "kind": "LinkedField",
-                    "name": "token1",
-                    "plural": false,
-                    "selections": (v7/*: any*/),
+                    "kind": "ScalarField",
+                    "name": "id",
                     "storageKey": null
                   },
                   {
                     "alias": null,
                     "args": null,
                     "kind": "ScalarField",
-                    "name": "tvl",
+                    "name": "address",
                     "storageKey": null
                   },
                   {
                     "alias": null,
                     "args": null,
                     "kind": "ScalarField",
-                    "name": "reserveUSD",
+                    "name": "imageURI",
                     "storageKey": null
                   },
                   {
                     "alias": null,
                     "args": null,
                     "kind": "ScalarField",
-                    "name": "poolAPR",
+                    "name": "name",
                     "storageKey": null
                   },
                   {
                     "alias": null,
                     "args": null,
                     "kind": "ScalarField",
-                    "name": "rewardAPR",
+                    "name": "symbol",
                     "storageKey": null
                   },
                   {
                     "alias": null,
                     "args": null,
                     "kind": "ScalarField",
-                    "name": "volume24h",
+                    "name": "priceUSD",
                     "storageKey": null
                   },
                   {
                     "alias": null,
                     "args": null,
                     "kind": "ScalarField",
-                    "name": "volume30d",
+                    "name": "priceChange1h",
+                    "storageKey": null
+                  },
+                  {
+                    "alias": null,
+                    "args": null,
+                    "kind": "ScalarField",
+                    "name": "priceChange24h",
+                    "storageKey": null
+                  },
+                  {
+                    "alias": null,
+                    "args": null,
+                    "kind": "ScalarField",
+                    "name": "volumeUSD24h",
+                    "storageKey": null
+                  },
+                  {
+                    "alias": null,
+                    "args": null,
+                    "kind": "ScalarField",
+                    "name": "volume1h",
+                    "storageKey": null
+                  },
+                  {
+                    "alias": null,
+                    "args": null,
+                    "kind": "ScalarField",
+                    "name": "fdv",
+                    "storageKey": null
+                  },
+                  {
+                    "alias": null,
+                    "args": null,
+                    "kind": "ScalarField",
+                    "name": "decimals",
                     "storageKey": null
                   },
                   {
@@ -292,29 +258,29 @@ return {
       },
       {
         "alias": null,
-        "args": (v4/*: any*/),
+        "args": (v1/*: any*/),
         "filters": [
           "orderBy",
           "orderDirection"
         ],
         "handle": "connection",
-        "key": "PoolsPage__pairs",
+        "key": "TokensPage__tokens",
         "kind": "LinkedHandle",
-        "name": "pairs"
+        "name": "tokens"
       }
     ]
   },
   "params": {
-    "cacheID": "d892a98aff2b796eae6848be48c91f18",
+    "cacheID": "f2658a78af2881c7a9e861695840e88d",
     "id": null,
     "metadata": {},
-    "name": "PoolsPageQuery",
+    "name": "TokensPagePaginationQuery",
     "operationKind": "query",
-    "text": "query PoolsPageQuery(\n  $first: Int!\n  $after: String\n  $orderBy: PairOrderBy!\n  $orderDirection: OrderDirection!\n) {\n  ...PoolsPage_pairs_3MMUTb\n}\n\nfragment PoolsPage_pairs_3MMUTb on Query {\n  pairs(first: $first, after: $after, orderBy: $orderBy, orderDirection: $orderDirection) {\n    edges {\n      node {\n        id\n        address\n        token0 {\n          id\n          address\n          symbol\n          decimals\n          ...TokenPairFragment\n        }\n        token1 {\n          id\n          address\n          symbol\n          decimals\n          ...TokenPairFragment\n        }\n        tvl\n        reserveUSD\n        poolAPR\n        rewardAPR\n        volume24h\n        volume30d\n        __typename\n      }\n      cursor\n    }\n    pageInfo {\n      hasNextPage\n      endCursor\n    }\n    totalCount\n  }\n}\n\nfragment TokenPairFragment on Token {\n  id\n  address\n  name\n  symbol\n  decimals\n  imageURI\n}\n"
+    "text": "query TokensPagePaginationQuery(\n  $after: String\n  $first: Int!\n  $orderBy: TokenOrderBy!\n  $orderDirection: OrderDirection!\n) {\n  ...TokensPage_tokens_3MMUTb\n}\n\nfragment TokenPairFragment on Token {\n  id\n  address\n  name\n  symbol\n  decimals\n  imageURI\n}\n\nfragment TokensPage_tokens_3MMUTb on Query {\n  tokens(first: $first, after: $after, orderBy: $orderBy, orderDirection: $orderDirection) {\n    edges {\n      node {\n        id\n        address\n        imageURI\n        name\n        symbol\n        priceUSD\n        priceChange1h\n        priceChange24h\n        volumeUSD24h\n        volume1h\n        fdv\n        ...TokenPairFragment\n        __typename\n      }\n      cursor\n    }\n    pageInfo {\n      hasNextPage\n      endCursor\n    }\n    totalCount\n  }\n}\n"
   }
 };
 })();
 
-(node as any).hash = "042e21d84d5d50f9c5b122ecc891d2a5";
+(node as any).hash = "353cef019789740f312b0c67938b5d4c";
 
 export default node;

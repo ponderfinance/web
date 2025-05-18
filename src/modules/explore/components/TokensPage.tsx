@@ -1,22 +1,45 @@
 'use client'
 
-import React, { Suspense, useState, useEffect, useCallback } from 'react'
-import { graphql, useLazyLoadQuery, useQueryLoader } from 'react-relay'
-import { TokensPageQuery } from '@/src/__generated__/TokensPageQuery.graphql'
+import React, { Suspense, useEffect, useCallback } from 'react'
+import { graphql, useQueryLoader, usePaginationFragment, useLazyLoadQuery } from 'react-relay'
+import { TokensPageQuery, TokenOrderBy, OrderDirection } from '@/src/__generated__/TokensPageQuery.graphql'
+import { TokensPage_tokens$key } from '@/src/__generated__/TokensPage_tokens.graphql'
 import { TokensDisplay } from '@/src/modules/explore/components/TokensDisplay'
-import { View, Text, Skeleton } from 'reshaped'
+import { View, Text, Skeleton, Button, Loader } from 'reshaped'
 import { tokenFragment } from '@/src/components/TokenPair'
 import ScrollableTable from '@/src/components/ScrollableTable'
 import { useRefreshOnUpdate } from '@/src/hooks/useRefreshOnUpdate'
 import { withRelayBoundary } from '@/src/lib/relay/withRelayBoundary'
 
+// Define main query for tokens
 export const tokensPageQuery = graphql`
   query TokensPageQuery(
     $first: Int!
+    $after: String
     $orderBy: TokenOrderBy!
     $orderDirection: OrderDirection!
   ) {
-    tokens(first: $first, orderBy: $orderBy, orderDirection: $orderDirection) {
+    ...TokensPage_tokens @arguments(
+      first: $first
+      after: $after
+      orderBy: $orderBy
+      orderDirection: $orderDirection
+    )
+  }
+`;
+
+// Define a refetchable fragment for pagination
+export const tokensPageFragment = graphql`
+  fragment TokensPage_tokens on Query
+  @refetchable(queryName: "TokensPagePaginationQuery")
+  @argumentDefinitions(
+    first: { type: "Int!" }
+    after: { type: "String" }
+    orderBy: { type: "TokenOrderBy!" }
+    orderDirection: { type: "OrderDirection!" }
+  ) {
+    tokens(first: $first, after: $after, orderBy: $orderBy, orderDirection: $orderDirection)
+    @connection(key: "TokensPage__tokens", filters: ["orderBy", "orderDirection"]) {
       edges {
         node {
           id
@@ -40,7 +63,7 @@ export const tokensPageQuery = graphql`
       totalCount
     }
   }
-`
+`;
 
 // Loading component for suspense
 function TokensLoading() {
@@ -140,109 +163,205 @@ function TokensLoading() {
   )
 }
 
-// Main content component that fetches data
-function TokensContent({
+// Paginated tokens with sorting
+interface PaginatedTokensProps {
+  fragmentRef: TokensPage_tokens$key;
+  onSortChange: (orderBy: TokenOrderBy, orderDirection: OrderDirection) => void;
+  currentOrderBy: TokenOrderBy;
+  currentOrderDirection: OrderDirection;
+}
+
+function PaginatedTokens({ 
+  fragmentRef, 
+  onSortChange,
+  currentOrderBy,
+  currentOrderDirection 
+}: PaginatedTokensProps) {
+  const { data, loadNext, hasNext, isLoadingNext } = usePaginationFragment(
+    tokensPageFragment,
+    fragmentRef
+  );
+  const loaderRef = React.useRef<HTMLDivElement>(null);
+
+  // Handle sorting
+  const handleSort = useCallback((column: string) => {
+    const orderBy = column as TokenOrderBy;
+    const orderDirection = 
+      orderBy === currentOrderBy && currentOrderDirection === 'desc' 
+        ? 'asc' as OrderDirection 
+        : 'desc' as OrderDirection;
+    
+    onSortChange(orderBy, orderDirection);
+  }, [currentOrderBy, currentOrderDirection, onSortChange]);
+
+  // Load more handler
+  const loadMoreItems = useCallback(() => {
+    if (hasNext && !isLoadingNext) {
+      loadNext(10);
+    }
+  }, [hasNext, isLoadingNext, loadNext]);
+
+  // Setup intersection observer to detect when the user scrolls to the bottom
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasNext && !isLoadingNext) {
+          loadMoreItems();
+        }
+      },
+      { threshold: 0.1 }
+    );
+
+    const currentRef = loaderRef.current;
+    if (currentRef) {
+      observer.observe(currentRef);
+    }
+
+    return () => {
+      if (currentRef) {
+        observer.unobserve(currentRef);
+      }
+    };
+  }, [hasNext, isLoadingNext, loadMoreItems]);
+
+  return (
+    <TokensDisplay
+      data={data}
+      orderBy={currentOrderBy}
+      orderDirection={currentOrderDirection}
+      setOrderBy={handleSort}
+      setOrderDirection={() => {}} // Handled in handleSort
+      hasMore={hasNext}
+      isLoading={isLoadingNext}
+      loaderRef={loaderRef}
+    />
+  );
+}
+
+// Component that consumes the query and passes the fragment reference
+function TokensQueryRenderer({
+  queryReference,
   orderBy,
   orderDirection,
-  setOrderBy,
-  setOrderDirection,
+  onSortChange
 }: {
-  orderBy: string
-  orderDirection: string
-  setOrderBy: (value: string) => void
-  setOrderDirection: (value: string) => void
+  queryReference: any;
+  orderBy: TokenOrderBy;
+  orderDirection: OrderDirection;
+  onSortChange: (orderBy: TokenOrderBy, orderDirection: OrderDirection) => void;
 }) {
   const data = useLazyLoadQuery<TokensPageQuery>(
     tokensPageQuery,
     {
       first: 20,
-      orderBy: orderBy as any,
-      orderDirection: orderDirection as any,
+      after: null,
+      orderBy,
+      orderDirection
     },
-    {
-      fetchPolicy: 'store-and-network', // Use store data but still fetch from network
-      fetchKey: orderBy + orderDirection, // Use orderBy/direction as fetchKey to ensure correct data when sorting changes
-    }
-  )
+    { fetchPolicy: 'store-or-network', fetchKey: queryReference }
+  );
 
   return (
-    <TokensDisplay
-      data={data}
-      orderBy={orderBy}
-      orderDirection={orderDirection}
-      setOrderBy={setOrderBy}
-      setOrderDirection={setOrderDirection}
+    <PaginatedTokens
+      fragmentRef={data}
+      onSortChange={onSortChange}
+      currentOrderBy={orderBy}
+      currentOrderDirection={orderDirection}
     />
-  )
+  );
 }
 
-// Exported page component without direct Relay hooks
+// Exported page component
 const TokensPageContent = () => {
-  const [orderBy, setOrderBy] = useState<string>('volumeUSD24h')
-  const [orderDirection, setOrderDirection] = useState<string>('desc')
-  const [mounted, setMounted] = useState(false)
-  const [refreshCounter, setRefreshCounter] = useState(0)
-  
-  // Add query loader for manual refreshes
-  const [queryRef, loadQuery] = useQueryLoader<TokensPageQuery>(tokensPageQuery)
-  
-  // Handle refreshing when token data updates
-  const handleTokenUpdate = useCallback(() => {
-    loadQuery({
-      first: 20,
-      orderBy: orderBy as any,
-      orderDirection: orderDirection as any
-    }, { 
-      fetchPolicy: 'store-and-network' // Use store data and update from network
-    })
-    
-    // Force re-render with counter increment
-    setRefreshCounter(prev => prev + 1)
-  }, [loadQuery, orderBy, orderDirection])
-  
+  // Get sort parameters from URL if available
+  const getInitialSortParams = () => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const orderBy = params.get('orderBy') as TokenOrderBy || 'volumeUSD24h';
+      const orderDirection = params.get('orderDirection') as OrderDirection || 'desc';
+      return { orderBy, orderDirection };
+    }
+    return { orderBy: 'volumeUSD24h' as TokenOrderBy, orderDirection: 'desc' as OrderDirection };
+  };
+
+  const [sortParams, setSortParams] = React.useState(getInitialSortParams);
+  const [mounted, setMounted] = React.useState(false);
+  const [queryRef, loadQuery] = useQueryLoader<TokensPageQuery>(tokensPageQuery);
+  // Use a counter to force re-render of the query renderer
+  const [queryRefreshCounter, setQueryRefreshCounter] = React.useState(0);
+
+  // Sync URL params with state
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const handleRouteChange = () => {
+        setSortParams(getInitialSortParams());
+      };
+      
+      window.addEventListener('popstate', handleRouteChange);
+      setMounted(true);
+      
+      return () => {
+        window.removeEventListener('popstate', handleRouteChange);
+      };
+    }
+  }, []);
+
+  // Initial data load
+  useEffect(() => {
+    if (mounted) {
+      loadQuery({
+        first: 20,
+        after: null,
+        orderBy: sortParams.orderBy,
+        orderDirection: sortParams.orderDirection
+      });
+      setQueryRefreshCounter(prev => prev + 1); // Increment to trigger re-render
+    }
+  }, [mounted, loadQuery, sortParams]);
+
+  // Handle sort change
+  const handleSortChange = useCallback((orderBy: TokenOrderBy, orderDirection: OrderDirection) => {
+    window.history.pushState(
+      {}, 
+      '', 
+      `?orderBy=${orderBy}&orderDirection=${orderDirection}`
+    );
+    setSortParams({ orderBy, orderDirection });
+  }, []);
+
   // Use our custom hook for real-time updates
   useRefreshOnUpdate({
     entityType: 'token',
-    onUpdate: handleTokenUpdate,
-    minRefreshInterval: 5000, // 5 seconds minimum between updates
-    shouldRefetch: true // Force refetch to ensure we get fresh data
-  })
-
-  // Only render the query component after mounting on the client
-  useEffect(() => {
-    setMounted(true)
-    
-    // Initial data load
-    loadQuery({
-      first: 20,
-      orderBy: orderBy as any,
-      orderDirection: orderDirection as any
-    }, {
-      fetchPolicy: 'network-only' // Always get fresh data on initial load
-    })
-  }, [loadQuery, orderBy, orderDirection])
-
-  // Create a key that changes when refreshCounter changes to force re-mount
-  const contentKey = `tokens-content-${refreshCounter}`
+    onUpdate: () => {
+      loadQuery({
+        first: 20,
+        after: null,
+        orderBy: sortParams.orderBy,
+        orderDirection: sortParams.orderDirection
+      });
+      setQueryRefreshCounter(prev => prev + 1); // Increment to trigger re-render
+    },
+    minRefreshInterval: 5000,
+    shouldRefetch: true
+  });
 
   if (!mounted) {
-    return <TokensLoading />
+    return <TokensLoading />;
   }
 
   return (
     <View gap={6}>
       <Suspense fallback={<TokensLoading />}>
-        <TokensContent
-          key={contentKey}
-          orderBy={orderBy}
-          orderDirection={orderDirection}
-          setOrderBy={setOrderBy}
-          setOrderDirection={setOrderDirection}
+        <TokensQueryRenderer
+          queryReference={queryRefreshCounter}
+          orderBy={sortParams.orderBy}
+          orderDirection={sortParams.orderDirection}
+          onSortChange={handleSortChange}
         />
       </Suspense>
     </View>
-  )
-}
+  );
+};
 
 // Use the RelayBoundary HOC with a custom loading component
-export const TokensPage = withRelayBoundary(TokensPageContent, TokensLoading)
+export const TokensPage = withRelayBoundary(TokensPageContent, TokensLoading);

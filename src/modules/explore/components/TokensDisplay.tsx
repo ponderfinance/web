@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useEffect, useCallback } from 'react'
-import { View, Text, Actionable, Image, Skeleton } from 'reshaped'
+import { View, Text, Actionable, Image, Skeleton, Loader } from 'reshaped'
 import { TokensPageQuery } from '@/src/__generated__/TokensPageQuery.graphql'
 import { getIpfsGateway } from '@/src/utils/ipfs'
 import { roundDecimal } from '@/src/utils/numbers'
@@ -12,6 +12,7 @@ import { useQueryLoader } from 'react-relay'
 import { tokensPageQuery } from './TokensPage'
 import ScrollableTable from '@/src/components/ScrollableTable'
 import { withRedisRecovery } from '@/src/lib/redis/recovery'
+import { TokensPage_tokens$data } from '@/src/__generated__/TokensPage_tokens.graphql'
 
 // Helper to format currency values
 const formatCurrency = (value: string | null | undefined): string => {
@@ -49,11 +50,14 @@ const getPercentChangeColor = (value: number | null | undefined): 'positive' | '
 }
 
 type TokensDisplayProps = {
-  data: TokensPageQuery['response']
+  data: TokensPage_tokens$data
   orderBy: string
   orderDirection: string
   setOrderBy: (orderBy: string) => void
   setOrderDirection: (orderDirection: string) => void
+  hasMore?: boolean
+  isLoading?: boolean
+  loaderRef?: React.RefObject<HTMLDivElement>
 }
 
 export const TokensDisplay: React.FC<TokensDisplayProps> = ({
@@ -62,6 +66,9 @@ export const TokensDisplay: React.FC<TokensDisplayProps> = ({
   orderDirection,
   setOrderBy,
   setOrderDirection,
+  hasMore = false,
+  isLoading = false,
+  loaderRef
 }) => {
   // Get Redis subscriber context
   const { tokenLastUpdated, refreshData } = useRedisSubscriber();
@@ -235,6 +242,26 @@ export const TokensDisplay: React.FC<TokensDisplayProps> = ({
             </View>
           </Link>
         ))}
+        
+        {/* Loading indicator row */}
+        {hasMore && (
+          <View
+            direction="row"
+            gap={0}
+            padding={4}
+            className={'border-0 border-neutral-faded'}
+            align="center"
+            width="100%"
+          >
+            <View.Item columns={12}>
+              <View align="center" width="100%">
+                <div ref={loaderRef}>
+                  <Loader size="medium" />
+                </div>
+              </View>
+            </View.Item>
+          </View>
+        )}
       </View>
     </ScrollableTable>
   )

@@ -1,5 +1,5 @@
 /**
- * @generated SignedSource<<70509cf977e0f0a91ec531ce6e6c1b95>>
+ * @generated SignedSource<<f21363d169f35a33ace023b222896ddd>>
  * @lightSyntaxTransform
  * @nogrep
  */
@@ -12,42 +12,44 @@ import { ConcreteRequest, Query } from 'relay-runtime';
 import { FragmentRefs } from "relay-runtime";
 export type OrderDirection = "asc" | "desc" | "%future added value";
 export type PairOrderBy = "createdAt" | "reserveUSD" | "volumeUSD" | "%future added value";
-export type PoolsPageQuery$variables = {
+export type PoolsPagePaginationQuery$variables = {
   after?: string | null;
   first: number;
   orderBy: PairOrderBy;
   orderDirection: OrderDirection;
 };
-export type PoolsPageQuery$data = {
+export type PoolsPagePaginationQuery$data = {
   readonly " $fragmentSpreads": FragmentRefs<"PoolsPage_pairs">;
 };
-export type PoolsPageQuery = {
-  response: PoolsPageQuery$data;
-  variables: PoolsPageQuery$variables;
+export type PoolsPagePaginationQuery = {
+  response: PoolsPagePaginationQuery$data;
+  variables: PoolsPagePaginationQuery$variables;
 };
 
 const node: ConcreteRequest = (function(){
-var v0 = {
-  "defaultValue": null,
-  "kind": "LocalArgument",
-  "name": "after"
-},
-v1 = {
-  "defaultValue": null,
-  "kind": "LocalArgument",
-  "name": "first"
-},
-v2 = {
-  "defaultValue": null,
-  "kind": "LocalArgument",
-  "name": "orderBy"
-},
-v3 = {
-  "defaultValue": null,
-  "kind": "LocalArgument",
-  "name": "orderDirection"
-},
-v4 = [
+var v0 = [
+  {
+    "defaultValue": null,
+    "kind": "LocalArgument",
+    "name": "after"
+  },
+  {
+    "defaultValue": null,
+    "kind": "LocalArgument",
+    "name": "first"
+  },
+  {
+    "defaultValue": null,
+    "kind": "LocalArgument",
+    "name": "orderBy"
+  },
+  {
+    "defaultValue": null,
+    "kind": "LocalArgument",
+    "name": "orderDirection"
+  }
+],
+v1 = [
   {
     "kind": "Variable",
     "name": "after",
@@ -69,23 +71,23 @@ v4 = [
     "variableName": "orderDirection"
   }
 ],
-v5 = {
+v2 = {
   "alias": null,
   "args": null,
   "kind": "ScalarField",
   "name": "id",
   "storageKey": null
 },
-v6 = {
+v3 = {
   "alias": null,
   "args": null,
   "kind": "ScalarField",
   "name": "address",
   "storageKey": null
 },
-v7 = [
-  (v5/*: any*/),
-  (v6/*: any*/),
+v4 = [
+  (v2/*: any*/),
+  (v3/*: any*/),
   {
     "alias": null,
     "args": null,
@@ -117,18 +119,13 @@ v7 = [
 ];
 return {
   "fragment": {
-    "argumentDefinitions": [
-      (v0/*: any*/),
-      (v1/*: any*/),
-      (v2/*: any*/),
-      (v3/*: any*/)
-    ],
+    "argumentDefinitions": (v0/*: any*/),
     "kind": "Fragment",
     "metadata": null,
-    "name": "PoolsPageQuery",
+    "name": "PoolsPagePaginationQuery",
     "selections": [
       {
-        "args": (v4/*: any*/),
+        "args": (v1/*: any*/),
         "kind": "FragmentSpread",
         "name": "PoolsPage_pairs"
       }
@@ -138,18 +135,13 @@ return {
   },
   "kind": "Request",
   "operation": {
-    "argumentDefinitions": [
-      (v1/*: any*/),
-      (v0/*: any*/),
-      (v2/*: any*/),
-      (v3/*: any*/)
-    ],
+    "argumentDefinitions": (v0/*: any*/),
     "kind": "Operation",
-    "name": "PoolsPageQuery",
+    "name": "PoolsPagePaginationQuery",
     "selections": [
       {
         "alias": null,
-        "args": (v4/*: any*/),
+        "args": (v1/*: any*/),
         "concreteType": "PairConnection",
         "kind": "LinkedField",
         "name": "pairs",
@@ -171,8 +163,8 @@ return {
                 "name": "node",
                 "plural": false,
                 "selections": [
-                  (v5/*: any*/),
-                  (v6/*: any*/),
+                  (v2/*: any*/),
+                  (v3/*: any*/),
                   {
                     "alias": null,
                     "args": null,
@@ -180,7 +172,7 @@ return {
                     "kind": "LinkedField",
                     "name": "token0",
                     "plural": false,
-                    "selections": (v7/*: any*/),
+                    "selections": (v4/*: any*/),
                     "storageKey": null
                   },
                   {
@@ -190,7 +182,7 @@ return {
                     "kind": "LinkedField",
                     "name": "token1",
                     "plural": false,
-                    "selections": (v7/*: any*/),
+                    "selections": (v4/*: any*/),
                     "storageKey": null
                   },
                   {
@@ -292,7 +284,7 @@ return {
       },
       {
         "alias": null,
-        "args": (v4/*: any*/),
+        "args": (v1/*: any*/),
         "filters": [
           "orderBy",
           "orderDirection"
@@ -305,16 +297,16 @@ return {
     ]
   },
   "params": {
-    "cacheID": "d892a98aff2b796eae6848be48c91f18",
+    "cacheID": "87a6e9a8c5da25d7e10a21bc9e95516f",
     "id": null,
     "metadata": {},
-    "name": "PoolsPageQuery",
+    "name": "PoolsPagePaginationQuery",
     "operationKind": "query",
-    "text": "query PoolsPageQuery(\n  $first: Int!\n  $after: String\n  $orderBy: PairOrderBy!\n  $orderDirection: OrderDirection!\n) {\n  ...PoolsPage_pairs_3MMUTb\n}\n\nfragment PoolsPage_pairs_3MMUTb on Query {\n  pairs(first: $first, after: $after, orderBy: $orderBy, orderDirection: $orderDirection) {\n    edges {\n      node {\n        id\n        address\n        token0 {\n          id\n          address\n          symbol\n          decimals\n          ...TokenPairFragment\n        }\n        token1 {\n          id\n          address\n          symbol\n          decimals\n          ...TokenPairFragment\n        }\n        tvl\n        reserveUSD\n        poolAPR\n        rewardAPR\n        volume24h\n        volume30d\n        __typename\n      }\n      cursor\n    }\n    pageInfo {\n      hasNextPage\n      endCursor\n    }\n    totalCount\n  }\n}\n\nfragment TokenPairFragment on Token {\n  id\n  address\n  name\n  symbol\n  decimals\n  imageURI\n}\n"
+    "text": "query PoolsPagePaginationQuery(\n  $after: String\n  $first: Int!\n  $orderBy: PairOrderBy!\n  $orderDirection: OrderDirection!\n) {\n  ...PoolsPage_pairs_3MMUTb\n}\n\nfragment PoolsPage_pairs_3MMUTb on Query {\n  pairs(first: $first, after: $after, orderBy: $orderBy, orderDirection: $orderDirection) {\n    edges {\n      node {\n        id\n        address\n        token0 {\n          id\n          address\n          symbol\n          decimals\n          ...TokenPairFragment\n        }\n        token1 {\n          id\n          address\n          symbol\n          decimals\n          ...TokenPairFragment\n        }\n        tvl\n        reserveUSD\n        poolAPR\n        rewardAPR\n        volume24h\n        volume30d\n        __typename\n      }\n      cursor\n    }\n    pageInfo {\n      hasNextPage\n      endCursor\n    }\n    totalCount\n  }\n}\n\nfragment TokenPairFragment on Token {\n  id\n  address\n  name\n  symbol\n  decimals\n  imageURI\n}\n"
   }
 };
 })();
 
-(node as any).hash = "042e21d84d5d50f9c5b122ecc891d2a5";
+(node as any).hash = "562e70d168feed344726d5c98ef72069";
 
 export default node;

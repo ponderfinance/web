@@ -1,11 +1,12 @@
 'use client'
 
 import React, { useEffect } from 'react'
-import { View, Text, Actionable } from 'reshaped'
+import { View, Text, Actionable, Loader } from 'reshaped'
 import { PoolsPageQuery } from '@/src/__generated__/PoolsPageQuery.graphql'
 import { TokenPair } from '@/src/components/TokenPair'
 import Link from 'next/link'
 import ScrollableTable from '@/src/components/ScrollableTable'
+import { PoolsPage_pairs$data } from '@/src/__generated__/PoolsPage_pairs.graphql'
 
 // Helper to format currency values
 const formatCurrency = (value: number | string | null | undefined): string => {
@@ -35,11 +36,14 @@ const formatPercentage = (value: number | string | null | undefined): string => 
 
 // Define the component props
 interface PoolsDisplayProps {
-  data: PoolsPageQuery['response']
+  data: PoolsPage_pairs$data
   orderBy: string
   orderDirection: string
   setOrderBy: (value: string) => void
   setOrderDirection: (value: string) => void
+  hasMore?: boolean
+  isLoading?: boolean
+  loaderRef?: React.RefObject<HTMLDivElement>
 }
 
 export const PoolsDisplay: React.FC<PoolsDisplayProps> = ({
@@ -48,6 +52,9 @@ export const PoolsDisplay: React.FC<PoolsDisplayProps> = ({
   orderDirection,
   setOrderBy,
   setOrderDirection,
+  hasMore = false,
+  isLoading = false,
+  loaderRef
 }) => {
   // Handle sorting
   const handleSort = (column: string) => {
@@ -173,6 +180,26 @@ export const PoolsDisplay: React.FC<PoolsDisplayProps> = ({
             </View.Item>
           </View>
         ))}
+        
+        {/* Loading indicator row */}
+        {hasMore && (
+          <View
+            direction="row"
+            gap={0}
+            padding={4}
+            className={'border-0 border-neutral-faded'}
+            align="center"
+            width="100%"
+          >
+            <View.Item columns={12}>
+              <View align="center" width="100%">
+                <div ref={loaderRef}>
+                  <Loader size="medium" />
+                </div>
+              </View>
+            </View.Item>
+          </View>
+        )}
       </View>
     </ScrollableTable>
   )
