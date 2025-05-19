@@ -228,7 +228,7 @@ const messageHandlerRegistry: Record<string, MessageHandler> = {
           
         if (environment) {
           try {
-            // Mark the store as needing refresh
+            // Force invalidation for the transaction connection to guarantee a refresh
             environment.commitUpdate(store => {
               // Find the root record
               const root = store.getRoot();
@@ -236,17 +236,31 @@ const messageHandlerRegistry: Record<string, MessageHandler> = {
               // Get the transactions connection if it exists
               const transactionsConnection = root.getLinkedRecord('recentTransactions', variables);
               if (transactionsConnection) {
-                // Force the connection to be refetched by touching it
+                // Force the connection to be refetched by touching a field
                 transactionsConnection.setValue(
                   Date.now().toString(),
                   '__forceRefetch'
                 );
+                
+                // Also invalidate any existing edge to make sure it's refetched
+                try {
+                  const edges = transactionsConnection.getLinkedRecords('edges');
+                  if (edges && edges.length > 0) {
+                    // Mark the first edge for refetch to invalidate the connection
+                    edges[0].setValue(Date.now().toString(), '__edgeRefetch');
+                  }
+                } catch (edgeError) {
+                  console.log('No edges found, will rely on full refetch');
+                }
                 
                 console.log('Marked transactions connection for refetch');
               } else {
                 console.log('No transactions connection found, will do full refetch');
               }
             });
+            
+            // Call getStore().notify() to ensure components re-render
+            environment.getStore().notify();
           } catch (error) {
             console.error('Error invalidating transaction store:', error);
           }
@@ -403,7 +417,7 @@ export function registerTransactionListUpdater() {
     (store, data) => {
       try {
         // Get transaction ID from the data
-        const transactionId = data.entityId;
+        const transactionId = data.entityId || data.transactionId || data.txHash;
         if (!transactionId) return;
         
         // Find the root and connections
@@ -418,18 +432,24 @@ export function registerTransactionListUpdater() {
         // Update specific transaction if it exists in the store
         const transactionRecord = store.get(transactionId);
         if (transactionRecord) {
-          // Update specific fields if they exist in the data
-          if (data.valueUSD !== undefined) {
-            transactionRecord.setValue(data.valueUSD, 'valueUSD');
-          }
-          
-          console.log(`Updated transaction ${transactionId} in Relay store without refetching`);
+          // Update all relevant fields if they exist in the data
+          const fields = [
+            'valueUSD', 'txHash', 'timestamp', 'userAddress',
+            'token0', 'token1', 'amountIn0', 'amountIn1',
+            'amountOut0', 'amountOut1', 'type', 'status',
+            'blockNumber', 'gasUsed', 'gasPrice', 'feeUSD'
+          ];
+          fields.forEach(field => {
+            if (data[field] !== undefined) {
+              transactionRecord.setValue(data[field], field);
+              console.log(`Updated transaction ${transactionId} field ${field} in Relay store`);
+            }
+          });
         } else {
           // Transaction not in store yet, need to mark the connection for refetch
           console.log(`Transaction ${transactionId} not found in store, marking connection for refetch`);
           
-          // This is the key improvement: mark the entire connection for refetch
-          // when we have a new transaction that isn't in the store yet
+          // Mark the entire connection for refetch
           if (connectionsRecord) {
             // Get the edges array
             const edges = connectionsRecord.getLinkedRecords('edges');
