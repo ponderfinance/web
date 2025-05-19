@@ -200,14 +200,14 @@ const messageHandlerRegistry: Record<string, MessageHandler> = {
     handler: (data, environment, request, variables, sink) => {
       // Extract the actual data payload, normalizing the structure of different message formats
       const payload = data.payload || data;
-      console.log(`Received transaction update for ${request.name}:`, payload);
+      console.log(`[Relay] Received transaction update for ${request.name}:`, payload);
       
       // The transaction ID might be in different places depending on source
       const entityId = payload.entityId || payload.transactionId;
       const txHash = payload.txHash;
       
       if (!entityId && !txHash) {
-        console.error('Transaction update missing entityId and txHash', payload);
+        console.error('[Relay] Transaction update missing entityId and txHash', payload);
         // Still fetch fresh data even if we can't do a targeted update
         fetchFreshData();
         return;
@@ -216,9 +216,12 @@ const messageHandlerRegistry: Record<string, MessageHandler> = {
       // Try store update first (when transaction updater is registered)
       let updated = false;
       if (environment && entityId) {
+        console.log(`[Relay] Attempting to applyStoreUpdate for transaction-${entityId}`);
         updated = applyStoreUpdate(`transaction-${entityId}`, payload, environment);
         if (updated) {
-          console.log(`Applied direct store update for transaction ${entityId}`);
+          console.log(`[Relay] Applied direct store update for transaction ${entityId}`);
+        } else {
+          console.log(`[Relay] No direct store update for transaction ${entityId}`);
         }
       }
       
@@ -241,28 +244,28 @@ const messageHandlerRegistry: Record<string, MessageHandler> = {
                   Date.now().toString(),
                   '__forceRefetch'
                 );
-                
+                console.log('[Relay] Marked recentTransactions connection for refetch');
                 // Also invalidate any existing edge to make sure it's refetched
                 try {
                   const edges = transactionsConnection.getLinkedRecords('edges');
                   if (edges && edges.length > 0) {
                     // Mark the first edge for refetch to invalidate the connection
                     edges[0].setValue(Date.now().toString(), '__edgeRefetch');
+                    console.log('[Relay] Marked first edge for refetch');
                   }
                 } catch (edgeError) {
-                  console.log('No edges found, will rely on full refetch');
+                  console.log('[Relay] No edges found, will rely on full refetch');
                 }
-                
-                console.log('Marked transactions connection for refetch');
               } else {
-                console.log('No transactions connection found, will do full refetch');
+                console.log('[Relay] No transactions connection found, will do full refetch');
               }
             });
             
             // Call getStore().notify() to ensure components re-render
             environment.getStore().notify();
+            console.log('[Relay] Called environment.getStore().notify() after marking for refetch');
           } catch (error) {
-            console.error('Error invalidating transaction store:', error);
+            console.error('[Relay] Error invalidating transaction store:', error);
           }
         }
       }
@@ -273,11 +276,11 @@ const messageHandlerRegistry: Record<string, MessageHandler> = {
         Observable.from(fetchQuery(request, variables, {}))
           .subscribe({
             next: (response) => {
-              console.log(`Fetched updated transaction data for ${request.name}`);
+              console.log(`[Relay] Fetched updated transaction data for ${request.name}`);
               sink.next(response);
             },
             error: (error: any) => {
-              console.error(`Error fetching updated transaction data:`, error);
+              console.error(`[Relay] Error fetching updated transaction data:`, error);
               sink.error(error instanceof Error ? error : new Error(String(error)));
             }
           });
@@ -425,7 +428,7 @@ export function registerTransactionListUpdater() {
         const connectionsRecord = root.getLinkedRecord('recentTransactions');
         
         if (!connectionsRecord) {
-          console.log('No transactions connection found in store');
+          console.log('[Relay] No transactions connection found in store');
           return;
         }
         
@@ -442,12 +445,12 @@ export function registerTransactionListUpdater() {
           fields.forEach(field => {
             if (data[field] !== undefined) {
               transactionRecord.setValue(data[field], field);
-              console.log(`Updated transaction ${transactionId} field ${field} in Relay store`);
+              console.log(`[Relay] Updated transaction ${transactionId} field ${field} in Relay store`);
             }
           });
         } else {
           // Transaction not in store yet, need to mark the connection for refetch
-          console.log(`Transaction ${transactionId} not found in store, marking connection for refetch`);
+          console.log(`[Relay] Transaction ${transactionId} not found in store, marking connection for refetch`);
           
           // Mark the entire connection for refetch
           if (connectionsRecord) {
@@ -460,12 +463,13 @@ export function registerTransactionListUpdater() {
                 // This doesn't actually change data, but marks the record as changed
                 // which will trigger Relay to refetch the connection
                 firstEdge.setValue(firstEdge.getValue('cursor'), 'cursor');
+                console.log('[Relay] Marked first edge for refetch in updater');
               }
             }
           }
         }
       } catch (error) {
-        console.error('Error updating transaction in store:', error);
+        console.error('[Relay] Error updating transaction in store:', error);
       }
     }
   );
