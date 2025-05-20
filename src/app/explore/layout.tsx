@@ -4,7 +4,7 @@ import React, { Suspense } from 'react'
 import { View, Text } from 'reshaped'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { 
+import {
   GlobalProtocolMetricsSkeleton,
 } from '@/src/modules/explore/components/GlobalProtocolMetrics'
 import GlobalProtocolMetricsWithSubscription from '@/src/modules/explore/components/GlobalProtocolMetricsSubscription'
@@ -21,7 +21,7 @@ export default function ExploreLayout({ children }: { children: React.ReactNode 
   const isTokenDetailPage = pathname?.match(/^\/explore\/tokens\/0x[a-fA-F0-9]+$/) !== null
 
   return (
-    <View gap={12} padding={4} width="100%">
+    <View gap={12} paddingTop={4} width="100%">
       {/* Global protocol metrics with subscription support */}
       {!isTokenDetailPage && (
         <Suspense fallback={<GlobalProtocolMetricsSkeleton />}>
