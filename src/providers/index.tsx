@@ -3,7 +3,7 @@
 import { privyConfig, wagmiConfig } from '@/config'
 import { PrivyProvider } from '@privy-io/react-auth'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { useMemo, useState, useEffect, useRef } from 'react'
+import { useMemo, useState, useEffect } from 'react'
 import { WagmiProvider, usePublicClient, useWalletClient, http } from 'wagmi'
 import { PonderProvider, PonderSDK } from '@ponderfinance/sdk'
 import { createPublicClient, createWalletClient, custom, type PublicClient } from 'viem'
@@ -14,6 +14,7 @@ import { RelayEnvironmentProvider } from 'react-relay'
 import { getClientEnvironment } from '@/src/lib/relay/environment'
 import { RedisSubscriberProvider } from './RedisSubscriberProvider'
 import { TokenDataProvider } from '@/src/contexts/TokenDataContext'
+import type { Environment } from 'relay-runtime'
 
 // Helper to create styled console logs
 const logWithStyle = (message: string, type: 'success' | 'info' | 'error' | 'warning' = 'info') => {
@@ -29,36 +30,46 @@ const logWithStyle = (message: string, type: 'success' | 'info' | 'error' | 'war
   console.log(`%c${message}`, styles[type]);
 };
 
-// Proper Relay Provider using established patterns
+// Client-side Relay Provider following Next.js best practices
 function RelayProvider({ children }: { children: React.ReactNode }) {
-  // Create environment immediately on client side
-  const environment = useMemo(() => {
-    if (typeof window === 'undefined') return null;
-    try {
-      return getClientEnvironment();
-    } catch (err) {
-      console.error('Error creating Relay environment:', err);
-      return null;
-    }
-  }, []);
+  const [environment, setEnvironment] = useState<Environment | null>(null)
+  const [isClient, setIsClient] = useState(false)
   
-  // Always render with environment (null is handled gracefully)
-  if (environment) {
+  // Mark as client-side after hydration
+  useEffect(() => {
+    setIsClient(true)
+  }, [])
+  
+  // Create environment only on client-side after hydration
+  useEffect(() => {
+    if (!isClient) return
+    
+    try {
+      const env = getClientEnvironment()
+      setEnvironment(env)
+    } catch (error) {
+      console.error('Failed to create Relay environment:', error)
+      // App continues without Relay - graceful degradation
+    }
+  }, [isClient])
+  
+  // Only render RelayEnvironmentProvider when we have a valid environment
+  if (isClient && environment) {
     return (
       <RelayEnvironmentProvider environment={environment}>
         <TokenDataProvider>
           {children}
         </TokenDataProvider>
       </RelayEnvironmentProvider>
-    );
+    )
   }
   
-  // Fallback without Relay (for SSR or if environment creation fails)
+  // Fallback during SSR and before environment is ready
   return (
     <TokenDataProvider>
       {children}
     </TokenDataProvider>
-  );
+  )
 }
 
 // SDK Provider using wallet hook

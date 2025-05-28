@@ -48,252 +48,186 @@ if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
   window.enableRedisDebugMode = enableRedisDebugMode;
 }
 
-// Provider component
+// Provider component following Next.js best practices
 export function RedisSubscriberProvider({ children }: { children: React.ReactNode }) {
-  // Update timestamps
+  // State
   const [metricsLastUpdated, setMetricsLastUpdated] = useState<number | null>(null)
   const [pairLastUpdated, setPairLastUpdated] = useState<Record<string, number>>({})
   const [tokenLastUpdated, setTokenLastUpdated] = useState<Record<string, number>>({})
   const [transactionLastUpdated, setTransactionLastUpdated] = useState<Record<string, number>>({})
   const [connectionState, setConnectionState] = useState<ConnectionState>('DISCONNECTED')
-  const [refreshTrigger, setRefreshTrigger] = useState(0)
+  const [isClient, setIsClient] = useState(false)
   
-  // References
-  const environmentRef = useRef<any>(null);
-  const updatesRef = useRef<Record<string, number>>({});
-  const initialized = useRef(false);
-  const pollingTimerRef = useRef<any>(null);
+  // Refs
+  const environmentRef = useRef<any>(null)
+  const updatesRef = useRef<Record<string, number>>({})
+  const cleanupRef = useRef<(() => void) | null>(null)
   
-  // Get Relay environment
+  // Mark as client-side after hydration  
   useEffect(() => {
-    if (typeof window === 'undefined') return;
+    setIsClient(true)
+  }, [])
+  
+  // Get Relay environment on client-side
+  useEffect(() => {
+    if (!isClient) return
     
     try {
-      environmentRef.current = getClientEnvironment();
-      // console.log('✅ Got Relay environment');
+      environmentRef.current = getClientEnvironment()
     } catch (error) {
-      console.error('Error accessing Relay environment:', error);
+      console.error('Error accessing Relay environment:', error)
     }
-  }, []);
+  }, [isClient])
   
   // Function to check if an entity should be refreshed
   const shouldEntityRefresh = (entityType: string, entityId: string, minInterval = 5000) => {
-    const key = `${entityType}-${entityId}`;
-    const lastUpdate = updatesRef.current[key];
-    const now = Date.now();
+    const key = `${entityType}-${entityId}`
+    const lastUpdate = updatesRef.current[key]
+    const now = Date.now()
     
-    return !lastUpdate || (now - lastUpdate) > minInterval;
-  };
+    return !lastUpdate || (now - lastUpdate) > minInterval
+  }
   
   // Force refresh all data
   const refreshData = () => {
-    setRefreshTrigger(prev => prev + 1);
-  };
+    // Trigger a re-render and clear update cache
+    updatesRef.current = {}
+    setMetricsLastUpdated(Date.now())
+  }
   
-  // Setup polling fallback when connection is suspended or disconnected for too long
+  // Initialize Redis functionality on client-side only
   useEffect(() => {
-    if (typeof window === 'undefined') return;
+    if (!isClient) return
     
-    // Clear any existing polling timer
-    if (pollingTimerRef.current) {
-      clearInterval(pollingTimerRef.current);
-      pollingTimerRef.current = null;
-    }
-    
-    // Start polling if suspended or disconnected
-    if (connectionState === 'SUSPENDED') {
-      console.log('🔄 Connection suspended, using polling fallback');
-      
-      // Set up metrics polling
-      pollingTimerRef.current = setInterval(async () => {
-        try {
-          // Get metrics via GraphQL
-          const result = await fetch('/api/graphql', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              query: `query ProtocolMetrics {
-                protocol {
-                  totalValueLockedUSD
-                  dailyVolumeUSD
-                  weeklyVolumeUSD
-                }
-              }`
-            })
-          }).then(r => r.json());
-          
-          if (result?.data?.protocol) {
-            console.log('📊 Polling: got metrics data');
-            setMetricsLastUpdated(Date.now());
-            
-            // Update store if possible
-            if (environmentRef.current) {
-              applyStoreUpdate('global-metrics', { 
-                metrics: result.data.protocol 
-              }, environmentRef.current);
-            }
-          }
-        } catch (error) {
-          console.error('Error polling metrics:', error);
-        }
-      }, 30000); // Poll every 30 seconds
-      
-      // Clean up on unmount
-      return () => {
-        if (pollingTimerRef.current) {
-          clearInterval(pollingTimerRef.current);
-        }
-      };
-    }
-  }, [connectionState]);
-  
-  // Initialize Redis functionality asynchronously
-  useEffect(() => {
-    if (typeof window === 'undefined' || initialized.current) return;
-    
-    initialized.current = true;
-    
-    // Lazy load Redis functionality without delay
+    // Dynamic import to avoid build-time issues
     const initRedis = async () => {
       try {
-        // Dynamic import to avoid blocking startup
-        const redisModule = await import('@/src/lib/redis/eventService');
+        const redisModule = await import('@/src/lib/redis/eventService')
         
-        // Register as a subscriber
-        redisModule.registerSubscriber();
+        // Register as subscriber
+        redisModule.registerSubscriber()
+        initializeRelayUpdaters()
         
-        // Initialize Relay updaters
-        initializeRelayUpdaters();
-        
-        // Handle connection state changes
+        // Connection state handler
         const handleConnectionEvent = () => {
-          const currentState = redisModule.getConnectionState();
+          const currentState = redisModule.getConnectionState()
           
-          // Map Redis enum to our local type
           if (currentState === redisModule.ConnectionState.CONNECTED) {
-            setConnectionState('CONNECTED');
+            setConnectionState('CONNECTED')
           } else if (currentState === redisModule.ConnectionState.DISCONNECTED) {
-            setConnectionState('DISCONNECTED');
+            setConnectionState('DISCONNECTED')
           } else if (currentState === redisModule.ConnectionState.SUSPENDED) {
-            setConnectionState('SUSPENDED');
+            setConnectionState('SUSPENDED')
           } else {
-            setConnectionState('DISCONNECTED');
+            setConnectionState('ERROR')
           }
-        };
+        }
         
-        // Listen to connection events
-        const emitter = redisModule.getSubscriberEventEmitter();
-        emitter.on(redisModule.ConnectionEvent.CONNECTED, handleConnectionEvent);
-        emitter.on(redisModule.ConnectionEvent.DISCONNECTED, handleConnectionEvent);
-        emitter.on(redisModule.ConnectionEvent.ERROR, handleConnectionEvent);
-        emitter.on(redisModule.ConnectionEvent.SUSPENDED, handleConnectionEvent);
-        
-        // Set initial state
-        handleConnectionEvent();
-        
-        // Set up event handlers for real-time updates
+        // Event handlers
         const handleMetricsUpdate = (data: any) => {
-          // Try direct store update
-          let updated = false;
           if (environmentRef.current) {
-            updated = applyStoreUpdate('global-metrics', data, environmentRef.current);
+            const updated = applyStoreUpdate('global-metrics', data, environmentRef.current)
             if (updated) {
-              updatesRef.current['metrics-global'] = Date.now();
+              updatesRef.current['metrics-global'] = Date.now()
             }
           }
-          
-          // Update timestamp
-          setMetricsLastUpdated(Date.now());
-        };
+          setMetricsLastUpdated(Date.now())
+        }
         
         const handlePairUpdate = (data: any) => {
-          const entityId = data.entityId || data.pairId;
-          if (!entityId) return;
+          const entityId = data.entityId || data.pairId
+          if (!entityId) return
           
-          // Try direct store update
-          let updated = false;
           if (environmentRef.current) {
-            updated = applyStoreUpdate(`pair-${entityId}`, data, environmentRef.current);
+            const updated = applyStoreUpdate(`pair-${entityId}`, data, environmentRef.current)
             if (updated) {
-              updatesRef.current[`pair-${entityId}`] = Date.now();
+              updatesRef.current[`pair-${entityId}`] = Date.now()
             }
           }
           
-          // Update timestamp
           setPairLastUpdated(prev => ({
             ...prev,
             [entityId]: Date.now()
-          }));
-        };
+          }))
+        }
         
         const handleTokenUpdate = (data: any) => {
-          const entityId = data.entityId || data.tokenId;
-          if (!entityId) return;
+          const entityId = data.entityId || data.tokenId
+          if (!entityId) return
           
-          // Try direct store update
-          let updated = false;
           if (environmentRef.current) {
-            updated = applyStoreUpdate(`token-price-${entityId}`, data, environmentRef.current);
+            const updated = applyStoreUpdate(`token-price-${entityId}`, data, environmentRef.current)
             if (updated) {
-              updatesRef.current[`token-${entityId}`] = Date.now();
+              updatesRef.current[`token-${entityId}`] = Date.now()
             }
           }
           
-          // Update timestamp
           setTokenLastUpdated(prev => ({
             ...prev,
             [entityId]: Date.now()
-          }));
-        };
+          }))
+        }
         
         const handleTransactionUpdate = (data: any) => {
-          const entityId = data.entityId || data.transactionId;
-          if (!entityId) return;
+          const entityId = data.entityId || data.transactionId
+          if (!entityId) return
           
-          // Try direct store update
-          let updated = false;
           if (environmentRef.current) {
-            updated = applyStoreUpdate(`transaction-${entityId}`, data, environmentRef.current);
+            const updated = applyStoreUpdate(`transaction-${entityId}`, data, environmentRef.current)
             if (updated) {
-              updatesRef.current[`transaction-${entityId}`] = Date.now();
+              updatesRef.current[`transaction-${entityId}`] = Date.now()
             }
           }
           
-          // Update timestamp
           setTransactionLastUpdated(prev => ({
             ...prev,
             [entityId]: Date.now()
-          }));
-        };
+          }))
+        }
         
         // Set up event listeners
-        emitter.on(redisModule.REDIS_CHANNELS.METRICS_UPDATED, handleMetricsUpdate);
-        emitter.on(redisModule.REDIS_CHANNELS.PAIR_UPDATED, handlePairUpdate);
-        emitter.on(redisModule.REDIS_CHANNELS.TOKEN_UPDATED, handleTokenUpdate);
-        emitter.on(redisModule.REDIS_CHANNELS.TRANSACTION_UPDATED, handleTransactionUpdate);
+        const emitter = redisModule.getSubscriberEventEmitter()
+        emitter.on(redisModule.ConnectionEvent.CONNECTED, handleConnectionEvent)
+        emitter.on(redisModule.ConnectionEvent.DISCONNECTED, handleConnectionEvent)
+        emitter.on(redisModule.ConnectionEvent.ERROR, handleConnectionEvent)
+        emitter.on(redisModule.ConnectionEvent.SUSPENDED, handleConnectionEvent)
+        emitter.on(redisModule.REDIS_CHANNELS.METRICS_UPDATED, handleMetricsUpdate)
+        emitter.on(redisModule.REDIS_CHANNELS.PAIR_UPDATED, handlePairUpdate)
+        emitter.on(redisModule.REDIS_CHANNELS.TOKEN_UPDATED, handleTokenUpdate)
+        emitter.on(redisModule.REDIS_CHANNELS.TRANSACTION_UPDATED, handleTransactionUpdate)
+        
+        // Set initial state
+        handleConnectionEvent()
         
         // Store cleanup function
-        return () => {
-          emitter.off(redisModule.ConnectionEvent.CONNECTED, handleConnectionEvent);
-          emitter.off(redisModule.ConnectionEvent.DISCONNECTED, handleConnectionEvent);
-          emitter.off(redisModule.ConnectionEvent.ERROR, handleConnectionEvent);
-          emitter.off(redisModule.ConnectionEvent.SUSPENDED, handleConnectionEvent);
-          emitter.off(redisModule.REDIS_CHANNELS.METRICS_UPDATED, handleMetricsUpdate);
-          emitter.off(redisModule.REDIS_CHANNELS.PAIR_UPDATED, handlePairUpdate);
-          emitter.off(redisModule.REDIS_CHANNELS.TOKEN_UPDATED, handleTokenUpdate);
-          emitter.off(redisModule.REDIS_CHANNELS.TRANSACTION_UPDATED, handleTransactionUpdate);
-          redisModule.unregisterSubscriber();
-        };
+        cleanupRef.current = () => {
+          emitter.off(redisModule.ConnectionEvent.CONNECTED, handleConnectionEvent)
+          emitter.off(redisModule.ConnectionEvent.DISCONNECTED, handleConnectionEvent)
+          emitter.off(redisModule.ConnectionEvent.ERROR, handleConnectionEvent)
+          emitter.off(redisModule.ConnectionEvent.SUSPENDED, handleConnectionEvent)
+          emitter.off(redisModule.REDIS_CHANNELS.METRICS_UPDATED, handleMetricsUpdate)
+          emitter.off(redisModule.REDIS_CHANNELS.PAIR_UPDATED, handlePairUpdate)
+          emitter.off(redisModule.REDIS_CHANNELS.TOKEN_UPDATED, handleTokenUpdate)
+          emitter.off(redisModule.REDIS_CHANNELS.TRANSACTION_UPDATED, handleTransactionUpdate)
+          redisModule.unregisterSubscriber()
+        }
         
       } catch (error) {
-        console.error('Error initializing Redis functionality:', error);
-        // Continue without Redis - app will use polling fallback
+        console.error('Redis initialization failed:', error)
+        // App continues without Redis functionality
       }
-    };
+    }
     
-    // Initialize immediately
-    initRedis();
-  }, []);
+    initRedis()
+    
+    // Cleanup on unmount
+    return () => {
+      if (cleanupRef.current) {
+        cleanupRef.current()
+        cleanupRef.current = null
+      }
+    }
+  }, [isClient])
   
   // Context value
   const contextValue = {
@@ -304,11 +238,11 @@ export function RedisSubscriberProvider({ children }: { children: React.ReactNod
     connectionState,
     refreshData,
     shouldEntityRefresh
-  };
+  }
   
   return (
     <RedisSubscriberContext.Provider value={contextValue}>
       {children}
     </RedisSubscriberContext.Provider>
-  );
+  )
 }

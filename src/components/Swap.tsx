@@ -3,7 +3,7 @@ import { Text, Button, View, Actionable, Icon, useToast, Image } from 'reshaped'
 import { type Address, formatUnits, parseUnits } from 'viem'
 import { useAccount, useBalance } from 'wagmi'
 import { useQuery } from '@tanstack/react-query'
-import { useLazyLoadQuery, graphql } from 'react-relay'
+import { useLazyLoadQuery, graphql, useRelayEnvironment } from 'react-relay'
 import {
   useGasEstimate,
   useSwap,
@@ -1308,3 +1308,159 @@ export function SwapInterface({
 }
 
 export default SwapInterface
+
+// Safe wrapper that only renders SwapInterface when Relay environment is available
+function SafeSwapInterface(props: SwapInterfaceProps) {
+  try {
+    // This will throw if no Relay environment is available
+    useRelayEnvironment()
+    return <SwapInterface {...props} />
+  } catch (error) {
+    // Return the same UI structure but without Relay functionality
+    return <SwapInterfaceStaticUI {...props} />
+  }
+}
+
+// Static UI version without Relay queries for when environment isn't ready
+function SwapInterfaceStaticUI({ defaultTokenIn, defaultTokenOut, defaultWidth = '480px', className }: SwapInterfaceProps) {
+  const { login } = usePrivy()
+  const { address: account } = useAccount()
+  const [slippage, setSlippage] = useState(DEFAULT_SLIPPAGE)
+
+  return (
+    <View align="center" className={className}>
+      <View width={{ s: '100%', m: defaultWidth }}>
+        <View gap={2} borderRadius="large">
+          {/* Show actual interface tabs */}
+          <InterfaceTabs slippage={slippage} setSlippage={setSlippage} />
+          
+          <View maxHeight="600px" overflow="auto" gap={1}>
+            {/* Input Token Section */}
+            <View
+              gap={2}
+              padding={4}
+              paddingTop={6}
+              paddingBottom={6}
+              borderRadius="large"
+              borderColor="neutral-faded"
+              align="start"
+            >
+              <Text color="neutral-faded" variant="body-3">
+                Sell
+              </Text>
+              <View direction="row" gap={8} wrap={false}>
+                <View grow={true} align="center">
+                  <input
+                    placeholder="0"
+                    disabled
+                    className="flex w-full h-full text-4xl bg-[rgba(0,0,0,0)] focus:outline-0"
+                  />
+                </View>
+                <TokenSelector
+                  onSelectToken={() => {}} // Disabled function
+                  tokenAddress={defaultTokenIn}
+                  otherSelectedToken={defaultTokenOut}
+                />
+              </View>
+            </View>
+
+            {/* Output Token Section */}
+            <View
+              gap={2}
+              padding={4}
+              paddingTop={6}
+              paddingBottom={6}
+              borderRadius="large"
+              backgroundColor="elevation-base"
+              align="start"
+              position="relative"
+            >
+              <View
+                position="absolute"
+                insetTop={-7}
+                align="center"
+                backgroundColor="elevation-overlay"
+                borderColor="neutral-faded"
+                borderRadius="large"
+                attributes={{
+                  style: {
+                    left: '50%',
+                    marginLeft: '-22px',
+                    borderWidth: '4px',
+                    borderColor: 'var(--rs-color-background-page)',
+                  },
+                }}
+                zIndex={2}
+              >
+                <Button
+                  disabled
+                  variant="ghost"
+                  size="small"
+                  attributes={{ style: { paddingInline: 4 } }}
+                >
+                  <View padding={2}>
+                    <ArrowDown size={24} />
+                  </View>
+                </Button>
+              </View>
+              <Text color="neutral-faded" variant="body-3">
+                Buy
+              </Text>
+              <View direction="row" gap={8} wrap={false}>
+                <View grow={true} align="center">
+                  <input
+                    placeholder="0"
+                    disabled
+                    readOnly
+                    className="flex w-full h-full text-4xl bg-[rgba(0,0,0,0)] focus:outline-0"
+                  />
+                </View>
+                <TokenSelector
+                  onSelectToken={() => {}} // Disabled function
+                  tokenAddress={defaultTokenOut}
+                  otherSelectedToken={defaultTokenIn}
+                />
+              </View>
+            </View>
+
+            {/* Action Button */}
+            <View gap={4} className="mt-4">
+              {!account ? (
+                <Button
+                  fullWidth
+                  size="large"
+                  variant="solid"
+                  color="primary"
+                  onClick={() => login()}
+                >
+                  Connect Wallet
+                </Button>
+              ) : (
+                <Button fullWidth size="large" disabled>
+                  Loading...
+                </Button>
+              )}
+            </View>
+          </View>
+        </View>
+      </View>
+    </View>
+  )
+}
+
+// Client-side wrapper to prevent SSR execution of Relay queries
+export function ClientSwapInterface(props: SwapInterfaceProps) {
+  const [isClient, setIsClient] = useState(false)
+  
+  useEffect(() => {
+    setIsClient(true)
+  }, [])
+  
+  if (!isClient) {
+    // Return the static UI during SSR
+    return <SwapInterfaceStaticUI {...props} />
+  }
+  
+  // Use the safe wrapper for client-side rendering
+  return <SafeSwapInterface {...props} />
+}
