@@ -593,103 +593,87 @@ export function SwapInterface({
 
     const id = toast.show({
       color: 'neutral',
-      actionsSlot: (
-        <Actionable 
-          attributes={{
-            style: {
-              width: '100% !important',
-            },
-          }}
-          onClick={() => window.open(`${CURRENT_CHAIN.blockExplorers?.default.url}/tx/${txHash}`, '_blank')}
-        >
-          <View 
-            direction="row"
-            align="start"
-            gap={3}
-            position="relative"
-          >
-            {/* Token Pair Display using cached data */}
-            {tokenInData && tokenOutData ? (
-              <View position="relative">
+      title: (
+        <View direction="row" align="start" gap={3} position="relative">
+          {/* Token Pair Display */}
+          {tokenInData && tokenOutData ? (
+            <View position="relative">
+              <View
+                height={8}
+                width={8}
+                overflow="hidden"
+                insetStart={-4.25}
+              >
                 <View
+                  position="absolute"
+                  insetTop={0}
+                  insetEnd={-4}
+                  attributes={{ style: { zIndex: 2 } }}
+                  overflow="hidden"
+                  borderRadius="circular"
                   height={8}
                   width={8}
-                  overflow="hidden"
-                  insetStart={-4.25}
                 >
-                  <View
-                    position="absolute"
-                    insetTop={0}
-                    insetEnd={-4}
-                    attributes={{ style: { zIndex: 2 } }}
-                    overflow="hidden"
-                    borderRadius="circular"
+                  <Image
+                    src={tokenInData.imageURI ? getIpfsGateway(tokenInData.imageURI) : '/tokens/coin.svg'}
                     height={8}
                     width={8}
-                  >
-                    <Image
-                      src={tokenInData.imageURI ? getIpfsGateway(tokenInData.imageURI) : '/tokens/coin.svg'}
-                      height={8}
-                      width={8}
-                      alt={tokenInData.symbol || 'Token'}
-                    />
-                  </View>
-                </View>
-                <View
-                  height={8}
-                  width={8}
-                  overflow="hidden"
-                  insetEnd={-4.25}
-                  insetTop={0}
-                  position="absolute"
-                >
-                  <View
-                    position="absolute"
-                    insetTop={0}
-                    insetStart={-4}
-                    overflow="hidden"
-                    borderRadius="circular"
-                    attributes={{
-                      style: {
-                        zIndex: 1,
-                      },
-                    }}
-                  >
-                    <Image
-                      src={tokenOutData.imageURI ? getIpfsGateway(tokenOutData.imageURI) : '/tokens/coin.svg'}
-                      height={8}
-                      width={8}
-                      alt={tokenOutData.symbol || 'Token'}
-                    />
-                  </View>
+                    alt={tokenInData.symbol || 'Token'}
+                  />
                 </View>
               </View>
-            ) : (
-              <View height={8} width={12} /> // Fallback placeholder
-            )}
-            
-            <View direction="column" gap={1}>
-              <Text variant="body-2">Swapped</Text>
-              <Text variant="body-2" color="neutral-faded">
-                {formattedAmountIn} {tokenInInfo?.symbol || 'KUB'} for {formattedAmountOut} {tokenOutInfo?.symbol || 'KUB'}
-              </Text>
+              <View
+                height={8}
+                width={8}
+                overflow="hidden"
+                insetEnd={-4.25}
+                insetTop={0}
+                position="absolute"
+              >
+                <View
+                  position="absolute"
+                  insetTop={0}
+                  insetStart={-4}
+                  overflow="hidden"
+                  borderRadius="circular"
+                  attributes={{
+                    style: {
+                      zIndex: 1,
+                    },
+                  }}
+                >
+                  <Image
+                    src={tokenOutData.imageURI ? getIpfsGateway(tokenOutData.imageURI) : '/tokens/coin.svg'}
+                    height={8}
+                    width={8}
+                    alt={tokenOutData.symbol || 'Token'}
+                  />
+                </View>
+              </View>
             </View>
-            <Button
-              onClick={(e) => { e.stopPropagation(); toast.hide(id); }} 
-              variant="ghost"
-              size="small"
-              attributes={{
-                style: {
-                  position: 'absolute',
-                  top: '-8px',
-                  right: '8px'
-                }
-              }}
-            >
-              <Icon svg={X} />
-            </Button>
+          ) : null}
+          <View direction="column" gap={1}>
+            <Text variant="body-2" weight="regular">Swapped</Text>
+            <Text variant="body-2" color="neutral-faded" weight="regular">
+              {formattedAmountIn} {tokenInInfo?.symbol || 'KUB'} for {formattedAmountOut} {tokenOutInfo?.symbol || 'KUB'}
+            </Text>
           </View>
-        </Actionable>
+          <Button
+            onClick={() => toast.hide(id)}
+            variant="ghost"
+            size="small"
+            attributes={{
+              style: {
+                position: 'absolute',
+                top: '-8px',
+                right: '-8px',
+                zIndex: 10
+              }
+            }}
+          >
+            <Icon svg={X} />
+          </Button>
+        </View>
       ),
       timeout: 0,
     })
