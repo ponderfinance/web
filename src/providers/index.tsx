@@ -1,8 +1,5 @@
 'use client'
 
-// Import Redis singleton configuration
-import '@/src/config/redis';
-
 import { privyConfig, wagmiConfig } from '@/config'
 import { PrivyProvider } from '@privy-io/react-auth'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -34,40 +31,21 @@ const logWithStyle = (message: string, type: 'success' | 'info' | 'error' | 'war
 
 // Proper Relay Provider using established patterns
 function RelayProvider({ children }: { children: React.ReactNode }) {
-  // Store environment in ref to prevent unnecessary re-renders
-  const envRef = useRef<any>(null);
-  const [isReady, setIsReady] = useState(false);
-  
-  // Initialize the environment once on mount
-  useEffect(() => {
-    // Skip in SSR
-    if (typeof window === 'undefined') return;
-    if (envRef.current) return; // Already initialized
-    
+  // Create environment immediately on client side
+  const environment = useMemo(() => {
+    if (typeof window === 'undefined') return null;
     try {
-      // logWithStyle('🔄 Initializing Relay environment...', 'info');
-      
-      // Get the singleton environment instance
-      const env = getClientEnvironment();
-      
-      if (env) {
-        envRef.current = env;
-        setIsReady(true);
-        // logWithStyle('✅ Relay environment initialized successfully', 'success');
-      } else {
-        console.error('Failed to create Relay environment');
-        logWithStyle('⚠️ Failed to create Relay environment', 'warning');
-      }
+      return getClientEnvironment();
     } catch (err) {
       console.error('Error creating Relay environment:', err);
-      logWithStyle('❌ Error creating Relay environment:', 'error');
+      return null;
     }
   }, []);
   
-  // If environment is ready, provide it to children
-  if (isReady && envRef.current) {
+  // Always render with environment (null is handled gracefully)
+  if (environment) {
     return (
-      <RelayEnvironmentProvider environment={envRef.current}>
+      <RelayEnvironmentProvider environment={environment}>
         <TokenDataProvider>
           {children}
         </TokenDataProvider>
@@ -75,8 +53,12 @@ function RelayProvider({ children }: { children: React.ReactNode }) {
     );
   }
   
-  // Return null until environment is ready - don't render children prematurely
-  return null;
+  // Fallback without Relay (for SSR or if environment creation fails)
+  return (
+    <TokenDataProvider>
+      {children}
+    </TokenDataProvider>
+  );
 }
 
 // SDK Provider using wallet hook

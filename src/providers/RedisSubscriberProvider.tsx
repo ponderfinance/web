@@ -1,18 +1,12 @@
 'use client'
 
 import React, { createContext, useContext, useEffect, useState, useRef } from 'react'
-import { 
-  registerSubscriber,
-  unregisterSubscriber,
-  getSubscriberEventEmitter,
-  REDIS_CHANNELS,
-  ConnectionState,
-  ConnectionEvent,
-  getConnectionState
-} from '@/src/lib/redis/eventService';
 import { applyStoreUpdate } from '@/src/relay/createRelayEnvironment'
 import { initializeRelayUpdaters } from '@/src/relay/initRelayUpdaters'
 import { getClientEnvironment } from '@/src/lib/relay/environment'
+
+// Define types to avoid importing Redis modules at startup
+type ConnectionState = 'CONNECTED' | 'DISCONNECTED' | 'ERROR' | 'SUSPENDED'
 
 // Context type definition
 type RedisSubscriberContextType = {
@@ -31,7 +25,7 @@ const RedisSubscriberContext = createContext<RedisSubscriberContextType>({
   pairLastUpdated: {},
   tokenLastUpdated: {},
   transactionLastUpdated: {},
-  connectionState: ConnectionState.DISCONNECTED,
+  connectionState: 'DISCONNECTED',
   refreshData: () => {},
   shouldEntityRefresh: () => false
 })
@@ -61,7 +55,7 @@ export function RedisSubscriberProvider({ children }: { children: React.ReactNod
   const [pairLastUpdated, setPairLastUpdated] = useState<Record<string, number>>({})
   const [tokenLastUpdated, setTokenLastUpdated] = useState<Record<string, number>>({})
   const [transactionLastUpdated, setTransactionLastUpdated] = useState<Record<string, number>>({})
-  const [connectionState, setConnectionState] = useState<ConnectionState>(ConnectionState.DISCONNECTED)
+  const [connectionState, setConnectionState] = useState<ConnectionState>('DISCONNECTED')
   const [refreshTrigger, setRefreshTrigger] = useState(0)
   
   // References
@@ -107,7 +101,7 @@ export function RedisSubscriberProvider({ children }: { children: React.ReactNod
     }
     
     // Start polling if suspended or disconnected
-    if (connectionState === ConnectionState.SUSPENDED) {
+    if (connectionState === 'SUSPENDED') {
       console.log('🔄 Connection suspended, using polling fallback');
       
       // Set up metrics polling
@@ -153,142 +147,152 @@ export function RedisSubscriberProvider({ children }: { children: React.ReactNod
     }
   }, [connectionState]);
   
-  // Handle connection state changes
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    
-    const handleConnectionEvent = () => {
-      const currentState = getConnectionState();
-      setConnectionState(currentState);
-    };
-    
-    // Listen to connection events
-    const emitter = getSubscriberEventEmitter();
-    emitter.on(ConnectionEvent.CONNECTED, handleConnectionEvent);
-    emitter.on(ConnectionEvent.DISCONNECTED, handleConnectionEvent);
-    emitter.on(ConnectionEvent.ERROR, handleConnectionEvent);
-    emitter.on(ConnectionEvent.SUSPENDED, handleConnectionEvent);
-    
-    // Set initial state
-    setConnectionState(getConnectionState());
-    
-    return () => {
-      emitter.off(ConnectionEvent.CONNECTED, handleConnectionEvent);
-      emitter.off(ConnectionEvent.DISCONNECTED, handleConnectionEvent);
-      emitter.off(ConnectionEvent.ERROR, handleConnectionEvent);
-      emitter.off(ConnectionEvent.SUSPENDED, handleConnectionEvent);
-    };
-  }, []);
-  
-  // Set up event handlers for real-time updates
+  // Initialize Redis functionality asynchronously
   useEffect(() => {
     if (typeof window === 'undefined' || initialized.current) return;
     
-    // console.log('🚀 Initializing real-time update handlers');
     initialized.current = true;
     
-    // Register as a subscriber
-    registerSubscriber();
-    
-    // Initialize Relay updaters
-    initializeRelayUpdaters();
-    
-    // Metrics update handler
-    const handleMetricsUpdate = (data: any) => {
-      // console.log('📈 Metrics update received');
-      
-      // Try direct store update
-      let updated = false;
-      if (environmentRef.current) {
-        updated = applyStoreUpdate('global-metrics', data, environmentRef.current);
-        if (updated) {
-          updatesRef.current['metrics-global'] = Date.now();
-        }
+    // Lazy load Redis functionality without delay
+    const initRedis = async () => {
+      try {
+        // Dynamic import to avoid blocking startup
+        const redisModule = await import('@/src/lib/redis/eventService');
+        
+        // Register as a subscriber
+        redisModule.registerSubscriber();
+        
+        // Initialize Relay updaters
+        initializeRelayUpdaters();
+        
+        // Handle connection state changes
+        const handleConnectionEvent = () => {
+          const currentState = redisModule.getConnectionState();
+          
+          // Map Redis enum to our local type
+          if (currentState === redisModule.ConnectionState.CONNECTED) {
+            setConnectionState('CONNECTED');
+          } else if (currentState === redisModule.ConnectionState.DISCONNECTED) {
+            setConnectionState('DISCONNECTED');
+          } else if (currentState === redisModule.ConnectionState.SUSPENDED) {
+            setConnectionState('SUSPENDED');
+          } else {
+            setConnectionState('DISCONNECTED');
+          }
+        };
+        
+        // Listen to connection events
+        const emitter = redisModule.getSubscriberEventEmitter();
+        emitter.on(redisModule.ConnectionEvent.CONNECTED, handleConnectionEvent);
+        emitter.on(redisModule.ConnectionEvent.DISCONNECTED, handleConnectionEvent);
+        emitter.on(redisModule.ConnectionEvent.ERROR, handleConnectionEvent);
+        emitter.on(redisModule.ConnectionEvent.SUSPENDED, handleConnectionEvent);
+        
+        // Set initial state
+        handleConnectionEvent();
+        
+        // Set up event handlers for real-time updates
+        const handleMetricsUpdate = (data: any) => {
+          // Try direct store update
+          let updated = false;
+          if (environmentRef.current) {
+            updated = applyStoreUpdate('global-metrics', data, environmentRef.current);
+            if (updated) {
+              updatesRef.current['metrics-global'] = Date.now();
+            }
+          }
+          
+          // Update timestamp
+          setMetricsLastUpdated(Date.now());
+        };
+        
+        const handlePairUpdate = (data: any) => {
+          const entityId = data.entityId || data.pairId;
+          if (!entityId) return;
+          
+          // Try direct store update
+          let updated = false;
+          if (environmentRef.current) {
+            updated = applyStoreUpdate(`pair-${entityId}`, data, environmentRef.current);
+            if (updated) {
+              updatesRef.current[`pair-${entityId}`] = Date.now();
+            }
+          }
+          
+          // Update timestamp
+          setPairLastUpdated(prev => ({
+            ...prev,
+            [entityId]: Date.now()
+          }));
+        };
+        
+        const handleTokenUpdate = (data: any) => {
+          const entityId = data.entityId || data.tokenId;
+          if (!entityId) return;
+          
+          // Try direct store update
+          let updated = false;
+          if (environmentRef.current) {
+            updated = applyStoreUpdate(`token-price-${entityId}`, data, environmentRef.current);
+            if (updated) {
+              updatesRef.current[`token-${entityId}`] = Date.now();
+            }
+          }
+          
+          // Update timestamp
+          setTokenLastUpdated(prev => ({
+            ...prev,
+            [entityId]: Date.now()
+          }));
+        };
+        
+        const handleTransactionUpdate = (data: any) => {
+          const entityId = data.entityId || data.transactionId;
+          if (!entityId) return;
+          
+          // Try direct store update
+          let updated = false;
+          if (environmentRef.current) {
+            updated = applyStoreUpdate(`transaction-${entityId}`, data, environmentRef.current);
+            if (updated) {
+              updatesRef.current[`transaction-${entityId}`] = Date.now();
+            }
+          }
+          
+          // Update timestamp
+          setTransactionLastUpdated(prev => ({
+            ...prev,
+            [entityId]: Date.now()
+          }));
+        };
+        
+        // Set up event listeners
+        emitter.on(redisModule.REDIS_CHANNELS.METRICS_UPDATED, handleMetricsUpdate);
+        emitter.on(redisModule.REDIS_CHANNELS.PAIR_UPDATED, handlePairUpdate);
+        emitter.on(redisModule.REDIS_CHANNELS.TOKEN_UPDATED, handleTokenUpdate);
+        emitter.on(redisModule.REDIS_CHANNELS.TRANSACTION_UPDATED, handleTransactionUpdate);
+        
+        // Store cleanup function
+        return () => {
+          emitter.off(redisModule.ConnectionEvent.CONNECTED, handleConnectionEvent);
+          emitter.off(redisModule.ConnectionEvent.DISCONNECTED, handleConnectionEvent);
+          emitter.off(redisModule.ConnectionEvent.ERROR, handleConnectionEvent);
+          emitter.off(redisModule.ConnectionEvent.SUSPENDED, handleConnectionEvent);
+          emitter.off(redisModule.REDIS_CHANNELS.METRICS_UPDATED, handleMetricsUpdate);
+          emitter.off(redisModule.REDIS_CHANNELS.PAIR_UPDATED, handlePairUpdate);
+          emitter.off(redisModule.REDIS_CHANNELS.TOKEN_UPDATED, handleTokenUpdate);
+          emitter.off(redisModule.REDIS_CHANNELS.TRANSACTION_UPDATED, handleTransactionUpdate);
+          redisModule.unregisterSubscriber();
+        };
+        
+      } catch (error) {
+        console.error('Error initializing Redis functionality:', error);
+        // Continue without Redis - app will use polling fallback
       }
-      
-      // Update timestamp
-      setMetricsLastUpdated(Date.now());
     };
     
-    // Pair update handler
-    const handlePairUpdate = (data: any) => {
-      const entityId = data.entityId || data.pairId;
-      if (!entityId) return;
-      
-      // Try direct store update
-      let updated = false;
-      if (environmentRef.current) {
-        updated = applyStoreUpdate(`pair-${entityId}`, data, environmentRef.current);
-        if (updated) {
-          updatesRef.current[`pair-${entityId}`] = Date.now();
-        }
-      }
-      
-      // Update timestamp
-      setPairLastUpdated(prev => ({
-        ...prev,
-        [entityId]: Date.now()
-      }));
-    };
-    
-    // Token update handler
-    const handleTokenUpdate = (data: any) => {
-      const entityId = data.entityId || data.tokenId;
-      if (!entityId) return;
-      
-      // Try direct store update
-      let updated = false;
-      if (environmentRef.current) {
-        updated = applyStoreUpdate(`token-price-${entityId}`, data, environmentRef.current);
-        if (updated) {
-          updatesRef.current[`token-${entityId}`] = Date.now();
-        }
-      }
-      
-      // Update timestamp
-      setTokenLastUpdated(prev => ({
-        ...prev,
-        [entityId]: Date.now()
-      }));
-    };
-    
-    // Transaction update handler
-    const handleTransactionUpdate = (data: any) => {
-      const entityId = data.entityId || data.transactionId;
-      if (!entityId) return;
-      
-      // Try direct store update
-      let updated = false;
-      if (environmentRef.current) {
-        updated = applyStoreUpdate(`transaction-${entityId}`, data, environmentRef.current);
-        if (updated) {
-          updatesRef.current[`transaction-${entityId}`] = Date.now();
-        }
-      }
-      
-      // Update timestamp
-      setTransactionLastUpdated(prev => ({
-        ...prev,
-        [entityId]: Date.now()
-      }));
-    };
-    
-    // Set up event listeners
-    const emitter = getSubscriberEventEmitter();
-    emitter.on(REDIS_CHANNELS.METRICS_UPDATED, handleMetricsUpdate);
-    emitter.on(REDIS_CHANNELS.PAIR_UPDATED, handlePairUpdate);
-    emitter.on(REDIS_CHANNELS.TOKEN_UPDATED, handleTokenUpdate);
-    emitter.on(REDIS_CHANNELS.TRANSACTION_UPDATED, handleTransactionUpdate);
-    
-    // Clean up
-    return () => {
-      emitter.off(REDIS_CHANNELS.METRICS_UPDATED, handleMetricsUpdate);
-      emitter.off(REDIS_CHANNELS.PAIR_UPDATED, handlePairUpdate);
-      emitter.off(REDIS_CHANNELS.TOKEN_UPDATED, handleTokenUpdate);
-      emitter.off(REDIS_CHANNELS.TRANSACTION_UPDATED, handleTransactionUpdate);
-      
-      unregisterSubscriber();
-    };
+    // Initialize immediately
+    initRedis();
   }, []);
   
   // Context value
