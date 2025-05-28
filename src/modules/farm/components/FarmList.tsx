@@ -18,8 +18,8 @@ import {
 import StakeModal from '../../../components/StakeModal'
 import { TokenPair, tokenFragment } from '../../../components/TokenPair'
 import { formatNumber, roundDecimal } from '@/src/utils/numbers'
-import { X, MagicWand } from '@phosphor-icons/react'
-import { TokenPairWrapper } from '@/src/components/TokenPairWrapper'
+import { X, MagicWand, ArrowUpRight, TrendUp, TrendDown, Coins } from '@phosphor-icons/react'
+import { TokenPairFromAddresses } from '@/src/components/TokenPairFromAddresses'
 import { useQuery } from '@tanstack/react-query'
 import { KKUB_ADDRESS } from '@/src/constants/addresses'
 import { CURRENT_CHAIN } from '@/src/constants/chains'
@@ -1126,7 +1126,7 @@ const PoolCard = ({ pid, address, position, onManage }: PoolCardProps) => {
               <>
                 <View gap={1}>
                   <View direction="row" gap={4} align="center">
-                    <TokenPairWrapper
+                    <TokenPairFromAddresses
                       tokenAAddress={position.token0.address}
                       tokenBAddress={position.token1.address}
                       size="small"

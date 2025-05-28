@@ -32,7 +32,7 @@ export const TokenPair: React.FC<TokenPairProps> = ({
   size = 'small',
   showSymbols = true,
 }) => {
-  // Use the fragments to get token data
+  // Extract data using Relay fragments
   const tokenAData = useFragment<TokenPairFragment$key>(tokenFragment, tokenA)
   const tokenBData = useFragment<TokenPairFragment$key>(tokenFragment, tokenB)
 

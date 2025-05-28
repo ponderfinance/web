@@ -29,7 +29,7 @@ import { KKUB_ADDRESS } from '@/src/constants/addresses'
 import { CURRENT_CHAIN } from '@/src/constants/chains'
 import { useEffect, useMemo, useState, useCallback } from 'react'
 import { usePrivy } from '@privy-io/react-auth'
-import { TokenPairWrapper } from '@/src/components/TokenPairWrapper'
+import { TokenPairFromAddresses } from '@/src/components/TokenPairFromAddresses'
 
 interface AddLiquidityStepperProps {
   defaultTokenA?: Address
@@ -881,7 +881,7 @@ const AddLiquidityStepper = ({
         align="center"
       >
         <View>
-          <TokenPairWrapper 
+          <TokenPairFromAddresses 
             tokenAAddress={tokenA || null}
             tokenBAddress={tokenB || null}
             size="small"

@@ -8,7 +8,7 @@ import { Address } from 'viem'
 import LiquidityPositionItem from './LiquidityPositionItem'
 import { PoolPageQuery } from '@/src/__generated__/PoolPageQuery.graphql'
 import { CURRENT_CHAIN } from '@/src/constants/chains'
-import { TokenPairWrapper } from '@/src/components/TokenPairWrapper'
+import { TokenPairFromAddresses } from '@/src/components/TokenPairFromAddresses'
 
 interface Position {
   id: string
@@ -272,7 +272,7 @@ export function LiquidityPositionsList({ positionsData }: LiquidityPositionsList
               <Modal.Subtitle>
                 <View direction="row" align="center" gap={2}>
                   {/* Use TokenPairWrapper component for token display */}
-                  <TokenPairWrapper
+                  <TokenPairFromAddresses
                     tokenAAddress={selectedPosition.token0.address}
                     tokenBAddress={selectedPosition.token1.address}
                     size="small"

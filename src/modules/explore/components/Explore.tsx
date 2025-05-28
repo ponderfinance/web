@@ -1,7 +1,7 @@
 import React from 'react'
-import { View, Text, Actionable } from 'reshaped'
-import { TokenPairWrapper } from '@/src/components/TokenPairWrapper'
-import { PoolsPageQuery } from '@/src/__generated__/PoolsPageQuery.graphql'
+import { View, Text, Actionable, Button, Loader } from 'reshaped'
+import { TokenPair } from '@/src/components/TokenPair'
+import { PoolsPage_pairs$data } from '@/src/__generated__/PoolsPage_pairs.graphql'
 
 // Helper to format currency values
 const formatCurrency = (value: number): string => {
@@ -15,9 +15,9 @@ const formatCurrency = (value: number): string => {
   return `$${value.toFixed(2)}`
 }
 
-// Define the component props
+// Define the component props - use the actual fragment data
 interface ExploreProps {
-  data: PoolsPageQuery['response']
+  data: PoolsPage_pairs$data
   orderBy: string
   orderDirection: string
   setOrderBy: (value: string) => void
@@ -95,10 +95,10 @@ export const Explore: React.FC<ExploreProps> = ({
 
             <View.Item columns={3}>
               <View direction="row" align="center" gap={2}>
-                {/* Use TokenPairWrapper component for token display */}
-                <TokenPairWrapper
-                  tokenAAddress={node.token0.address as `0x${string}`}
-                  tokenBAddress={node.token1.address as `0x${string}`}
+                {/* Use TokenPair component with proper fragments */}
+                <TokenPair
+                  tokenA={node.token0}
+                  tokenB={node.token1}
                   size="small"
                 />
               </View>

@@ -3,7 +3,7 @@ import { Text, Button, View, Actionable, Icon, useToast, Image } from 'reshaped'
 import { type Address, formatUnits, parseUnits } from 'viem'
 import { useAccount, useBalance } from 'wagmi'
 import { useQuery } from '@tanstack/react-query'
-import { useLazyLoadQuery } from 'react-relay'
+import { useLazyLoadQuery, graphql } from 'react-relay'
 import {
   useGasEstimate,
   useSwap,
@@ -11,7 +11,6 @@ import {
   useSwapCallback,
   useSwapRoute,
   useTokenBalance,
-  useTokenInfo,
   useTokenAllowance,
   useTransaction,
   usePonderSDK,
@@ -24,10 +23,27 @@ import TokenSelector from '@/src/components/TokenSelector'
 import { CURRENT_CHAIN } from '@/src/constants/chains'
 import { formatNumber, roundDecimal } from '@/src/utils/numbers'
 import { TokenPair, tokenFragment } from '@/src/components/TokenPair'
-import { RelayEnvironmentProvider } from 'react-relay'
-import { environment } from '@/src/relay/environment'
-import { getClientEnvironment } from '@/src/lib/relay/environment'
-import { TokenPairWrapper } from '@/src/components/TokenPairWrapper'
+import { SwapTokenDataQuery } from '@/src/__generated__/SwapTokenDataQuery.graphql'
+import { useTokenData } from '@/src/contexts/TokenDataContext'
+import { getIpfsGateway } from '@/src/utils/ipfs'
+
+// GraphQL query for token data
+const swapTokenDataQuery = graphql`
+  query SwapTokenDataQuery($tokenInAddress: String!, $tokenOutAddress: String!, $skipTokenIn: Boolean!, $skipTokenOut: Boolean!) {
+    tokenIn: tokenByAddress(address: $tokenInAddress) @skip(if: $skipTokenIn) {
+      ...TokenPairFragment
+      decimals
+      symbol
+      name
+    }
+    tokenOut: tokenByAddress(address: $tokenOutAddress) @skip(if: $skipTokenOut) {
+      ...TokenPairFragment  
+      decimals
+      symbol
+      name
+    }
+  }
+`
 
 const kubTokenAbi = [
   {
@@ -137,6 +153,7 @@ export function SwapInterface({
   const sdk = usePonderSDK()
   const { address: account } = useAccount()
   const toast = useToast()
+  const tokenDataContext = useTokenData()
 
   // Form state
   const [tokenIn, setTokenIn] = useState<Address | undefined>(defaultTokenIn)
@@ -148,9 +165,48 @@ export function SwapInterface({
   const [approvalsPending, setApprovalsPending] = useState<Set<Address>>(new Set())
   const { login } = usePrivy()
 
-  // Token information
-  const { data: tokenInInfo } = useTokenInfo(tokenIn || ('' as Address))
-  const { data: tokenOutInfo } = useTokenInfo(tokenOut || ('' as Address))
+  // Prefetch token data when tokens change
+  useEffect(() => {
+    const addressesToPrefetch = [tokenIn, tokenOut].filter(Boolean) as Address[]
+    if (addressesToPrefetch.length > 0) {
+      tokenDataContext.prefetchTokens(addressesToPrefetch)
+    }
+  }, [tokenIn, tokenOut, tokenDataContext])
+
+  // Query token data via GraphQL instead of SDK
+  const tokenData = useLazyLoadQuery<SwapTokenDataQuery>(
+    swapTokenDataQuery,
+    {
+      tokenInAddress: tokenIn || '',
+      tokenOutAddress: tokenOut || '',
+      skipTokenIn: !tokenIn || isNativeKUB(tokenIn),
+      skipTokenOut: !tokenOut || isNativeKUB(tokenOut),
+    },
+    { fetchPolicy: 'store-or-network' }
+  )
+
+  // Extract token info from GraphQL data
+  const tokenInInfo = useMemo(() => {
+    if (isNativeKUB(tokenIn)) {
+      return { decimals: 18, symbol: 'KUB', name: 'Native KUB' }
+    }
+    return tokenData.tokenIn ? {
+      decimals: tokenData.tokenIn.decimals ?? 18,
+      symbol: tokenData.tokenIn.symbol ?? '',
+      name: tokenData.tokenIn.name ?? ''
+    } : null
+  }, [tokenData.tokenIn, tokenIn])
+
+  const tokenOutInfo = useMemo(() => {
+    if (isNativeKUB(tokenOut)) {
+      return { decimals: 18, symbol: 'KUB', name: 'Native KUB' }
+    }
+    return tokenData.tokenOut ? {
+      decimals: tokenData.tokenOut.decimals ?? 18,
+      symbol: tokenData.tokenOut.symbol ?? '',
+      name: tokenData.tokenOut.name ?? ''
+    } : null
+  }, [tokenData.tokenOut, tokenOut])
 
   // Handle both ERC20 and native KUB balances
   const { data: tokenInBalance, refetch: refetchTokenInBalance } = useTokenBalance(
@@ -531,56 +587,109 @@ export function SwapInterface({
         ? formatNumber(roundDecimal(formatUnits(swappedAmountOut || BigInt(0), tokenOutInfo.decimals), 4))
         : '0';
 
-    const environment = getClientEnvironment()
-    if (!environment) return
+    // Get token data from context for the TokenPair display
+    const tokenInData = tokenDataContext.getTokenData(tokenIn!)
+    const tokenOutData = tokenDataContext.getTokenData(tokenOut!)
 
     const id = toast.show({
       color: 'neutral',
       actionsSlot: (
-        <RelayEnvironmentProvider environment={environment}>
-          <Suspense>
-            <Actionable 
+        <Actionable 
+          attributes={{
+            style: {
+              width: '100% !important',
+            },
+          }}
+          onClick={() => window.open(`${CURRENT_CHAIN.blockExplorers?.default.url}/tx/${txHash}`, '_blank')}
+        >
+          <View 
+            direction="row"
+            align="start"
+            gap={3}
+            position="relative"
+          >
+            {/* Token Pair Display using cached data */}
+            {tokenInData && tokenOutData ? (
+              <View position="relative">
+                <View
+                  height={8}
+                  width={8}
+                  overflow="hidden"
+                  insetStart={-4.25}
+                >
+                  <View
+                    position="absolute"
+                    insetTop={0}
+                    insetEnd={-4}
+                    attributes={{ style: { zIndex: 2 } }}
+                    overflow="hidden"
+                    borderRadius="circular"
+                    height={8}
+                    width={8}
+                  >
+                    <Image
+                      src={tokenInData.imageURI ? getIpfsGateway(tokenInData.imageURI) : '/tokens/coin.svg'}
+                      height={8}
+                      width={8}
+                      alt={tokenInData.symbol || 'Token'}
+                    />
+                  </View>
+                </View>
+                <View
+                  height={8}
+                  width={8}
+                  overflow="hidden"
+                  insetEnd={-4.25}
+                  insetTop={0}
+                  position="absolute"
+                >
+                  <View
+                    position="absolute"
+                    insetTop={0}
+                    insetStart={-4}
+                    overflow="hidden"
+                    borderRadius="circular"
+                    attributes={{
+                      style: {
+                        zIndex: 1,
+                      },
+                    }}
+                  >
+                    <Image
+                      src={tokenOutData.imageURI ? getIpfsGateway(tokenOutData.imageURI) : '/tokens/coin.svg'}
+                      height={8}
+                      width={8}
+                      alt={tokenOutData.symbol || 'Token'}
+                    />
+                  </View>
+                </View>
+              </View>
+            ) : (
+              <View height={8} width={12} /> // Fallback placeholder
+            )}
+            
+            <View direction="column" gap={1}>
+              <Text variant="body-2">Swapped</Text>
+              <Text variant="body-2" color="neutral-faded">
+                {formattedAmountIn} {tokenInInfo?.symbol || 'KUB'} for {formattedAmountOut} {tokenOutInfo?.symbol || 'KUB'}
+              </Text>
+            </View>
+            <Button
+              onClick={(e) => { e.stopPropagation(); toast.hide(id); }} 
+              variant="ghost"
+              size="small"
               attributes={{
                 style: {
-                  width: '100% !important',
-                },
+                  position: 'absolute',
+                  top: '-8px',
+                  right: '8px'
+                }
               }}
-              onClick={() => window.open(`${CURRENT_CHAIN.blockExplorers.default.url}/tx/${txHash}`, '_blank')}
             >
-              <View 
-                direction="row"
-                align="start"
-                gap={3}
-                position="relative"
-              >
-                <TokenPairWrapper
-                  tokenAAddress={tokenIn || null}
-                  tokenBAddress={tokenOut || null}
-                />
-                <View direction="column" gap={1}>
-                  <Text variant="body-2">Swapped</Text>
-                  <Text variant="body-2" color="neutral-faded">
-                    {formattedAmountIn} {tokenInInfo?.symbol || 'KUB'} for {formattedAmountOut} {tokenOutInfo?.symbol || 'KUB'}
-                  </Text>
-                </View>
-                <Button
-                  onClick={(e) => { e.stopPropagation(); toast.hide(id); }} 
-                  variant="ghost"
-                  size="small"
-                  attributes={{
-                    style: {
-                      position: 'absolute',
-                      top: '-8px',
-                      right: '8px'
-                    }
-                  }}
-                >
-                  <Icon svg={X} />
-                </Button>
-              </View>
-            </Actionable>
-          </Suspense>
-        </RelayEnvironmentProvider>
+              <Icon svg={X} />
+            </Button>
+          </View>
+        </Actionable>
       ),
       timeout: 0,
     })

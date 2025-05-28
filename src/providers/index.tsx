@@ -16,6 +16,7 @@ import { Reshaped } from 'reshaped'
 import { RelayEnvironmentProvider } from 'react-relay'
 import { getClientEnvironment } from '@/src/lib/relay/environment'
 import { RedisSubscriberProvider } from './RedisSubscriberProvider'
+import { TokenDataProvider } from '@/src/contexts/TokenDataContext'
 
 // Helper to create styled console logs
 const logWithStyle = (message: string, type: 'success' | 'info' | 'error' | 'warning' = 'info') => {
@@ -67,7 +68,9 @@ function RelayProvider({ children }: { children: React.ReactNode }) {
   if (isReady && envRef.current) {
     return (
       <RelayEnvironmentProvider environment={envRef.current}>
-        {children}
+        <TokenDataProvider>
+          {children}
+        </TokenDataProvider>
       </RelayEnvironmentProvider>
     );
   }
