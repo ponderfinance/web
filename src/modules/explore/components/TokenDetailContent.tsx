@@ -453,7 +453,7 @@ function TokenDetailContent({
           )}
 
           {/* Stats Section - now aligned with chart */}
-          <View direction="column" gap={4}>
+          <View direction="column" gap={4} paddingBottom={8}>
             <Text variant="featured-2" weight="medium" color="neutral">
               Stats
             </Text>
