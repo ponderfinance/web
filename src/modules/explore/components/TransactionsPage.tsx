@@ -253,11 +253,13 @@ function TransactionsPageContent() {
   useRefreshOnUpdate({
     entityType: 'transaction',
     onUpdate: () => {
-      loadQuery({ first: 15, after: null });
+      // Clear any cached data to ensure we get fresh data
+      loadQuery({ first: 15, after: null }, { fetchPolicy: 'network-only' });
       setQueryRefreshCounter(prev => prev + 1); // Increment to trigger re-render
     },
-    minRefreshInterval: 1000,
+    minRefreshInterval: 500, // Reduced from 1000ms to 500ms for more responsive updates
     shouldRefetch: true,
+    debug: true, // Enable debug to trace transaction update flow
   });
   
   return (

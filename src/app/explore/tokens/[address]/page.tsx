@@ -121,6 +121,7 @@ export default function TokenPage({ params }: { params: { address: string } }) {
   const normalizedAddress = params.address.toLowerCase();
   
   // Render the client-side component with the validated address
+  // withRelayBoundary already handles all loading states, so no need for extra Suspense
   return (
     <ErrorBoundary 
       FallbackComponent={SilentErrorFallback}
@@ -128,9 +129,7 @@ export default function TokenPage({ params }: { params: { address: string } }) {
         console.log('[TokenPage] Error boundary reset - retrying');
       }}
     >
-      <Suspense fallback={<TokenDetailSkeleton />}>
-        <TokenDetailWithRelay tokenAddress={normalizedAddress} />
-      </Suspense>
+      <TokenDetailWithRelay tokenAddress={normalizedAddress} />
     </ErrorBoundary>
   );
 }

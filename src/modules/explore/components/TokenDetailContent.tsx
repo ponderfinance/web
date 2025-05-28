@@ -229,6 +229,7 @@ export const TokenDetailContentWithRelay = withRelayBoundary(
   ({ tokenAddress, initialTimeframe = '1m' }: { tokenAddress: string, initialTimeframe?: string }) => {
     const [queryRef, loadQuery] = useQueryLoader<TokenDetailContentQuery>(TokenDetailQuery)
     const [currentTimeframe, setCurrentTimeframe] = useState(initialTimeframe)
+    const [isInitialLoad, setIsInitialLoad] = useState(true)
   
     // Load initial data - only on mount and tokenAddress change
     useEffect(() => {
@@ -237,6 +238,7 @@ export const TokenDetailContentWithRelay = withRelayBoundary(
         timeframe: currentTimeframe,
         limit: 100
       })
+      setIsInitialLoad(false)
     }, [tokenAddress, loadQuery]) // Removed currentTimeframe dependency
   
     // This callback only updates the UI state, not trigger a new query
@@ -246,24 +248,22 @@ export const TokenDetailContentWithRelay = withRelayBoundary(
       // We don't reload the main query here - each component manages its own data
     }, [])
   
-    // Show skeleton while waiting for initial data
-    if (!queryRef) {
+    // Show skeleton only during the very first load - no nested Suspense needed
+    if (!queryRef && isInitialLoad) {
       return <TokenDetailSkeleton />
     }
   
-    // Success state with data
-    return (
-      <Suspense fallback={<TokenDetailSkeleton />}>
-        <TokenDetailContent 
-          queryRef={queryRef} 
-          currentTimeframe={currentTimeframe}
-          onTimeframeChange={handleTimeframeChange}
-          tokenAddress={tokenAddress}
-        />
-      </Suspense>
-    )
+    // Success state with data - no additional Suspense wrapper
+    return queryRef ? (
+      <TokenDetailContent 
+        queryRef={queryRef} 
+        currentTimeframe={currentTimeframe}
+        onTimeframeChange={handleTimeframeChange}
+        tokenAddress={tokenAddress}
+      />
+    ) : <TokenDetailSkeleton />
   },
-  TokenDetailSkeleton
+  TokenDetailSkeleton // This acts as the fallback for withRelayBoundary
 )
 
 // Token detail skeleton component for better code reuse
@@ -531,6 +531,7 @@ function SuspenseChartContainer({
 }) {
   // This local state controls the timeframe for this chart
   const [currentTimeframe, setCurrentTimeframe] = useState(initialTimeframe)
+  const [isLoadingTimeframe, setIsLoadingTimeframe] = useState(false)
   
   // Load chart data query
   const [chartQueryRef, loadChartQuery] = useQueryLoader<TokenDetailContentChartQuery>(ChartDataQuery)
@@ -544,15 +545,24 @@ function SuspenseChartContainer({
     })
   }, [tokenAddress, currentTimeframe, loadChartQuery])
   
-  // Handle timeframe button clicks - IMPORTANT: Only updates the chart, not the whole page
+  // Handle timeframe button clicks - prevent second loading state
   const handleTimeframeChange = (newTimeframe: string, event?: React.SyntheticEvent) => {
     if (event) {
       event.preventDefault()
       event.stopPropagation()
     }
     
-    // Set loading state by updating the local timeframe
+    // Don't reload if same timeframe
+    if (newTimeframe === currentTimeframe) return
+    
+    // Set brief loading state for visual feedback
+    setIsLoadingTimeframe(true)
+    
+    // Set loading state by updating the local timeframe  
     setCurrentTimeframe(newTimeframe)
+    
+    // Clear loading state after a brief moment
+    setTimeout(() => setIsLoadingTimeframe(false), 300)
     
     // Notify parent for UI state synchronization only
     onTimeframeChange(newTimeframe)
@@ -563,8 +573,16 @@ function SuspenseChartContainer({
   
   return (
     <View direction="column">
-      {/* Chart with Suspense boundary */}
-      <View height={100}>
+      {/* Chart container - use opacity for smooth transitions */}
+      <View 
+        height={100} 
+        attributes={{ 
+          style: { 
+            opacity: isLoadingTimeframe ? 0.6 : 1,
+            transition: 'opacity 0.2s ease-in-out'
+          } 
+        }}
+      >
         {chartQueryRef ? (
           <Suspense fallback={<ChartSkeleton />}>
             <ChartContent
@@ -587,12 +605,14 @@ function SuspenseChartContainer({
               color={currentTimeframe === tf ? 'primary' : 'neutral'}
               onClick={(event) => handleTimeframeChange(tf, event)}
               size="small"
+              disabled={isLoadingTimeframe}
               attributes={{
                 style: {
                   backgroundColor: currentTimeframe === tf
                     ? 'rgba(148, 224, 254, 0.2)'
                     : 'transparent',
                   color: currentTimeframe === tf ? primaryColor : '#999999',
+                  opacity: isLoadingTimeframe ? 0.6 : 1,
                 },
               }}
             >

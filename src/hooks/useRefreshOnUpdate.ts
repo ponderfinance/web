@@ -127,8 +127,8 @@ export function useRefreshOnUpdate({
       const now = Date.now();
       const timeSinceLastRefresh = now - lastRefreshTimeRef.current;
       
-      // For transactions, we use a different threshold
-      const effectiveMinInterval = entityType === 'transaction' ? 1000 : minRefreshInterval;
+      // For transactions, we use a much shorter threshold to ensure timely updates
+      const effectiveMinInterval = entityType === 'transaction' ? 300 : minRefreshInterval;
       
       // Detect consecutive rapid updates (potential flurry of activity)
       if (timeSinceLastRefresh < 10000) { // 10 seconds threshold for consecutive updates
@@ -138,20 +138,22 @@ export function useRefreshOnUpdate({
       }
       
       // If we have rapid consecutive updates, be more aggressive with refreshing
+      // Always refresh immediately for transactions to ensure real-time updates
       const shouldRefreshNow = 
         timeSinceLastRefresh > effectiveMinInterval || 
         hasSignificantChange || 
+        entityType === 'transaction' || // Always refresh for transactions
         consecutiveUpdatesRef.current >= 3;
       
       if (shouldRefreshNow) {
         if (debug) {
-          // console.log(`[useRefreshOnUpdate] Refreshing ${entityType} ${entityId}`, {
-          //   timeSinceLastRefresh,
-          //   effectiveMinInterval,
-          //   hasSignificantChange,
-          //   consecutiveUpdates: consecutiveUpdatesRef.current,
-          //   connectionState
-          // });
+          console.log(`[useRefreshOnUpdate] Refreshing ${entityType} ${entityId}`, {
+            timeSinceLastRefresh,
+            effectiveMinInterval,
+            hasSignificantChange,
+            consecutiveUpdates: consecutiveUpdatesRef.current,
+            connectionState
+          });
         }
         
         lastRefreshTimeRef.current = now;
@@ -164,14 +166,26 @@ export function useRefreshOnUpdate({
         // Force a refetch if requested and environment is available
         if (shouldRefetch && environmentRef.current) {
           if (debug) {
-            // console.log(`[useRefreshOnUpdate] Forcing store invalidation for ${entityType} ${entityId}`);
+            console.log(`[useRefreshOnUpdate] Forcing store invalidation for ${entityType} ${entityId}`);
           }
           
-          // If it's a transaction or we've had multiple updates, do a more aggressive refresh
-          if (entityType === 'transaction' || consecutiveUpdatesRef.current >= 3) {
-            // For transactions, we need to be more aggressive with the store invalidation
+          // For transactions, always do an aggressive refresh
+          if (entityType === 'transaction') {
             try {
+              // For transactions, do a complete invalidation to ensure we get fresh data
               environmentRef.current.getStore().notify();
+              
+              // For transaction updates, sometimes we need to force a GC to clear cached data
+              if (consecutiveUpdatesRef.current > 2) {
+                setTimeout(() => {
+                  try {
+                    environmentRef.current.getStore().gc();
+                    console.log('[useRefreshOnUpdate] Forced garbage collection on transaction store');
+                  } catch (err) {
+                    console.error('Error running garbage collection:', err);
+                  }
+                }, 50); // Small delay to allow the update to process first
+              }
             } catch (err) {
               console.error('Error invalidating store:', err);
             }
