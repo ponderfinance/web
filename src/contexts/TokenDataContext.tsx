@@ -1,21 +1,5 @@
-import React, { createContext, useContext, useState, useEffect } from 'react'
-import { useLazyLoadQuery, graphql } from 'react-relay'
+import React, { createContext, useContext, useState } from 'react'
 import { type Address } from 'viem'
-import { TokenDataContextQuery } from '@/src/__generated__/TokenDataContextQuery.graphql'
-
-// GraphQL query to fetch single token data
-const tokenDataQuery = graphql`
-  query TokenDataContextQuery($address: String!) {
-    token: tokenByAddress(address: $address) {
-      id
-      address
-      name
-      symbol
-      decimals
-      imageURI
-    }
-  }
-`
 
 interface TokenData {
   id: string
@@ -47,7 +31,6 @@ interface TokenDataProviderProps {
 
 export const TokenDataProvider: React.FC<TokenDataProviderProps> = ({ children }) => {
   const [tokenCache, setTokenCache] = useState<Map<string, TokenData>>(new Map())
-  const [addressesToFetch, setAddressesToFetch] = useState<Address[]>([])
 
   // Native KUB data
   const nativeKubData: TokenData = {
@@ -70,18 +53,16 @@ export const TokenDataProvider: React.FC<TokenDataProviderProps> = ({ children }
   }
 
   const prefetchTokens = (addresses: Address[]) => {
-    const uncachedAddresses = addresses.filter(addr => {
-      const normalized = addr.toLowerCase()
-      return normalized !== '0x0000000000000000000000000000000000000000' && 
-             !tokenCache.has(normalized)
+    // For now, just store in cache as null to avoid blocking
+    // We can implement actual prefetching later if needed
+    addresses.forEach(address => {
+      const normalized = address.toLowerCase()
+      if (normalized !== '0x0000000000000000000000000000000000000000' && 
+          !tokenCache.has(normalized)) {
+        // Mark as "will fetch" but don't actually fetch yet
+        setTokenCache(prev => new Map(prev).set(normalized, null as any))
+      }
     })
-
-    if (uncachedAddresses.length > 0) {
-      setAddressesToFetch(prev => {
-        const newAddresses = uncachedAddresses.filter(addr => !prev.includes(addr))
-        return newAddresses.length > 0 ? [...prev, ...newAddresses] : prev
-      })
-    }
   }
 
   const value: TokenDataContextType = {
@@ -91,35 +72,7 @@ export const TokenDataProvider: React.FC<TokenDataProviderProps> = ({ children }
 
   return (
     <TokenDataContext.Provider value={value}>
-      {addressesToFetch.map(address => (
-        <TokenDataFetcher 
-          key={address}
-          address={address} 
-          onDataFetched={(token) => {
-            if (token) {
-              setTokenCache(prev => new Map(prev).set(token.address.toLowerCase(), token))
-            }
-            setAddressesToFetch(prev => prev.filter(addr => addr !== address))
-          }}
-        />
-      ))}
       {children}
     </TokenDataContext.Provider>
   )
-}
-
-// Separate component to handle the Relay query for individual tokens
-const TokenDataFetcher: React.FC<{
-  address: Address
-  onDataFetched: (data: TokenData | null) => void
-}> = ({ address, onDataFetched }) => {
-  const data = useLazyLoadQuery<TokenDataContextQuery>(tokenDataQuery, {
-    address: address.toLowerCase()
-  }, { fetchPolicy: 'store-or-network' })
-
-  useEffect(() => {
-    onDataFetched(data.token as TokenData | null)
-  }, [data.token, onDataFetched])
-
-  return null // This component doesn't render anything
 } 
