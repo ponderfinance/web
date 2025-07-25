@@ -5,8 +5,8 @@ import { MongoClient } from 'mongodb';
 import { TokenPriceService } from './tokenPriceService';
 import { getRedisClient, CACHE_PREFIXES } from '@/src/lib/redis/exports';
 
-// Cache TTL in seconds (5 minutes for price data)
-const PRICE_CHART_CACHE_TTL = 300;
+// Cache TTL in seconds (30 minutes for price data - industry standard)
+const PRICE_CHART_CACHE_TTL = 1800;
 
 // Export the interface for other files to use
 export interface ChartDataPoint {
@@ -153,8 +153,8 @@ export class PriceChartService {
           maxDataPoints = 168; // One point per hour
           break;
         case '1m':
-          fromTimestamp = now - 2592000;
-          maxDataPoints = 120; // One point per ~6 hours
+          fromTimestamp = now - 2629746; // 30.44 days (true month)
+          maxDataPoints = 720; // One point per hour
           break;
         case '1y':
           fromTimestamp = now - 31536000;
@@ -362,8 +362,12 @@ export class PriceChartService {
       const nextValue = dataPoints[i + 1].value;
       
       // Keep this point if it's different from previous OR next is different
-      if (Math.abs(prevValue - currValue) > 0.000001 || 
-          Math.abs(currValue - nextValue) > 0.000001) {
+      // Use percentage-based threshold instead of fixed amount
+      const prevDiff = Math.abs((currValue - prevValue) / prevValue) * 100;
+      const nextDiff = Math.abs((nextValue - currValue) / currValue) * 100;
+      
+      // Keep point if price change is > 0.01% (much more reasonable threshold)
+      if (prevDiff > 0.01 || nextDiff > 0.01) {
         result.push(dataPoints[i]);
       }
     }

@@ -179,8 +179,8 @@ interface PaginatedPoolsProps {
   currentOrderDirection: OrderDirection;
 }
 
-function PaginatedPools({ 
-  fragmentRef, 
+function PaginatedPools({
+  fragmentRef,
   onSortChange,
   currentOrderBy,
   currentOrderDirection
@@ -191,14 +191,16 @@ function PaginatedPools({
   );
   const loaderRef = React.useRef<HTMLDivElement>(null);
 
+  console.log('data', data)
+
   // Handle sorting
   const handleSort = useCallback((column: string) => {
     const orderBy = column as PairOrderBy;
-    const orderDirection = 
-      orderBy === currentOrderBy && currentOrderDirection === 'desc' 
-        ? 'asc' as OrderDirection 
+    const orderDirection =
+      orderBy === currentOrderBy && currentOrderDirection === 'desc'
+        ? 'asc' as OrderDirection
         : 'desc' as OrderDirection;
-    
+
     onSortChange(orderBy, orderDirection);
   }, [currentOrderBy, currentOrderDirection, onSortChange]);
 
@@ -304,10 +306,10 @@ const PoolsPageContent = () => {
       const handleRouteChange = () => {
         setSortParams(getInitialSortParams());
       };
-      
+
       window.addEventListener('popstate', handleRouteChange);
       setMounted(true);
-      
+
       return () => {
         window.removeEventListener('popstate', handleRouteChange);
       };
@@ -330,8 +332,8 @@ const PoolsPageContent = () => {
   // Handle sort change
   const handleSortChange = useCallback((orderBy: PairOrderBy, orderDirection: OrderDirection) => {
     window.history.pushState(
-      {}, 
-      '', 
+      {},
+      '',
       `?orderBy=${orderBy}&orderDirection=${orderDirection}`
     );
     setSortParams({ orderBy, orderDirection });

@@ -139,7 +139,7 @@ const MAX_UINT256 = BigInt(
   '0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff'
 )
 const DEFAULT_DEADLINE_MINUTES = 20
-const DEFAULT_SLIPPAGE = 0.5 // 0.5%
+const DEFAULT_SLIPPAGE = 2.0 // 2.0%
 const HIGH_PRICE_IMPACT_THRESHOLD = 2 // 2%
 const CRITICAL_PRICE_IMPACT_THRESHOLD = 5 // 5%
 const KUB_ADDRESS = '0x0000000000000000000000000000000000000000'
@@ -685,6 +685,8 @@ export function SwapInterface({
     setIsProcessing(true)
 
     try {
+      // Use the user-controlled slippage from the UI
+      const currentMinimumReceived = minimumReceived.raw
       // Special case for KUB -> WKUB (direct deposit)
       if (
         isNativeKUB(tokenIn) &&
@@ -833,7 +835,7 @@ export function SwapInterface({
         swapParams = {
           type: 'exactETHForTokens',
           params: {
-            amountOutMin: minimumReceived.raw,
+            amountOutMin: currentMinimumReceived,
             path: route.path,
             to: account,
             deadline,
@@ -845,7 +847,7 @@ export function SwapInterface({
           type: 'exactTokensForETH',
           params: {
             amountIn: parsedAmountIn,
-            amountOutMin: minimumReceived.raw,
+            amountOutMin: currentMinimumReceived,
             path: route.path,
             to: account,
             deadline,
@@ -879,7 +881,7 @@ export function SwapInterface({
           type: 'exactTokensForTokens',
           params: {
             amountIn: parsedAmountIn || BigInt(0),
-            amountOutMin: minimumReceived.raw,
+            amountOutMin: currentMinimumReceived,
             path: route.path,
             to: account,
             deadline,
