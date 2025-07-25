@@ -575,23 +575,57 @@ export const resolvers = {
             token0: true,
             token1: true
           },
-          orderBy: { createdAt: 'desc' }
+          orderBy: [
+            { volume24h: 'desc' }, // Order by 24h volume first (highest to lowest)
+            { volume30d: 'desc' }, // Then by 30d volume
+            { createdAt: 'desc' }   // Finally by creation time
+          ]
         })
         
-        // Add computed fields
-        const transformedPairs = pairs.map((pair: any) => ({
-          ...pair,
-          tvl: 0,
-          reserveUSD: '0',
-          poolAPR: 0,
-          rewardAPR: 0,
-          volume1h: '0',
-          volume24h: '0',
-          volume7d: '0',
-          volume30d: '0',
-          volumeChange24h: 0,
-          volumeTVLRatio: 0
-        }))
+        // Use existing pre-computed fields with fast TVL calculation
+        const transformedPairs = pairs.map((pair: any) => {
+          let tvl = 0
+          let reserveUSD = '0'
+          
+          try {
+            // Quick TVL calculation from reserves and token prices
+            const token0Price = parseFloat(pair.token0?.priceUSD || '0')
+            const token1Price = parseFloat(pair.token1?.priceUSD || '0')
+            const reserve0 = parseFloat(pair.reserve0 || '0')
+            const reserve1 = parseFloat(pair.reserve1 || '0')
+            const token0Decimals = pair.token0?.decimals || 18
+            const token1Decimals = pair.token1?.decimals || 18
+            
+            if (token0Price > 0 && reserve0 > 0) {
+              const token0ValueUSD = (reserve0 / Math.pow(10, token0Decimals)) * token0Price
+              tvl += token0ValueUSD
+            }
+            
+            if (token1Price > 0 && reserve1 > 0) {
+              const token1ValueUSD = (reserve1 / Math.pow(10, token1Decimals)) * token1Price
+              tvl += token1ValueUSD
+            }
+            
+            reserveUSD = tvl.toFixed(2)
+          } catch (error) {
+            console.warn(`[PAIRS] Error calculating TVL for pair ${pair.id}:`, error)
+          }
+          
+          return {
+            ...pair,
+            tvl: Math.round(tvl),
+            reserveUSD,
+            // Use pre-computed fields from the database
+            poolAPR: pair.poolAPR || 0,
+            rewardAPR: 0, // This would come from farming data
+            volume1h: pair.volume1h || '0',
+            volume24h: pair.volume24h || '0',
+            volume7d: pair.volume7d || '0',
+            volume30d: pair.volume30d || '0',
+            volumeChange24h: pair.volumeChange24h || 0,
+            volumeTVLRatio: pair.volumeTVLRatio || 0
+          }
+        })
         
         return createConnection(transformedPairs)
       } catch (error) {
