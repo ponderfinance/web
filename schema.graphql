@@ -268,8 +268,8 @@ type PriceSnapshot {
   pairId: String!
   price0: Float!
   price1: Float!
-  timestamp: Int!
-  blockNumber: Int!
+  timestamp: String!
+  blockNumber: String!
   pair: Pair!
   createdAt: DateTime!
 }
@@ -514,8 +514,8 @@ type Swap {
   amountIn1: String!
   amountOut0: String!
   amountOut1: String!
-  blockNumber: Int!
-  timestamp: Int!
+  blockNumber: String!
+  timestamp: String!
   token0: Token
   token1: Token
   valueUSD: String

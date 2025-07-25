@@ -1,5 +1,5 @@
 /**
- * @generated SignedSource<<01229b45e646851bd3b5bc6c037c73fb>>
+ * @generated SignedSource<<7ffac6abaf2d9da48d7c8e517d3b223a>>
  * @lightSyntaxTransform
  * @nogrep
  */
@@ -19,7 +19,7 @@ export type TransactionsPage_transactions$data = {
         readonly amountOut0: string;
         readonly amountOut1: string;
         readonly id: string;
-        readonly timestamp: number;
+        readonly timestamp: string;
         readonly token0: {
           readonly address: string;
           readonly id: string;
