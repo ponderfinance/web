@@ -1088,6 +1088,85 @@ export const resolvers = {
       }
     },
 
+    // 🚀 USER POSITIONS RESOLVER
+    userPositions: async (_parent: unknown, { userAddress }: { userAddress: string }, { prisma }: Context) => {
+      try {
+        console.time(`[USER_POSITIONS] ${userAddress}`)
+        
+        if (!userAddress) {
+          return {
+            liquidityPositions: [],
+            farmingPositions: [],
+            stakingPositions: []
+          }
+        }
+
+        // Fetch all position types in parallel
+        const [liquidityPositions, farmingPositions, stakingPositions] = await Promise.all([
+          prisma.liquidityPosition.findMany({
+            where: {
+              userAddress: { equals: userAddress, mode: 'insensitive' }
+            },
+            include: {
+              pair: {
+                include: {
+                  token0: true,
+                  token1: true
+                }
+              }
+            }
+          }),
+          prisma.farmingPosition.findMany({
+            where: {
+              userAddress: { equals: userAddress, mode: 'insensitive' }
+            }
+          }),
+          prisma.stakingPosition.findMany({
+            where: {
+              userAddress: { equals: userAddress, mode: 'insensitive' }
+            }
+          })
+        ])
+
+        // Serialize BigInt fields to strings
+        const serializedLiquidityPositions = liquidityPositions.map(pos => ({
+          ...pos,
+          liquidity: pos.liquidity?.toString() || '0',
+          token0Amount: pos.token0Amount?.toString() || '0',
+          token1Amount: pos.token1Amount?.toString() || '0'
+        }))
+
+        const serializedFarmingPositions = farmingPositions.map(pos => ({
+          ...pos,
+          amount: pos.amount?.toString() || '0',
+          rewardDebt: pos.rewardDebt?.toString() || '0',
+          ponderStaked: pos.ponderStaked?.toString() || '0',
+          weightedShares: pos.weightedShares?.toString() || '0'
+        }))
+
+        const serializedStakingPositions = stakingPositions.map(pos => ({
+          ...pos,
+          amount: pos.amount?.toString() || '0',
+          rewardDebt: pos.rewardDebt?.toString() || '0'
+        }))
+
+        console.timeEnd(`[USER_POSITIONS] ${userAddress}`)
+        
+        return {
+          liquidityPositions: serializedLiquidityPositions,
+          farmingPositions: serializedFarmingPositions,
+          stakingPositions: serializedStakingPositions
+        }
+      } catch (error) {
+        console.error(`[USER_POSITIONS] Error for ${userAddress}:`, error)
+        return {
+          liquidityPositions: [],
+          farmingPositions: [],
+          stakingPositions: []
+        }
+      }
+    },
+
     // Add other resolvers as needed...
     
   }
