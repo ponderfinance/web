@@ -9,6 +9,7 @@ import { graphql, useLazyLoadQuery, useFragment } from 'react-relay'
 import { getIpfsGateway } from '@/src/utils/ipfs'
 import { TokenSelectorQuery } from '@/src/__generated__/TokenSelectorQuery.graphql'
 import { TokenSelectorTokenFragment$key } from '@/src/__generated__/TokenSelectorTokenFragment.graphql'
+import { withRelayBoundary } from '@/src/lib/relay/withRelayBoundary'
 
 // Define our GraphQL query for fetching tokens
 const tokenSelectorQuery = graphql`
@@ -437,6 +438,20 @@ const TokenSelectorWithData: React.FC<{
   )
 }
 
+// Wrap TokenSelectorWithData with Relay boundary
+const TokenSelectorWithDataSafe = withRelayBoundary(
+  TokenSelectorWithData,
+  () => (
+    <Button variant="outline" disabled>
+      <View direction="row" gap={2} align="center" paddingInline={1}>
+        <Skeleton height={6} width={6} borderRadius="circular" />
+        <Skeleton height={4} width={8} />
+        <Icon svg={CaretDown} size={4} color="neutral-faded" />
+      </View>
+    </Button>
+  )
+)
+
 // Main component with client-side data fetching
 const TokenSelector: React.FC<TokenSelectorProps> = (props) => {
   const { active, activate, deactivate } = useToggle(false)
@@ -476,7 +491,7 @@ const TokenSelector: React.FC<TokenSelectorProps> = (props) => {
 
   // Once mounted, render the full component with Relay data
   return (
-    <TokenSelectorWithData
+    <TokenSelectorWithDataSafe
       active={active}
       activate={activate}
       deactivate={deactivate}

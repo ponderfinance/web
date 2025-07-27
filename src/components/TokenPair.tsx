@@ -6,7 +6,7 @@ import { getIpfsGateway } from '@/src/utils/ipfs'
 
 export interface TokenPairProps {
   tokenA: TokenPairFragment$key
-  tokenB: TokenPairFragment$key
+  tokenB: TokenPairFragment$key | null
   size?: 'small' | 'large'
   showSymbols?: boolean
 }
@@ -32,13 +32,13 @@ export const TokenPair: React.FC<TokenPairProps> = ({
   size = 'small',
   showSymbols = true,
 }) => {
-  // Extract data using Relay fragments
+  // Extract data using Relay fragments - handle null tokenB for native tokens
   const tokenAData = useFragment<TokenPairFragment$key>(tokenFragment, tokenA)
-  const tokenBData = useFragment<TokenPairFragment$key>(tokenFragment, tokenB)
+  const tokenBData = tokenB ? useFragment<TokenPairFragment$key>(tokenFragment, tokenB) : null
 
-  // Check if the tokens are native KUB (address 0x0...)
+  // Check if the tokens are native KUB (address 0x0... or null for native)
   const isTokenANative = tokenAData.address === '0x0000000000000000000000000000000000000000'
-  const isTokenBNative = tokenBData.address === '0x0000000000000000000000000000000000000000'
+  const isTokenBNative = !tokenBData || (tokenBData && tokenBData.address === '0x0000000000000000000000000000000000000000')
 
   // Determine first token display information
   const firstTokenDisplay = {
@@ -51,11 +51,11 @@ export const TokenPair: React.FC<TokenPairProps> = ({
 
   // Determine second token display information
   const secondTokenDisplay = {
-    symbol: isTokenBNative ? 'KUB' : tokenBData.symbol || 'Unknown',
+    symbol: isTokenBNative ? 'KUB' : tokenBData?.symbol || 'Unknown',
     icon: isTokenBNative
       ? NATIVE_KUB_ICON
-      : getIpfsGateway(tokenBData.imageURI || '') || DEFAULT_TOKEN_ICON,
-    name: isTokenBNative ? 'Native KUB' : tokenBData.name || 'Unknown Token',
+      : getIpfsGateway(tokenBData?.imageURI || '') || DEFAULT_TOKEN_ICON,
+    name: isTokenBNative ? 'Native KUB' : tokenBData?.name || 'Unknown Token',
   }
 
   return (
