@@ -1,5 +1,5 @@
 /**
- * @generated SignedSource<<a1d26de2be89f1f77f9791ae11d92edc>>
+ * @generated SignedSource<<1e366099e42a7e6714b0b467a16eb8b9>>
  * @lightSyntaxTransform
  * @nogrep
  */
@@ -18,7 +18,7 @@ export type PoolPageQuery$data = {
     readonly liquidityPositions: ReadonlyArray<{
       readonly " $fragmentSpreads": FragmentRefs<"LiquidityPositionItem_position">;
     }>;
-  };
+  } | null;
 };
 export type PoolPageQuery = {
   response: PoolPageQuery$data;

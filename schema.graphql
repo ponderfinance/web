@@ -47,7 +47,7 @@ type Query {
 
   # User data
   user(id: ID!): User
-  userPositions(userAddress: String!): UserPositions!
+  userPositions(userAddress: String!): UserPositions
 
   # Protocol data
   protocolMetrics: ProtocolMetric!
