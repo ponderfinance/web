@@ -134,8 +134,11 @@ model PriceSnapshot {
   pair         Pair     @relation(fields: [pairId], references: [id])
   createdAt    DateTime @default(now())
 
-  @@index([timestamp])
-  @@index([pairId, timestamp])
+  // 🔥 CRITICAL PERFORMANCE INDEXES (enhanced for chart performance)
+  @@index([pairId, timestamp])          // Existing - good for pair-specific queries
+  @@index([timestamp])                  // Existing - good for time range queries
+  @@index([pairId, timestamp, price0])  // NEW - optimized for non-zero price queries
+  @@index([pairId, timestamp, price1])  // NEW - optimized for non-zero price queries
 }
 
 // Pair reserve snapshots
@@ -606,3 +609,31 @@ model MetricSnapshot {
   // Index for faster lookups
   @@index([entity, entityId, metricType, timeframe])
 }
+
+// 🚀 INDUSTRY-STANDARD OHLC CANDLES FOR BLAZING FAST CHARTS
+model PriceCandle {
+  id            String    @id @default(auto()) @map("_id") @db.ObjectId
+  tokenId       String    @db.ObjectId // Direct token reference for speed
+  intervalType  String    // '1m', '5m', '30m', '1h', '1d' - industry standard intervals
+  timestamp     Int       // Aligned timestamp (start of interval)
+  
+  // OHLC data (all in USD for consistent charting)
+  openPrice     String    // Opening price in USD
+  highPrice     String    // Highest price in USD  
+  lowPrice      String    // Lowest price in USD
+  closePrice    String    // Closing price in USD
+  
+  // Volume and activity metrics
+  volumeUSD     String    @default("0") // Trading volume in USD for this interval
+  tradeCount    Int       @default(0)   // Number of trades in this interval
+  
+  // Metadata
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  
+  // 🔥 BLAZING FAST COMPOUND INDEXES (industry best practice)
+  @@unique([tokenId, intervalType, timestamp]) // Primary constraint + index
+  @@index([timestamp, intervalType])           // Time-based queries
+  @@index([intervalType, timestamp])           // Interval-based queries
+}
+
