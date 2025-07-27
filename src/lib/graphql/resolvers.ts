@@ -4,6 +4,24 @@ import { createPublicClient, http } from 'viem'
 import { CURRENT_CHAIN } from '@/src/constants/chains'
 // Removed indexer import - using direct Prisma queries instead
 
+// ERC20 ABI for token supply queries
+const ERC20_ABI = [
+  {
+    constant: true,
+    inputs: [],
+    name: 'totalSupply',
+    outputs: [{ name: '', type: 'uint256' }],
+    type: 'function'
+  },
+  {
+    constant: true,
+    inputs: [],
+    name: 'decimals',
+    outputs: [{ name: '', type: 'uint8' }],
+    type: 'function'
+  }
+] as const
+
 // Cache constants
 const CACHE_PREFIXES = {
   TOKEN: 'token:',
@@ -39,6 +57,57 @@ interface TokenPriceChartArgs {
 }
 
 type Empty = Record<string, never>
+
+// Token supply interface
+interface TokenSupply {
+  totalSupply: number
+  circulatingSupply: number
+}
+
+/**
+ * Get real token supply data from blockchain
+ * @param tokenAddress The token contract address
+ * @returns Token supply data
+ */
+async function getTokenSupply(tokenAddress: string): Promise<TokenSupply> {
+  try {
+    console.log(`[TOKEN_SUPPLY] Fetching supply for ${tokenAddress}`)
+    
+    // Call the blockchain to get actual token total supply
+    const totalSupplyResult = await publicClient.readContract({
+      address: tokenAddress as `0x${string}`,
+      abi: ERC20_ABI,
+      functionName: 'totalSupply'
+    })
+    
+    // Get token decimals
+    const decimalsResult = await publicClient.readContract({
+      address: tokenAddress as `0x${string}`,
+      abi: ERC20_ABI,
+      functionName: 'decimals'
+    })
+    
+    // Convert from raw token units to human-readable numbers
+    const decimals = Number(decimalsResult)
+    const totalSupplyRaw = Number(totalSupplyResult)
+    const totalSupply = totalSupplyRaw / Math.pow(10, decimals)
+    
+    console.log(`[TOKEN_SUPPLY] ${tokenAddress}: totalSupply=${totalSupply}, decimals=${decimals}`)
+    
+    // For now, we don't have a way to determine circulating supply from blockchain
+    // So we return 0 to indicate it's unknown (fallback logic will estimate it)
+    return {
+      totalSupply,
+      circulatingSupply: 0 // Would need external API or specific contract logic
+    }
+  } catch (error) {
+    console.warn(`[TOKEN_SUPPLY] Failed to fetch supply for ${tokenAddress}:`, error)
+    return {
+      totalSupply: 0,
+      circulatingSupply: 0
+    }
+  }
+}
 
 // INDUSTRY-GRADE CHART DATA SERVICE
 class IndustryChartService {
@@ -354,13 +423,39 @@ class FastTokenService {
         
         tvl = totalReserves * priceUSD
         
-        // Estimate Market Cap and FDV from TVL (common DeFi practice)
+        // Calculate accurate Market Cap and FDV using real token supply data
         if (totalReserves > 0) {
-          const estimatedCirculatingSupply = totalReserves * 2 // Conservative 2x multiplier
-          const estimatedTotalSupply = totalReserves * 5 // Conservative 5x multiplier for FDV
-          
-          marketCap = (estimatedCirculatingSupply * priceUSD).toFixed(0)
-          fdv = (estimatedTotalSupply * priceUSD).toFixed(0)
+          try {
+            // Try to get actual token supply from blockchain
+            const tokenSupply = await getTokenSupply(token.address)
+            
+            if (tokenSupply.totalSupply > 0) {
+              // Use real total supply for accurate FDV
+              fdv = (tokenSupply.totalSupply * priceUSD).toFixed(0)
+              
+              // For market cap, use circulating supply if available, otherwise estimate as 70% of total
+              const circulatingSupply = tokenSupply.circulatingSupply > 0 
+                ? tokenSupply.circulatingSupply 
+                : tokenSupply.totalSupply * 0.7 // Conservative 70% circulating estimate
+              
+              marketCap = (circulatingSupply * priceUSD).toFixed(0)
+            } else {
+              // Fallback to TVL-based estimation only if blockchain data unavailable
+              const estimatedCirculatingSupply = totalReserves * 2 // Conservative 2x multiplier
+              const estimatedTotalSupply = totalReserves * 5 // Conservative 5x multiplier for FDV
+              
+              marketCap = (estimatedCirculatingSupply * priceUSD).toFixed(0)
+              fdv = (estimatedTotalSupply * priceUSD).toFixed(0)
+            }
+          } catch (supplyError) {
+            console.log(`[TOKEN_SUPPLY_ERROR] Could not fetch supply for ${token.address}:`, supplyError)
+            // Fallback to TVL-based estimation
+            const estimatedCirculatingSupply = totalReserves * 2
+            const estimatedTotalSupply = totalReserves * 5
+            
+            marketCap = (estimatedCirculatingSupply * priceUSD).toFixed(0)
+            fdv = (estimatedTotalSupply * priceUSD).toFixed(0)
+          }
         }
         
         console.log(`[ULTRA_FAST_TOKEN] TVL: $${tvl.toFixed(2)}, Market Cap: $${marketCap}, FDV: $${fdv}`)
@@ -648,17 +743,24 @@ export const resolvers = {
         if (metrics) {
           console.timeEnd('[PROTOCOL_METRICS]')
           console.log('[PROTOCOL_METRICS] ✅ Using indexer-computed metrics')
-          return metrics
+          return {
+            ...metrics,
+            // Ensure percentage changes are properly mapped
+            volume24hChange: metrics.volume24hChange || 0,
+            volume1hChange: metrics.volume1hChange || 0
+          }
         }
         
         // Method 2: Fallback to cached Redis data from your indexer
         try {
           const redis = getRedisClient()
           if (redis) {
-            const [tvl, volume24h, volume1h] = await Promise.all([
+            const [tvl, volume24h, volume1h, volume24hChange, volume1hChange] = await Promise.all([
               safeRedisGet(`${CACHE_PREFIXES.PROTOCOL}tvl`),
               safeRedisGet(`${CACHE_PREFIXES.PROTOCOL}volume24h`), 
-              safeRedisGet(`${CACHE_PREFIXES.PROTOCOL}volume1h`)
+              safeRedisGet(`${CACHE_PREFIXES.PROTOCOL}volume1h`),
+              safeRedisGet(`${CACHE_PREFIXES.PROTOCOL}volume24hChange`),
+              safeRedisGet(`${CACHE_PREFIXES.PROTOCOL}volume1hChange`)
             ])
             
             if (tvl || volume24h) {
@@ -684,8 +786,8 @@ export const resolvers = {
                 weeklyActiveUsers: 0,
                 monthlyActiveUsers: 0,
                 volume1h: volume1h || '0',
-                volume1hChange: 0,
-                volume24hChange: 0,
+                volume1hChange: parseFloat(volume1hChange as string) || 0,
+                volume24hChange: parseFloat(volume24hChange as string) || 0,
                 totalPairs: 0,
                 activePoolsCount: 0
               }
