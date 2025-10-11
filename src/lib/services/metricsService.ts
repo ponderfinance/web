@@ -33,17 +33,17 @@ const CACHE_TTL = {
 export interface ProtocolMetrics {
   id: string;
   timestamp: number;
-  totalValueLockedUSD: string;
-  liquidityPoolsTVL: string;
-  stakingTVL: string;
-  farmingTVL: string;
-  dailyVolumeUSD: string;
-  weeklyVolumeUSD: string;
-  monthlyVolumeUSD: string;
+  totalValueLockedUsd: string;
+  liquidityPoolsTvl: string;
+  stakingTvl: string;
+  farmingTvl: string;
+  dailyVolumeUsd: string;
+  weeklyVolumeUsd: string;
+  monthlyVolumeUsd: string;
   volume1h: string;
   volume1hChange: number;
   volume24hChange: number | null;
-  dailyFeesUSD: string;
+  dailyFeesUsd: string;
   totalPairs: number;
   activePoolsCount: number;
 }
@@ -51,26 +51,26 @@ export interface ProtocolMetrics {
 export interface PairMetrics {
   id: string;
   address: string;
-  reserveUSD: string;
+  reserveUsd: string;
   tvl: string;
   volume1h: string;
   volume24h: string;
   volume7d: string;
   volume30d: string;
   volumeChange24h: number | null;
-  volumeTVLRatio: number;
-  poolAPR: number;
+  volumeTvlRatio: number;
+  poolApr: number;
   lastUpdate: number;
 }
 
 export interface TokenMetrics {
   id: string;
-  priceUSD: string;
+  priceUsd: string;
   priceChange24h: number | null;
   priceChange1h: number | null;
   priceChange7d: number | null;
   volume1h: string;
-  volumeUSD24h: string;
+  volumeUsd24h: string;
   volume7d: string;
   volume30d: string;
   volumeChange24h: number | null;
@@ -117,17 +117,17 @@ export const MetricsService = {
         const defaultMetric: ProtocolMetrics = {
           id: 'default',
           timestamp: Math.floor(Date.now() / 1000),
-          totalValueLockedUSD: '0',
-          liquidityPoolsTVL: '0',
-          stakingTVL: '0',
-          farmingTVL: '0',
-          dailyVolumeUSD: '0',
-          weeklyVolumeUSD: '0',
-          monthlyVolumeUSD: '0',
+          totalValueLockedUsd: '0',
+          liquidityPoolsTvl: '0',
+          stakingTvl: '0',
+          farmingTvl: '0',
+          dailyVolumeUsd: '0',
+          weeklyVolumeUsd: '0',
+          monthlyVolumeUsd: '0',
           volume1h: '0',
           volume1hChange: 0,
           volume24hChange: 0,
-          dailyFeesUSD: '0',
+          dailyFeesUsd: '0',
           totalPairs: 0,
           activePoolsCount: 0
         };
@@ -151,7 +151,7 @@ export const MetricsService = {
         : metric.timestamp;
       
       // If volume data is more than 30 minutes old, get recent swaps
-      let volume24h = metric.dailyVolumeUSD;
+      let volume24h = metric.dailyVolumeUsd;
       
       if (now - metricTime > CACHE_TTL.LONG) {
         // Calculate recent volume
@@ -162,17 +162,17 @@ export const MetricsService = {
       const protocolMetric: ProtocolMetrics = {
         id: metric.id || 'default',
         timestamp: metricTime,
-        totalValueLockedUSD: metric.totalValueLockedUSD || '0',
-        liquidityPoolsTVL: metric.liquidityPoolsTVL || '0',
-        stakingTVL: metric.stakingTVL || '0',
-        farmingTVL: metric.farmingTVL || '0',
-        dailyVolumeUSD: volume24h,
-        weeklyVolumeUSD: metric.weeklyVolumeUSD || '0',
-        monthlyVolumeUSD: metric.monthlyVolumeUSD || '0',
+        totalValueLockedUsd: metric.totalValueLockedUsd || '0',
+        liquidityPoolsTvl: metric.liquidityPoolsTvl || '0',
+        stakingTvl: metric.stakingTvl || '0',
+        farmingTvl: metric.farmingTvl || '0',
+        dailyVolumeUsd: volume24h,
+        weeklyVolumeUsd: metric.weeklyVolumeUsd || '0',
+        monthlyVolumeUsd: metric.monthlyVolumeUsd || '0',
         volume1h: metric.volume1h || '0',
         volume1hChange: typeof metric.volume1hChange === 'number' ? metric.volume1hChange : 0,
         volume24hChange: metric.volume24hChange,
-        dailyFeesUSD: metric.dailyFeesUSD || '0',
+        dailyFeesUsd: metric.dailyFeesUsd || '0',
         totalPairs: metric.totalPairs || 0,
         activePoolsCount: metric.activePoolsCount || 0
       };
@@ -193,17 +193,17 @@ export const MetricsService = {
       return {
         id: 'default',
         timestamp: Math.floor(Date.now() / 1000),
-        totalValueLockedUSD: '0',
-        liquidityPoolsTVL: '0',
-        stakingTVL: '0',
-        farmingTVL: '0',
-        dailyVolumeUSD: '0',
-        weeklyVolumeUSD: '0',
-        monthlyVolumeUSD: '0',
+        totalValueLockedUsd: '0',
+        liquidityPoolsTvl: '0',
+        stakingTvl: '0',
+        farmingTvl: '0',
+        dailyVolumeUsd: '0',
+        weeklyVolumeUsd: '0',
+        monthlyVolumeUsd: '0',
         volume1h: '0',
         volume1hChange: 0,
         volume24hChange: 0,
-        dailyFeesUSD: '0',
+        dailyFeesUsd: '0',
         totalPairs: 0,
         activePoolsCount: 0
       };
@@ -267,23 +267,23 @@ export const MetricsService = {
       // Calculate additional metrics
       const tvlValue = parseFloat(tvl);
       const volumeValue = parseFloat(volume24h);
-      const volumeTVLRatio = tvlValue > 0 ? volumeValue / tvlValue : 0;
+      const volumeTvlRatio = tvlValue > 0 ? volumeValue / tvlValue : 0;
       const dailyFeeRevenue = volumeValue * 0.003; // 0.3% fee
-      const poolAPR = tvlValue > 0 ? (dailyFeeRevenue / tvlValue) * 365 * 100 : 0;
+      const poolApr = tvlValue > 0 ? (dailyFeeRevenue / tvlValue) * 365 * 100 : 0;
       
       // Create metrics object
       const pairMetrics: PairMetrics = {
         id: pairId,
         address: pair.address,
-        reserveUSD: tvl, // Use calculated TVL for reserveUSD
+        reserveUsd: tvl, // Use calculated TVL for reserveUsd
         tvl,
         volume1h,
         volume24h,
         volume7d,
         volume30d,
         volumeChange24h: pair.volumeChange24h,
-        volumeTVLRatio,
-        poolAPR,
+        volumeTvlRatio,
+        poolApr,
         lastUpdate: now
       };
       
@@ -302,15 +302,15 @@ export const MetricsService = {
       return {
         id: pairId,
         address: '',
-        reserveUSD: '0',
+        reserveUsd: '0',
         tvl: '0',
         volume1h: '0',
         volume24h: '0',
         volume7d: '0',
         volume30d: '0',
         volumeChange24h: null,
-        volumeTVLRatio: 0,
-        poolAPR: 0,
+        volumeTvlRatio: 0,
+        poolApr: 0,
         lastUpdate: Math.floor(Date.now() / 1000)
       };
     }
@@ -364,18 +364,18 @@ export const MetricsService = {
       
       // Get latest price data
       const priceData = await TokenPriceService.getTokenPriceUSD(tokenId);
-      const priceUSD = priceData > 0 ? priceData.toString() : (token.priceUSD || '0');
+      const priceUsd = priceData > 0 ? priceData.toString() : (token.priceUsd || '0');
       
       // Check if volume data is stale
       const now = Math.floor(Date.now() / 1000);
       
       // Calculate or reuse volume metrics
-      let volumeUSD24h = token.volumeUSD24h || '0';
+      let volumeUsd24h = token.volumeUsd24h || '0';
       
       // If we need real-time volume data
-      if (forceRefresh || !volumeUSD24h || volumeUSD24h === '0') {
+      if (forceRefresh || !volumeUsd24h || volumeUsd24h === '0') {
         // Check for recent swaps to ensure volume is still valid
-        volumeUSD24h = await this.calculateRealTime24hVolume(tokenId, 'token');
+        volumeUsd24h = await this.calculateRealTime24hVolume(tokenId, 'token');
       }
       
       // Calculate TVL
@@ -388,12 +388,12 @@ export const MetricsService = {
       // Create metrics object
       const tokenMetrics: TokenMetrics = {
         id: tokenId,
-        priceUSD,
+        priceUsd,
         priceChange24h: token.priceChange24h,
         priceChange1h: token.priceChange1h || 0,
         priceChange7d: token.priceChange7d || 0,
         volume1h: token.volume1h || '0',
-        volumeUSD24h,
+        volumeUsd24h,
         volume7d: token.volume7d || '0',
         volume30d: token.volume30d || '0',
         volumeChange24h: token.volumeChange24h,
@@ -417,12 +417,12 @@ export const MetricsService = {
       console.error(`Error retrieving metrics for token ${tokenId}:`, error);
       return {
         id: tokenId,
-        priceUSD: '0',
+        priceUsd: '0',
         priceChange24h: null,
         priceChange1h: null,
         priceChange7d: null,
         volume1h: '0',
-        volumeUSD24h: '0',
+        volumeUsd24h: '0',
         volume7d: '0',
         volume30d: '0',
         volumeChange24h: null,
@@ -443,7 +443,7 @@ export const MetricsService = {
       const oneDayAgo = now - 24 * 60 * 60;
       
       let swaps = [];
-      let totalVolumeUSD = 0;
+      let totalVolumeUsd = 0;
       
       if (entityType === 'protocol') {
         // For protocol, get all swaps
@@ -502,7 +502,7 @@ export const MetricsService = {
         try {
           // If the swap already has a precomputed valueUSD, use that
           if (swap.valueUSD && parseFloat(swap.valueUSD) > 0) {
-            totalVolumeUSD += parseFloat(swap.valueUSD);
+            totalVolumeUsd += parseFloat(swap.valueUSD);
             continue;
           }
           
@@ -514,8 +514,8 @@ export const MetricsService = {
           const token1Decimals = pair.token1.decimals || 18;
           
           // Get token prices - use the price from token object or get from service
-          let token0Price = parseFloat(pair.token0.priceUSD || '0');
-          let token1Price = parseFloat(pair.token1.priceUSD || '0');
+          let token0Price = parseFloat(pair.token0.priceUsd || '0');
+          let token1Price = parseFloat(pair.token1.priceUsd || '0');
           
           if (token0Price <= 0) {
             token0Price = await TokenPriceService.getTokenPriceUSD(pair.token0Id);
@@ -526,26 +526,26 @@ export const MetricsService = {
           }
           
           // Calculate values based on available data
-          let swapVolumeUSD = 0;
+          let swapVolumeUsd = 0;
           
           if (token0Price > 0) {
             const amount0 = Number(formatUnits(BigInt(swap.amountIn0 || '0'), token0Decimals)) +
                            Number(formatUnits(BigInt(swap.amountOut0 || '0'), token0Decimals));
-            swapVolumeUSD = amount0 * token0Price;
+            swapVolumeUsd = amount0 * token0Price;
           } else if (token1Price > 0) {
             const amount1 = Number(formatUnits(BigInt(swap.amountIn1 || '0'), token1Decimals)) +
                            Number(formatUnits(BigInt(swap.amountOut1 || '0'), token1Decimals));
-            swapVolumeUSD = amount1 * token1Price;
+            swapVolumeUsd = amount1 * token1Price;
           }
           
-          totalVolumeUSD += swapVolumeUSD;
+          totalVolumeUsd += swapVolumeUsd;
         } catch (error) {
           console.error(`Error calculating volume for swap ${swap.id}:`, error);
           // Continue with other swaps
         }
       }
       
-      return totalVolumeUSD.toString();
+      return totalVolumeUsd.toString();
     } catch (error) {
       console.error(`Error calculating real-time volume for ${entityType} ${entityId}:`, error);
       return '0';
@@ -568,8 +568,8 @@ export const MetricsService = {
       if (!pair) return '0';
       
       // Get token prices
-      const token0Price = parseFloat(pair.token0.priceUSD || '0');
-      const token1Price = parseFloat(pair.token1.priceUSD || '0');
+      const token0Price = parseFloat(pair.token0.priceUsd || '0');
+      const token1Price = parseFloat(pair.token1.priceUsd || '0');
       
       // Get token decimals
       const token0Decimals = pair.token0.decimals || 18;
@@ -626,7 +626,7 @@ export const MetricsService = {
       
       let totalTVL = 0;
       const tokenDecimals = token.decimals || 18;
-      const tokenPrice = parseFloat(token.priceUSD || '0');
+      const tokenPrice = parseFloat(token.priceUsd || '0');
       
       // Process token0 pairs
       for (const pair of token.pairsAsToken0) {
@@ -673,7 +673,7 @@ export const MetricsService = {
   async calculateTokenMarketCap(token: any): Promise<string> {
     try {
       // Get token price
-      const tokenPrice = parseFloat(token.priceUSD || '0');
+      const tokenPrice = parseFloat(token.priceUsd || '0');
       if (tokenPrice <= 0) return '0';
       
       // Try to get supply from the supply model
@@ -711,7 +711,7 @@ export const MetricsService = {
   async calculateTokenFDV(token: any): Promise<string> {
     try {
       // Get token price
-      const tokenPrice = parseFloat(token.priceUSD || '0');
+      const tokenPrice = parseFloat(token.priceUsd || '0');
       if (tokenPrice <= 0) return '0';
       
       // Try to get supply from the supply model

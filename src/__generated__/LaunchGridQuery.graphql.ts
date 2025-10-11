@@ -1,5 +1,5 @@
 /**
- * @generated SignedSource<<931201c0d5866e19864aec51d612c8a9>>
+ * @generated SignedSource<<c43bb7f69799a55f6ab3f44c5fb3e70a>>
  * @lightSyntaxTransform
  * @nogrep
  */
@@ -144,7 +144,7 @@ return {
                     "alias": null,
                     "args": null,
                     "kind": "ScalarField",
-                    "name": "imageURI",
+                    "name": "imageUri",
                     "storageKey": null
                   },
                   {
@@ -271,12 +271,12 @@ return {
     ]
   },
   "params": {
-    "cacheID": "760bdd7489bbc89f06e23917fc3d9c7e",
+    "cacheID": "a2ff0dad74edcad8db5d59f63096105f",
     "id": null,
     "metadata": {},
     "name": "LaunchGridQuery",
     "operationKind": "query",
-    "text": "query LaunchGridQuery {\n  activeLaunches(first: 20) {\n    edges {\n      node {\n        ...LaunchGridFragment\n        id\n      }\n    }\n  }\n}\n\nfragment LaunchGridFragment on Launch {\n  id\n  launchId\n  tokenAddress\n  creatorAddress\n  imageURI\n  kubRaised\n  ponderRaised\n  status\n  kubPairAddress\n  ponderPairAddress\n  hasDualPools\n  ponderPoolSkipped\n  kubLiquidity\n  ponderLiquidity\n  ponderBurned\n  lpWithdrawn\n  lpWithdrawnAt\n  completedAt\n  cancelledAt\n  createdAt\n  updatedAt\n}\n"
+    "text": "query LaunchGridQuery {\n  activeLaunches(first: 20) {\n    edges {\n      node {\n        ...LaunchGridFragment\n        id\n      }\n    }\n  }\n}\n\nfragment LaunchGridFragment on Launch {\n  id\n  launchId\n  tokenAddress\n  creatorAddress\n  imageUri\n  kubRaised\n  ponderRaised\n  status\n  kubPairAddress\n  ponderPairAddress\n  hasDualPools\n  ponderPoolSkipped\n  kubLiquidity\n  ponderLiquidity\n  ponderBurned\n  lpWithdrawn\n  lpWithdrawnAt\n  completedAt\n  cancelledAt\n  createdAt\n  updatedAt\n}\n"
   }
 };
 })();

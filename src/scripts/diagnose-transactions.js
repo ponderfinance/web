@@ -132,9 +132,9 @@ async function diagnoseTransactions() {
     
     if (protocolMetrics) {
       console.log('Latest protocol metrics:');
-      console.log(`Total Value Locked USD: ${protocolMetrics.totalValueLockedUSD}`);
-      console.log(`Liquidity Pools TVL: ${protocolMetrics.liquidityPoolsTVL}`);
-      console.log(`Daily Volume USD: ${protocolMetrics.dailyVolumeUSD}`);
+      console.log(`Total Value Locked USD: ${protocolMetrics.totalValueLockedUsd}`);
+      console.log(`Liquidity Pools TVL: ${protocolMetrics.liquidityPoolsTvl}`);
+      console.log(`Daily Volume USD: ${protocolMetrics.dailyVolumeUsd}`);
       console.log(`Timestamp: ${protocolMetrics.timestamp} (type: ${typeof protocolMetrics.timestamp})`);
       console.log(`Updated at: ${protocolMetrics.updatedAt.toISOString()}`);
     } else {
@@ -145,15 +145,15 @@ async function diagnoseTransactions() {
     console.log('\n--- Checking Top Tokens by Volume ---');
     const topTokens = await prisma.token.findMany({
       take: 5,
-      orderBy: { volumeUSD24h: 'desc' },
+      orderBy: { volumeUsd24h: 'desc' },
     });
     
     console.log(`Found ${topTokens.length} top tokens by volume.`);
     topTokens.forEach((token, i) => {
       console.log(`\nToken #${i + 1}:`);
       console.log(`Symbol: ${token.symbol}`);
-      console.log(`Price USD: ${token.priceUSD}`);
-      console.log(`Volume USD 24h: ${token.volumeUSD24h}`);
+      console.log(`Price USD: ${token.priceUsd}`);
+      console.log(`Volume USD 24h: ${token.volumeUsd24h}`);
       console.log(`TVL: ${token.tvl || 'Not set'}`);
     });
     

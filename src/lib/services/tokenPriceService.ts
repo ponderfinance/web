@@ -53,7 +53,7 @@ type Token = {
   name?: string | null;
   symbol?: string | null;
   decimals?: number | null;
-  priceUSD?: string | null;
+  priceUsd?: string | null;
 }
 
 type Pair = {
@@ -149,7 +149,7 @@ export const TokenPriceService = {
       const results: Record<string, string> = {}
       
       // Step 1: Try to get all prices from Redis cache in one batch
-      const cacheKeys = tokenIds.map(id => `token:${id}:priceUSD`)
+      const cacheKeys = tokenIds.map(id => `token:${id}:priceUsd`)
       const cachedPrices = await getMultipleKeys(cacheKeys)
       
       // Process cached results and identify missing prices
@@ -177,16 +177,16 @@ export const TokenPriceService = {
           address: true,
           symbol: true,
           decimals: true,
-          priceUSD: true
+          priceUsd: true
         }
       })
       
       // First use any prices already in the database
       const tokensNeedingPrices = tokens.filter((token: Token) => {
-        if (token.priceUSD) {
+        if (token.priceUsd) {
           // Use the database price if available
-          results[token.id] = token.priceUSD
-          pricesToCache.push({ tokenId: token.id, price: token.priceUSD })
+          results[token.id] = token.priceUsd
+          pricesToCache.push({ tokenId: token.id, price: token.priceUsd })
           return false
         }
         return true
@@ -387,7 +387,7 @@ export const TokenPriceService = {
    */
   async getCachedTokenPrice(tokenId: string): Promise<number | null> {
     try {
-      const cacheKey = `token:${tokenId}:priceUSD`
+      const cacheKey = `token:${tokenId}:priceUsd`
       const cached = await getKey(cacheKey)
       
       if (cached) {
@@ -409,7 +409,7 @@ export const TokenPriceService = {
    */
   async cacheTokenPrice(tokenId: string, price: number, ttlSeconds: number = CACHE_TTL_SECONDS): Promise<void> {
     try {
-      await setKey(`token:${tokenId}:priceUSD`, price.toString(), ttlSeconds)
+      await setKey(`token:${tokenId}:priceUsd`, price.toString(), ttlSeconds)
     } catch (error) {
       console.error(`Error caching token price for ${tokenId}:`, error)
     }
@@ -469,11 +469,11 @@ export const TokenPriceService = {
     try {
       const tokenData = await db.token.findUnique({
         where: { id: tokenId },
-        select: { priceUSD: true },
+        select: { priceUsd: true },
       })
 
-      if (tokenData?.priceUSD) {
-        const dbPrice = parseFloat(tokenData.priceUSD)
+      if (tokenData?.priceUsd) {
+        const dbPrice = parseFloat(tokenData.priceUsd)
           // Basic validation - price should be positive
           if (dbPrice > 0) {
             console.log(`Found database price ${dbPrice} for ${tokenSymbol}`)
@@ -502,7 +502,7 @@ export const TokenPriceService = {
         },
         orderBy: [
           // Order by liquidity (reserves) to prioritize most liquid pairs
-          { reserveUSD: 'desc' },
+          { reserveUsd: 'desc' },
           { createdAt: 'desc' }
         ]
       })
@@ -546,10 +546,10 @@ export const TokenPriceService = {
             // Find KKUB token
             const kkubToken = await db.token.findFirst({
               where: { symbol: MAIN_TOKEN_SYMBOL },
-              select: { id: true, priceUSD: true }
+              select: { id: true, priceUsd: true }
             });
             
-            if (kkubToken && kkubToken.priceUSD) {
+            if (kkubToken && kkubToken.priceUsd) {
               // Find pair with KKUB
               const kkubPair = await db.pair.findFirst({
           where: {
@@ -583,7 +583,7 @@ export const TokenPriceService = {
                   // Format reserves using appropriate decimals
                   const reserve0Formatted = Number(formatUnits(reserve0, token0Decimals));
                   const reserve1Formatted = Number(formatUnits(reserve1, token1Decimals));
-                  const kkubPrice = parseFloat(kkubToken.priceUSD);
+                  const kkubPrice = parseFloat(kkubToken.priceUsd);
                   
                   if (isToken0) {
                     // Stablecoin is token0, KKUB is token1
@@ -603,7 +603,7 @@ export const TokenPriceService = {
                 try {
                   await db.token.update({
                         where: { id: counterpartToken.id },
-                        data: { priceUSD: counterpartPrice.toString() }
+                        data: { priceUsd: counterpartPrice.toString() }
                       });
                       console.log(`Updated database with price ${counterpartPrice} for stablecoin ${counterpartToken.symbol}`);
                     } catch (dbError) {
@@ -671,7 +671,7 @@ export const TokenPriceService = {
               try {
                 await db.token.update({
                   where: { id: tokenId },
-                    data: { priceUSD: calculatedPrice.toString() }
+                    data: { priceUsd: calculatedPrice.toString() }
                 })
                   console.log(`Updated database with price ${calculatedPrice} for ${tokenSymbol}`)
               } catch (dbError) {
@@ -731,10 +731,10 @@ export const TokenPriceService = {
         // Find KKUB token
         const kkubToken = await prismaClient.token.findFirst({
           where: { symbol: MAIN_TOKEN_SYMBOL },
-          select: { id: true, priceUSD: true }
+          select: { id: true, priceUsd: true }
         });
         
-        if (kkubToken && kkubToken.priceUSD) {
+        if (kkubToken && kkubToken.priceUsd) {
           // Find pair with KKUB
           const kkubPair = await prismaClient.pair.findFirst({
             where: {
@@ -774,14 +774,14 @@ export const TokenPriceService = {
                   reserve1 * BigInt(10**token0Decimals) / reserve0, 
                   token1Decimals
                 ));
-                marketPrice = kkubPerStablecoin * parseFloat(kkubToken.priceUSD);
+                marketPrice = kkubPerStablecoin * parseFloat(kkubToken.priceUsd);
               } else {
                 // Stablecoin is token1, KKUB is token0
                 const kkubPerStablecoin = Number(formatUnits(
                   reserve0 * BigInt(10**token1Decimals) / reserve1, 
                   token0Decimals
                 ));
-                marketPrice = kkubPerStablecoin * parseFloat(kkubToken.priceUSD);
+                marketPrice = kkubPerStablecoin * parseFloat(kkubToken.priceUsd);
               }
               
               // If we got a reasonable market price, use it
@@ -892,7 +892,7 @@ export const TokenPriceService = {
           try {
             await prisma.token.update({
               where: { id: token.id },
-              data: { priceUSD: price.toString() }
+              data: { priceUsd: price.toString() }
             })
             console.log(`Updated database with reserve price ${price} for token ${tokenAddress}`)
           } catch (error) {
@@ -951,7 +951,7 @@ export const TokenPriceService = {
           try {
             await prisma.token.update({
               where: { id: token.id },
-              data: { priceUSD: price.toString() }
+              data: { priceUsd: price.toString() }
             })
             console.log(`Updated database with oracle price ${price} for token ${tokenAddress}`)
           } catch (error) {
@@ -986,7 +986,7 @@ export const TokenPriceService = {
               try {
                 await prisma.token.update({
                   where: { id: token.id },
-                  data: { priceUSD: price.toString() }
+                  data: { priceUsd: price.toString() }
                 })
                 console.log(`Updated database with fallback price ${price} for token ${tokenAddress}`)
               } catch (error) {
@@ -1035,7 +1035,7 @@ export const TokenPriceService = {
       // With our high-level API, we can't do this directly
       const redis = getRedisClient()
       if (redis) {
-      const keys = await redis.keys('token:*:priceUSD')
+      const keys = await redis.keys('token:*:priceUsd')
       if (keys.length > 0) {
         await redis.del(...keys)
           console.log(`Cleared ${keys.length} token price cache keys`)
@@ -1181,10 +1181,10 @@ async function getTokenPriceFromAPI(tokenId: string): Promise<string | null> {
     // Get price directly from database for consistency
     const token = await prismaClient.token.findUnique({
       where: { id: tokenId },
-      select: { priceUSD: true }
+      select: { priceUsd: true }
     });
     
-    return token?.priceUSD || null;
+    return token?.priceUsd || null;
   } catch (error) {
     console.error(`Error getting token price from database for ${tokenId}:`, error);
     return null;

@@ -1,5 +1,5 @@
 /**
- * @generated SignedSource<<af74a85929f9a2ab1808cccc302b87fe>>
+ * @generated SignedSource<<70cecd9a3ecce95b125fa4113cedd2a8>>
  * @lightSyntaxTransform
  * @nogrep
  */
@@ -14,9 +14,9 @@ export type TokenSelectorTokenFragment$data = {
   readonly address: string;
   readonly decimals: number | null;
   readonly id: string;
-  readonly imageURI: string | null;
+  readonly imageUri: string | null;
   readonly name: string | null;
-  readonly priceUSD: string | null;
+  readonly priceUsd: string | null;
   readonly symbol: string | null;
   readonly " $fragmentType": "TokenSelectorTokenFragment";
 };
@@ -70,14 +70,14 @@ const node: ReaderFragment = {
       "alias": null,
       "args": null,
       "kind": "ScalarField",
-      "name": "imageURI",
+      "name": "imageUri",
       "storageKey": null
     },
     {
       "alias": null,
       "args": null,
       "kind": "ScalarField",
-      "name": "priceUSD",
+      "name": "priceUsd",
       "storageKey": null
     }
   ],
@@ -85,6 +85,6 @@ const node: ReaderFragment = {
   "abstractKey": null
 };
 
-(node as any).hash = "d4b0d4a170a70717d5bba80e093b1666";
+(node as any).hash = "c380ef81fe4f78d4268ba6f1a969b695";
 
 export default node;

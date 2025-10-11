@@ -1,5 +1,5 @@
 /**
- * @generated SignedSource<<93054f976fe33fc77a57f8ad3a0864ba>>
+ * @generated SignedSource<<34d852c9a65d1507411f8bcd660e2616>>
  * @lightSyntaxTransform
  * @nogrep
  */
@@ -116,7 +116,7 @@ return {
             "alias": null,
             "args": null,
             "kind": "ScalarField",
-            "name": "imageURI",
+            "name": "imageUri",
             "storageKey": null
           },
           {
@@ -237,12 +237,12 @@ return {
     ]
   },
   "params": {
-    "cacheID": "ac3d0a11a15a1198360a4e90a52e2c14",
+    "cacheID": "4d82ddaf1bbbc777ba0924e3ed1af8b6",
     "id": null,
     "metadata": {},
     "name": "LaunchDetailViewQuery",
     "operationKind": "query",
-    "text": "query LaunchDetailViewQuery(\n  $launchId: Int!\n) {\n  launch(launchId: $launchId) {\n    ...LaunchDetailView_launch\n    ...LaunchToken_launch\n    id\n  }\n}\n\nfragment LaunchDetailView_launch on Launch {\n  id\n  launchId\n  ...LaunchToken_launch\n}\n\nfragment LaunchToken_launch on Launch {\n  id\n  launchId\n  tokenAddress\n  creatorAddress\n  imageURI\n  kubRaised\n  ponderRaised\n  status\n  kubPairAddress\n  ponderPairAddress\n  hasDualPools\n  ponderPoolSkipped\n  kubLiquidity\n  ponderLiquidity\n  ponderBurned\n  lpWithdrawn\n  lpWithdrawnAt\n  completedAt\n  cancelledAt\n  createdAt\n  updatedAt\n}\n"
+    "text": "query LaunchDetailViewQuery(\n  $launchId: Int!\n) {\n  launch(launchId: $launchId) {\n    ...LaunchDetailView_launch\n    ...LaunchToken_launch\n    id\n  }\n}\n\nfragment LaunchDetailView_launch on Launch {\n  id\n  launchId\n  ...LaunchToken_launch\n}\n\nfragment LaunchToken_launch on Launch {\n  id\n  launchId\n  tokenAddress\n  creatorAddress\n  imageUri\n  kubRaised\n  ponderRaised\n  status\n  kubPairAddress\n  ponderPairAddress\n  hasDualPools\n  ponderPoolSkipped\n  kubLiquidity\n  ponderLiquidity\n  ponderBurned\n  lpWithdrawn\n  lpWithdrawnAt\n  completedAt\n  cancelledAt\n  createdAt\n  updatedAt\n}\n"
   }
 };
 })();

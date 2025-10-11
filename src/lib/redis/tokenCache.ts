@@ -9,13 +9,13 @@ const TOKEN_PREFIX = 'token:'
 export async function getCachedTokenPrice(tokenId: string): Promise<string | null> {
   try {
     const redis = getRedisClient()
-    const key = `${TOKEN_PREFIX}${tokenId}:priceUSD`
+    const key = `${TOKEN_PREFIX}${tokenId}:priceUsd`
 
     const result = await redis.get(key)
     console.log(`Cache ${result ? 'HIT' : 'MISS'} for token ${tokenId} price`)
     return result
   } catch (error) {
-    console.error(`Error getting cached priceUSD for token ${tokenId}:`, error)
+    console.error(`Error getting cached priceUsd for token ${tokenId}:`, error)
     return null
   }
 }
@@ -32,7 +32,7 @@ export async function getCachedTokenPricesBulk(
   try {
     const redis = getRedisClient()
     // Use MGET for better performance
-    const keys = tokenIds.map((id) => `${TOKEN_PREFIX}${id}:priceUSD`)
+    const keys = tokenIds.map((id) => `${TOKEN_PREFIX}${id}:priceUsd`)
     const values = await redis.mget(...keys)
 
     const result: Record<string, string> = {}

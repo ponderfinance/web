@@ -40,7 +40,7 @@ async function testTokenPrices() {
             symbol
             name
             address
-            priceUSD
+            priceUsd
             priceChange24h
           }
         }
@@ -63,11 +63,11 @@ async function testTokenPrices() {
       
       // Log each token's price
       for (const token of tokens) {
-        console.log(`${token.symbol}: $${token.priceUSD || 'No price'} (24h change: ${token.priceChange24h || 'N/A'}%)`);
+        console.log(`${token.symbol}: $${token.priceUsd || 'No price'} (24h change: ${token.priceChange24h || 'N/A'}%)`);
       }
       
       // Verify if prices look valid
-      const pricesValid = tokens.some(token => parseFloat(token.priceUSD || '0') > 0);
+      const pricesValid = tokens.some(token => parseFloat(token.priceUsd || '0') > 0);
       console.log(`Token prices valid: ${pricesValid ? 'YES' : 'NO'}`);
     } else {
       console.log('No tokens found or invalid response format');
@@ -153,8 +153,8 @@ async function testMetrics() {
               id
               symbol
               address
-              priceUSD
-              volumeUSD24h
+              priceUsd
+              volumeUsd24h
               tvl
             }
           }
@@ -176,11 +176,11 @@ async function testMetrics() {
       
       for (const token of tokens) {
         console.log(`\n${token.symbol} Metrics:`);
-        console.log(`Price: $${parseFloat(token.priceUSD || 0).toLocaleString()}`);
-        console.log(`24h Volume: $${parseFloat(token.volumeUSD24h || 0).toLocaleString()}`);
+        console.log(`Price: $${parseFloat(token.priceUsd || 0).toLocaleString()}`);
+        console.log(`24h Volume: $${parseFloat(token.volumeUsd24h || 0).toLocaleString()}`);
         console.log(`TVL: $${parseFloat(token.tvl || 0).toLocaleString()}`);
         
-        volume24h += parseFloat(token.volumeUSD24h || 0);
+        volume24h += parseFloat(token.volumeUsd24h || 0);
         totalLiquidity += parseFloat(token.tvl || 0);
       }
       

@@ -99,10 +99,10 @@ export const PoolsDisplay: React.FC<PoolsDisplayProps> = ({
         </View.Item>
 
         <View.Item columns={2}>
-          <Actionable onClick={() => handleSort('reserveUSD')}>
+          <Actionable onClick={() => handleSort('reserveUsd')}>
             <View direction="row" align="center" gap={1}>
               <Text color="neutral-faded" weight="medium">
-                TVL {orderBy === 'reserveUSD' && (orderDirection === 'asc' ? '↑' : '↓')}
+                TVL {orderBy === 'reserveUsd' && (orderDirection === 'asc' ? '↑' : '↓')}
               </Text>
             </View>
           </Actionable>
@@ -156,18 +156,18 @@ export const PoolsDisplay: React.FC<PoolsDisplayProps> = ({
             </View.Item>
             
             <View.Item columns={2}>
-              <Text variant="body-3">{formatCurrency(node.tvl || node.reserveUSD)}</Text>
+              <Text variant="body-3">{formatCurrency(node.tvl || node.reserveUsd)}</Text>
             </View.Item>
             
             <View.Item columns={1}>
-              <Text variant="body-3" color={node.poolAPR && node.poolAPR > 0 ? "positive" : "neutral"}>
-                {formatPercentage(node.poolAPR)}
+              <Text variant="body-3" color={node.poolApr && node.poolApr > 0 ? "positive" : "neutral"}>
+                {formatPercentage(node.poolApr)}
               </Text>
             </View.Item>
             
             <View.Item columns={2}>
-              <Text variant="body-3" color={node.rewardAPR && node.rewardAPR > 0 ? "positive" : "neutral"}>
-                {formatPercentage(node.rewardAPR)}
+              <Text variant="body-3" color={node.rewardApr && node.rewardApr > 0 ? "positive" : "neutral"}>
+                {formatPercentage(node.rewardApr)}
               </Text>
             </View.Item>
             

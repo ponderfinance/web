@@ -150,8 +150,8 @@ export async function calculatePairTVL(
     }
 
     // Get token prices with appropriate decimal handling
-    const token0Price = pair.token0.priceUSD ? parseFloat(pair.token0.priceUSD) : 0
-    const token1Price = pair.token1.priceUSD ? parseFloat(pair.token1.priceUSD) : 0
+    const token0Price = pair.token0.priceUsd ? parseFloat(pair.token0.priceUsd) : 0
+    const token1Price = pair.token1.priceUsd ? parseFloat(pair.token1.priceUsd) : 0
 
     // Get decimals (defaults to 18 if not available)
     const token0Decimals = pair.token0.decimals ?? 18

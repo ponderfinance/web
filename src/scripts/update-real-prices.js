@@ -17,7 +17,7 @@ async function updateRealPrices() {
         address: true,
         symbol: true,
         decimals: true,
-        priceUSD: true
+        priceUsd: true
       }
     });
 
@@ -31,7 +31,7 @@ async function updateRealPrices() {
         address: true,
         symbol: true,
         decimals: true,
-        priceUSD: true
+        priceUsd: true
       }
     });
     
@@ -40,7 +40,7 @@ async function updateRealPrices() {
       return;
     }
     
-    console.log(`Current KKUB price: $${kkubToken.priceUSD}`);
+    console.log(`Current KKUB price: $${kkubToken.priceUsd}`);
     
     // First calculate exact stablecoin prices based on current reserves
     for (const stablecoin of stablecoins) {
@@ -92,7 +92,7 @@ async function updateRealPrices() {
         console.log(`Current exchange rate: ${exchangeRate} KKUB per ${stablecoin.symbol}`);
         
         // Stablecoin price = KKUB price × exchange rate
-        stablecoinPrice = parseFloat(kkubToken.priceUSD) * exchangeRate;
+        stablecoinPrice = parseFloat(kkubToken.priceUsd) * exchangeRate;
       } else {
         // KKUB is token0, Stablecoin is token1
         const reserve0Formatted = Number(formatUnits(reserve0, token0Decimals));
@@ -103,7 +103,7 @@ async function updateRealPrices() {
         console.log(`Current exchange rate: ${exchangeRate} ${stablecoin.symbol} per KKUB`);
         
         // Stablecoin price = KKUB price / exchange rate
-        stablecoinPrice = parseFloat(kkubToken.priceUSD) / exchangeRate;
+        stablecoinPrice = parseFloat(kkubToken.priceUsd) / exchangeRate;
       }
       
       try {
@@ -116,13 +116,13 @@ async function updateRealPrices() {
       console.log(`Calculated ${stablecoin.symbol} price: $${stablecoinPrice}`);
       
       // Update stablecoin price in database directly
-      console.log(`Updating ${stablecoin.symbol} price from $${stablecoin.priceUSD} to $${stablecoinPrice}`);
+      console.log(`Updating ${stablecoin.symbol} price from $${stablecoin.priceUsd} to $${stablecoinPrice}`);
       
       // MongoDB-compatible update
       await prisma.token.update({
         where: { id: stablecoin.id },
         data: { 
-          priceUSD: stablecoinPrice.toString(),
+          priceUsd: stablecoinPrice.toString(),
           lastPriceUpdate: new Date(),
           stablePair: 'MANUAL'  // Flag to prevent auto-updates
         }
@@ -131,10 +131,10 @@ async function updateRealPrices() {
       // Double-check the update worked
       const updatedToken = await prisma.token.findUnique({
         where: { id: stablecoin.id },
-        select: { priceUSD: true }
+        select: { priceUsd: true }
       });
       
-      console.log(`Verified ${stablecoin.symbol} price is now: $${updatedToken.priceUSD}`);
+      console.log(`Verified ${stablecoin.symbol} price is now: $${updatedToken.priceUsd}`);
     }
     
     // Get the updated stablecoin prices
@@ -145,13 +145,13 @@ async function updateRealPrices() {
       select: {
         id: true,
         symbol: true,
-        priceUSD: true
+        priceUsd: true
       }
     });
     
     console.log("\nUpdated stablecoin prices:");
     for (const stablecoin of updatedStablecoins) {
-      console.log(`${stablecoin.symbol}: $${stablecoin.priceUSD}`);
+      console.log(`${stablecoin.symbol}: $${stablecoin.priceUsd}`);
     }
     
     console.log('\nAll prices updated based on actual on-chain reserves.');

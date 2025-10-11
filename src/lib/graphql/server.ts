@@ -2,6 +2,7 @@
 import { execute, parse } from 'graphql'
 import { schema } from './schema'
 import prisma from '../db/prisma'
+import ponderDb from '../db/ponderDb'  // USING PONDER POSTGRES!
 import { createLoaders } from '../dataloader'
 import { Context } from './types'
 import { publicClient } from './resolvers'
@@ -9,9 +10,9 @@ import { publicClient } from './resolvers'
 // Create the context for this request
 function createContext(req?: Request): Context {
   return {
-    prisma,
+    prisma: ponderDb,  // SWITCHED TO PONDER!
     req,
-    loaders: createLoaders(prisma),
+    loaders: createLoaders(ponderDb),
     publicClient,
   }
 }

@@ -105,7 +105,7 @@ export const Explore: React.FC<ExploreProps> = ({
             </View.Item>
 
             <View.Item columns={2}>
-              <Text variant="body-2">{formatCurrency(Number(node.tvl || node.reserveUSD))}</Text>
+              <Text variant="body-2">{formatCurrency(Number(node.tvl || node.reserveUsd))}</Text>
             </View.Item>
           </View>
         ))}

@@ -1,5 +1,5 @@
 /**
- * @generated SignedSource<<93769e0b941f7b6a65dd53e584af46c6>>
+ * @generated SignedSource<<840d081f6222b774a7142a1c816dd39d>>
  * @lightSyntaxTransform
  * @nogrep
  */
@@ -16,9 +16,9 @@ export type PoolsPage_pairs$data = {
       readonly node: {
         readonly address: string;
         readonly id: string;
-        readonly poolAPR: number | null;
-        readonly reserveUSD: string;
-        readonly rewardAPR: number | null;
+        readonly poolApr: number | null;
+        readonly reserveUsd: string;
+        readonly rewardApr: number | null;
         readonly token0: {
           readonly address: string;
           readonly decimals: number | null;
@@ -208,21 +208,21 @@ return {
                   "alias": null,
                   "args": null,
                   "kind": "ScalarField",
-                  "name": "reserveUSD",
+                  "name": "reserveUsd",
                   "storageKey": null
                 },
                 {
                   "alias": null,
                   "args": null,
                   "kind": "ScalarField",
-                  "name": "poolAPR",
+                  "name": "poolApr",
                   "storageKey": null
                 },
                 {
                   "alias": null,
                   "args": null,
                   "kind": "ScalarField",
-                  "name": "rewardAPR",
+                  "name": "rewardApr",
                   "storageKey": null
                 },
                 {
@@ -300,6 +300,6 @@ return {
 };
 })();
 
-(node as any).hash = "562e70d168feed344726d5c98ef72069";
+(node as any).hash = "65e867f55da377f965142e768093b4d2";
 
 export default node;

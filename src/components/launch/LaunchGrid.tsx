@@ -10,7 +10,7 @@ const LaunchGridFragment = graphql`
     launchId
     tokenAddress
     creatorAddress
-    imageURI
+    imageUri
     kubRaised
     ponderRaised
     status
@@ -50,7 +50,7 @@ interface LaunchGridData {
         node: {
           id: string
           launchId: number
-          imageURI: string
+          imageUri: string
           status: string
           kubRaised: string
           ponderRaised: string
@@ -69,7 +69,7 @@ function LaunchCard({ launch }: { launch: any }) {
         <View direction="column" gap={4}>
           <View position="relative" height={200}>
             <Image
-              src={getIpfsGateway(data.imageURI ?? '')}
+              src={getIpfsGateway(data.imageUri ?? '')}
               alt={`${data.launchId} Launch`}
               width="100%"
               height="100%"

@@ -11,7 +11,7 @@ const LaunchListFragment = graphql`
   fragment LaunchListView_launch on Launch {
     id
     launchId
-    imageURI
+    imageUri
     status
     kubRaised
     ponderRaised
@@ -44,7 +44,7 @@ function LaunchCard({ launch }: LaunchCardProps) {
         <View direction="column" gap={4}>
           <View position="relative" height={200}>
             <Image
-              src={getIpfsGateway(data.imageURI ?? '')}
+              src={getIpfsGateway(data.imageUri ?? '')}
               alt={`Launch #${data.launchId}`}
               width="100%"
               height="100%"

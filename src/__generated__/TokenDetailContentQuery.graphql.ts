@@ -1,5 +1,5 @@
 /**
- * @generated SignedSource<<87911f38bd60e5e7f8176e6e3a0f35e5>>
+ * @generated SignedSource<<08f862685483e3073171e8831c1b055c>>
  * @lightSyntaxTransform
  * @nogrep
  */
@@ -21,14 +21,14 @@ export type TokenDetailContentQuery$data = {
     readonly decimals: number | null;
     readonly fdv: string;
     readonly id: string;
-    readonly imageURI: string | null;
+    readonly imageUri: string | null;
     readonly marketCap: string;
     readonly name: string | null;
     readonly priceChange24h: number | null;
-    readonly priceUSD: string | null;
+    readonly priceUsd: string | null;
     readonly symbol: string | null;
     readonly tvl: string;
-    readonly volumeUSD24h: string | null;
+    readonly volumeUsd24h: string | null;
     readonly " $fragmentSpreads": FragmentRefs<"TokenPriceChartContainer_token">;
   } | null;
   readonly tokenPriceChart: ReadonlyArray<{
@@ -102,7 +102,7 @@ v9 = {
   "alias": null,
   "args": null,
   "kind": "ScalarField",
-  "name": "priceUSD",
+  "name": "priceUsd",
   "storageKey": null
 },
 v10 = {
@@ -116,7 +116,7 @@ v11 = {
   "alias": null,
   "args": null,
   "kind": "ScalarField",
-  "name": "volumeUSD24h",
+  "name": "volumeUsd24h",
   "storageKey": null
 },
 v12 = {
@@ -144,7 +144,7 @@ v15 = {
   "alias": null,
   "args": null,
   "kind": "ScalarField",
-  "name": "imageURI",
+  "name": "imageUri",
   "storageKey": null
 },
 v16 = [
@@ -284,16 +284,16 @@ return {
     ]
   },
   "params": {
-    "cacheID": "eeb356c37901e9eb82b07f861ed6539b",
+    "cacheID": "cfed9fdc48dba67fbc6436a3adba1f8f",
     "id": null,
     "metadata": {},
     "name": "TokenDetailContentQuery",
     "operationKind": "query",
-    "text": "query TokenDetailContentQuery(\n  $tokenAddress: String!\n  $timeframe: String!\n  $limit: Int!\n) {\n  tokenByAddress(address: $tokenAddress) {\n    id\n    name\n    symbol\n    address\n    decimals\n    priceUSD\n    priceChange24h\n    volumeUSD24h\n    tvl\n    marketCap\n    fdv\n    imageURI\n    ...TokenPriceChartContainer_token\n  }\n  tokenPriceChart(tokenAddress: $tokenAddress, timeframe: $timeframe, limit: $limit) {\n    ...TokenPriceChartContainer_priceChart\n  }\n}\n\nfragment TokenPriceChartContainer_priceChart on ChartDataPoint {\n  time\n  value\n}\n\nfragment TokenPriceChartContainer_token on Token {\n  id\n  address\n  symbol\n  name\n  decimals\n}\n"
+    "text": "query TokenDetailContentQuery(\n  $tokenAddress: String!\n  $timeframe: String!\n  $limit: Int!\n) {\n  tokenByAddress(address: $tokenAddress) {\n    id\n    name\n    symbol\n    address\n    decimals\n    priceUsd\n    priceChange24h\n    volumeUsd24h\n    tvl\n    marketCap\n    fdv\n    imageUri\n    ...TokenPriceChartContainer_token\n  }\n  tokenPriceChart(tokenAddress: $tokenAddress, timeframe: $timeframe, limit: $limit) {\n    ...TokenPriceChartContainer_priceChart\n  }\n}\n\nfragment TokenPriceChartContainer_priceChart on ChartDataPoint {\n  time\n  value\n}\n\nfragment TokenPriceChartContainer_token on Token {\n  id\n  address\n  symbol\n  name\n  decimals\n}\n"
   }
 };
 })();
 
-(node as any).hash = "69bab9d418b9f3ad8ebdd8f603819f29";
+(node as any).hash = "6d7bec3f4e6c13095bd91b235c455462";
 
 export default node;

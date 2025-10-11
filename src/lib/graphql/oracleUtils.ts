@@ -219,7 +219,7 @@ export async function calculateReservesUSD(
         address: true,
         decimals: true,
         symbol: true,
-        priceUSD: true
+        priceUsd: true
       }
     });
 
@@ -230,7 +230,7 @@ export async function calculateReservesUSD(
         address: true,
         decimals: true,
         symbol: true,
-        priceUSD: true
+        priceUsd: true
       }
     });
 
@@ -245,8 +245,8 @@ export async function calculateReservesUSD(
     // Method 1: Check if token is USDT
     if (token0.address.toLowerCase() === USDT_ADDRESS) {
       // Always use the actual USDT price from the database
-      if (token0.priceUSD) {
-        token0PriceUSD = parseFloat(token0.priceUSD);
+      if (token0.priceUsd) {
+        token0PriceUSD = parseFloat(token0.priceUsd);
         console.log(`Using actual USDT price from database: $${token0PriceUSD}`);
       } else {
         // If no price in database, use oracle or other methods but don't fallback to 1
@@ -254,8 +254,8 @@ export async function calculateReservesUSD(
       }
     } else if (token1.address.toLowerCase() === USDT_ADDRESS) {
       // Always use the actual USDT price from the database
-      if (token1.priceUSD) {
-        token1PriceUSD = parseFloat(token1.priceUSD);
+      if (token1.priceUsd) {
+        token1PriceUSD = parseFloat(token1.priceUsd);
         console.log(`Using actual USDT price from database: $${token1PriceUSD}`);
       } else {
         // If no price in database, use oracle or other methods but don't fallback to 1

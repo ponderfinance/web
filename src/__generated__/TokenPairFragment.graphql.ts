@@ -1,5 +1,5 @@
 /**
- * @generated SignedSource<<98285d2038e8ff91abc2a95ccbb301f6>>
+ * @generated SignedSource<<8a15debb3af16106574e8920ce04c36e>>
  * @lightSyntaxTransform
  * @nogrep
  */
@@ -14,7 +14,7 @@ export type TokenPairFragment$data = {
   readonly address: string;
   readonly decimals: number | null;
   readonly id: string;
-  readonly imageURI: string | null;
+  readonly imageUri: string | null;
   readonly name: string | null;
   readonly symbol: string | null;
   readonly " $fragmentType": "TokenPairFragment";
@@ -69,7 +69,7 @@ const node: ReaderFragment = {
       "alias": null,
       "args": null,
       "kind": "ScalarField",
-      "name": "imageURI",
+      "name": "imageUri",
       "storageKey": null
     }
   ],
@@ -77,6 +77,6 @@ const node: ReaderFragment = {
   "abstractKey": null
 };
 
-(node as any).hash = "62d011581e0fa15587e040c48ff5584b";
+(node as any).hash = "f1800e76e3303ed08fd4b9822162d1ad";
 
 export default node;

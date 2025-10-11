@@ -459,8 +459,8 @@ export class PriceChartService {
       
       // Get the current USD price of the counterpart token
       // We need this to convert exchange rates to USD prices
-      console.log(`Using actual ${counterpartToken.symbol} price from database: $${counterpartToken.priceUSD}`);
-      let counterpartTokenPrice = parseFloat(counterpartToken.priceUSD || '0');
+      console.log(`Using actual ${counterpartToken.symbol} price from database: $${counterpartToken.priceUsd}`);
+      let counterpartTokenPrice = parseFloat(counterpartToken.priceUsd || '0');
       
       // If we don't have a stored price, try to get it from TokenPriceService
       if (!counterpartTokenPrice) {

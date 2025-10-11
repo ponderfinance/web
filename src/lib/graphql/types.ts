@@ -17,11 +17,11 @@ export interface PrismaToken {
   name?: string | null
   symbol?: string | null
   decimals?: number | null
-  imageURI?: string | null
+  imageUri?: string | null
   stablePair?: string | null
-  priceUSD?: string | null
+  priceUsd?: string | null
   priceChange24h?: number | null
-  volumeUSD24h?: string | null
+  volumeUsd24h?: string | null
   lastPriceUpdate?: Date | null
   createdAt: Date
   updatedAt: Date
@@ -64,7 +64,7 @@ export interface PrismaLaunch {
   launchId: number
   tokenAddress: string
   creatorAddress: string
-  imageURI: string
+  imageUri: string
   kubRaised: string
   ponderRaised: string
   status: string

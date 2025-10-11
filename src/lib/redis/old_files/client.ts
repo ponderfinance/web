@@ -96,10 +96,10 @@ export async function getProtocolMetricsFromRedis(): Promise<any | null> {
     return {
       id: 'redis-metrics',
       timestamp: timestamp ? parseInt(timestamp, 10) : Math.floor(Date.now() / 1000),
-      totalValueLockedUSD: tvl || '0',
-      dailyVolumeUSD: volume24h || '0',
-      weeklyVolumeUSD: volume7d || '0',
-      monthlyVolumeUSD: '0', // Not cached in Redis currently
+      totalValueLockedUsd: tvl || '0',
+      dailyVolumeUsd: volume24h || '0',
+      weeklyVolumeUsd: volume7d || '0',
+      monthlyVolumeUsd: '0', // Not cached in Redis currently
       volume1h: volume1h || '0',
       volume1hChange: volume1hChange ? parseFloat(volume1hChange) : 0,
       volume24hChange: volume24hChange ? parseFloat(volume24hChange) : 0
@@ -144,7 +144,7 @@ export async function clearProtocolMetricsCache(): Promise<void> {
 }
 
 /**
- * Update pair metrics in Redis with poolAPR and rewardAPR values
+ * Update pair metrics in Redis with poolApr and rewardApr values
  * @deprecated This function is no longer needed as metrics are now updated directly by the indexer
  */
 export async function updateLocalPairMetricsInRedis() {

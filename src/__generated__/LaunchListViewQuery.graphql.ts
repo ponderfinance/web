@@ -1,5 +1,5 @@
 /**
- * @generated SignedSource<<9ef97f68eb0bdc3410ed1f372e64a5b8>>
+ * @generated SignedSource<<99e4cd7458325f15aeca894b56cb62de>>
  * @lightSyntaxTransform
  * @nogrep
  */
@@ -126,7 +126,7 @@ return {
                     "alias": null,
                     "args": null,
                     "kind": "ScalarField",
-                    "name": "imageURI",
+                    "name": "imageUri",
                     "storageKey": null
                   },
                   {
@@ -162,12 +162,12 @@ return {
     ]
   },
   "params": {
-    "cacheID": "75d58f81dd5400c40dfc6ad46cba1ebb",
+    "cacheID": "40f6925dcc083dd3e7323ba8283b8399",
     "id": null,
     "metadata": {},
     "name": "LaunchListViewQuery",
     "operationKind": "query",
-    "text": "query LaunchListViewQuery {\n  activeLaunches {\n    edges {\n      node {\n        id\n        ...LaunchListView_launch\n      }\n    }\n  }\n}\n\nfragment LaunchListView_launch on Launch {\n  id\n  launchId\n  imageURI\n  status\n  kubRaised\n  ponderRaised\n}\n"
+    "text": "query LaunchListViewQuery {\n  activeLaunches {\n    edges {\n      node {\n        id\n        ...LaunchListView_launch\n      }\n    }\n  }\n}\n\nfragment LaunchListView_launch on Launch {\n  id\n  launchId\n  imageUri\n  status\n  kubRaised\n  ponderRaised\n}\n"
   }
 };
 })();

@@ -17,12 +17,12 @@ async function validateCacheTTL() {
     console.log('Finding a token to test...');
     const token = await prisma.token.findFirst({
       where: {
-        priceUSD: { not: null }
+        priceUsd: { not: null }
       },
       select: {
         id: true,
         symbol: true,
-        priceUSD: true
+        priceUsd: true
       }
     });
     
@@ -31,11 +31,11 @@ async function validateCacheTTL() {
       return;
     }
     
-    console.log(`Using token ${token.symbol} (${token.id}) with price $${token.priceUSD}`);
+    console.log(`Using token ${token.symbol} (${token.id}) with price $${token.priceUsd}`);
     
     // Step 2: Clear any existing cache for this token
     const redis = getRedisClient();
-    await redis.del(`token:${token.id}:priceUSD`);
+    await redis.del(`token:${token.id}:priceUsd`);
     console.log('Cleared existing cache entry');
     
     // Step 3: Request the price which should cache it
@@ -44,7 +44,7 @@ async function validateCacheTTL() {
     console.log(`Price fetched: $${price}`);
     
     // Step 4: Check that it was cached
-    const ttl = await redis.ttl(`token:${token.id}:priceUSD`);
+    const ttl = await redis.ttl(`token:${token.id}:priceUsd`);
     console.log(`Cache TTL: ${ttl} seconds`);
     
     // Step 5: Verify TTL is around 5 minutes (300 seconds)
@@ -55,7 +55,7 @@ async function validateCacheTTL() {
     }
     
     // Step 6: Get the cached value
-    const cachedPrice = await redis.get(`token:${token.id}:priceUSD`);
+    const cachedPrice = await redis.get(`token:${token.id}:priceUsd`);
     console.log(`Cached price value: ${cachedPrice}`);
     
     if (cachedPrice) {

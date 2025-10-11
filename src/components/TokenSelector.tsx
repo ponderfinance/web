@@ -14,7 +14,7 @@ import { withRelayBoundary } from '@/src/lib/relay/withRelayBoundary'
 // Define our GraphQL query for fetching tokens
 const tokenSelectorQuery = graphql`
   query TokenSelectorQuery {
-    tokens(first: 12, orderBy: priceUSD, orderDirection: desc) {
+    tokens(first: 12, orderBy: priceUsd, orderDirection: desc) {
       edges {
         node {
           ...TokenSelectorTokenFragment
@@ -32,8 +32,8 @@ const tokenFragment = graphql`
     name
     symbol
     decimals
-    imageURI
-    priceUSD
+    imageUri
+    priceUsd
   }
 `
 
@@ -43,8 +43,8 @@ interface Token {
   symbol: string
   address: `0x${string}`
   decimals: number
-  imageURI?: string | null
-  priceUSD?: string | null
+  imageUri?: string | null
+  priceUsd?: string | null
   isNative?: boolean
   isCustom?: boolean
 }
@@ -69,7 +69,7 @@ const NATIVE_KUB: Token = {
   symbol: 'KUB',
   address: '0x0000000000000000000000000000000000000000' as `0x${string}`,
   decimals: 18,
-  imageURI: '/tokens/bitkub.png',
+  imageUri: '/tokens/bitkub.png',
   isNative: true,
 }
 
@@ -100,7 +100,7 @@ const findTokenByAddress = (
 
 const TokenItem: React.FC<TokenItemProps> = ({ token, onSelect }) => {
   // Get token icon source - use default if not available
-  const tokenIcon = token.imageURI ? getIpfsGateway(token.imageURI) : '/tokens/coin.svg'
+  const tokenIcon = token.imageUri ? getIpfsGateway(token.imageUri) : '/tokens/coin.svg'
 
   return (
     <Button
@@ -178,8 +178,8 @@ const TokenSelectorWithData: React.FC<{
       symbol: tokenData.symbol || '???',
       address: tokenData.address as `0x${string}`,
       decimals: tokenData.decimals || 18,
-      imageURI: tokenData.imageURI,
-      priceUSD: tokenData.priceUSD,
+      imageUri: tokenData.imageUri,
+      priceUsd: tokenData.priceUsd,
     }
   })
 
@@ -214,7 +214,7 @@ const TokenSelectorWithData: React.FC<{
           symbol: tokenInfo.symbol || '???',
           address: searchTerm as `0x${string}`,
           decimals: tokenInfo.decimals || 18,
-          imageURI: '/tokens/coin.svg', // Default icon
+          imageUri: '/tokens/coin.svg', // Default icon
           isCustom: true,
         }
 
@@ -281,9 +281,9 @@ const TokenSelectorWithData: React.FC<{
       >
         <View direction="row" gap={2} align="center" paddingInline={1}>
           <View insetStart={-2}>
-            {selectedToken?.imageURI && (
+            {selectedToken?.imageUri && (
               <Image
-                src={getIpfsGateway(selectedToken.imageURI) || '/tokens/coin.svg'}
+                src={getIpfsGateway(selectedToken.imageUri) || '/tokens/coin.svg'}
                 height={6}
                 width={6}
                 alt={selectedToken.symbol || 'Selected Token Icon'}
@@ -385,7 +385,7 @@ const TokenSelectorWithData: React.FC<{
                       symbol: tokenInfo.symbol || '???',
                       address: searchTerm as `0x${string}`,
                       decimals: tokenInfo.decimals || 18,
-                      imageURI: '/tokens/coin.svg',
+                      imageUri: '/tokens/coin.svg',
                       isCustom: true,
                     }
                     setCustomTokens([...customTokens, newToken])

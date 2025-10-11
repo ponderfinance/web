@@ -63,9 +63,34 @@ export function RedisSubscriberProvider({ children }: { children: React.ReactNod
   const updatesRef = useRef<Record<string, number>>({})
   const cleanupRef = useRef<(() => void) | null>(null)
   
-  // Mark as client-side after hydration  
+  // Mark as client-side after hydration
   useEffect(() => {
     setIsClient(true)
+
+    // Add global error handler to suppress EventSource JSON parsing errors
+    // These occur during HMR when the dev server is restarting
+    if (typeof window !== 'undefined') {
+      const originalError = console.error
+      console.error = (...args: any[]) => {
+        const message = args[0]?.toString() || ''
+
+        // Suppress specific EventSource/SSE related errors
+        if (
+          (message.includes('Unexpected token') && message.includes('<!DOCTYPE')) ||
+          (message.includes('is not valid JSON') && (
+            message.includes('redirect-boundary') ||
+            message.includes('not-found-boundary') ||
+            message.includes('QueryResource')
+          ))
+        ) {
+          // These are transient HMR errors, ignore them
+          return
+        }
+
+        // Pass through all other errors
+        originalError.apply(console, args)
+      }
+    }
   }, [])
   
   // Get Relay environment on client-side
@@ -98,10 +123,13 @@ export function RedisSubscriberProvider({ children }: { children: React.ReactNod
   // Initialize Redis functionality on client-side only
   useEffect(() => {
     if (!isClient) return
-    
+
     // Dynamic import to avoid build-time issues
     const initRedis = async () => {
       try {
+        // Add a small delay to ensure the dev server is ready
+        await new Promise(resolve => setTimeout(resolve, 1000))
+
         const redisModule = await import('@/src/lib/redis/eventService')
         
         // Register as subscriber

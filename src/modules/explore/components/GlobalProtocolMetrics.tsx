@@ -10,8 +10,8 @@ import { useRefreshOnUpdate } from '@/src/hooks/useRefreshOnUpdate'
 export const globalProtocolMetricsQuery = graphql`
   query GlobalProtocolMetricsQuery {
     protocolMetrics {
-      dailyVolumeUSD
-      totalValueLockedUSD
+      dailyVolumeUsd
+      totalValueLockedUsd
       volume1hChange
       volume24hChange
     }
@@ -73,8 +73,8 @@ type GlobalProtocolMetricsProps = {
 export default function GlobalProtocolMetrics({ queryRef }: GlobalProtocolMetricsProps) {
   // Initialize metrics state
   const [metrics, setMetrics] = useState<{
-    dailyVolumeUSD: string;
-    totalValueLockedUSD: string;
+    dailyVolumeUsd: string;
+    totalValueLockedUsd: string;
     volume1hChange: number | null;
     volume24hChange: number | null;
   } | null>(null)
@@ -105,7 +105,7 @@ export default function GlobalProtocolMetrics({ queryRef }: GlobalProtocolMetric
           24h Volume
         </Text>
         <View direction="row" align="baseline" gap={2}>
-          <Text variant="featured-3">{formatCurrency(metrics.dailyVolumeUSD)}</Text>
+          <Text variant="featured-3">{formatCurrency(metrics.dailyVolumeUsd)}</Text>
           <View direction="row" align="center" gap={1}>
             {(metrics.volume24hChange || 0) > 0 ? (
               <Text variant="body-3" color="positive">+{Math.abs(metrics.volume24hChange || 0).toFixed(2)}%</Text>
@@ -123,7 +123,7 @@ export default function GlobalProtocolMetrics({ queryRef }: GlobalProtocolMetric
           Total TVL
         </Text>
         <View direction="row" align="baseline" gap={2}>
-          <Text variant="featured-3">{formatCurrency(metrics.totalValueLockedUSD)}</Text>
+          <Text variant="featured-3">{formatCurrency(metrics.totalValueLockedUsd)}</Text>
         </View>
       </View>
     </View>

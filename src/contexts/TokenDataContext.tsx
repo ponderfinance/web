@@ -7,7 +7,7 @@ interface TokenData {
   name: string | null
   symbol: string | null
   decimals: number | null
-  imageURI: string | null
+  imageUri: string | null
 }
 
 interface TokenDataContextType {
@@ -39,7 +39,7 @@ export const TokenDataProvider: React.FC<TokenDataProviderProps> = ({ children }
     name: 'Native KUB',
     symbol: 'KUB',
     decimals: 18,
-    imageURI: '/tokens/bitkub.png'
+    imageUri: '/tokens/bitkub.png'
   }
 
   const getTokenData = (address: Address): TokenData | null => {

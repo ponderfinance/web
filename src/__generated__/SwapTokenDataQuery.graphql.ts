@@ -1,5 +1,5 @@
 /**
- * @generated SignedSource<<f57890cf9f2b69bc3b7e2856ecd2635d>>
+ * @generated SignedSource<<ba50182e154493d4ed89fbbb42277918>>
  * @lightSyntaxTransform
  * @nogrep
  */
@@ -123,7 +123,7 @@ v10 = [
     "alias": null,
     "args": null,
     "kind": "ScalarField",
-    "name": "imageURI",
+    "name": "imageUri",
     "storageKey": null
   }
 ];
@@ -225,12 +225,12 @@ return {
     ]
   },
   "params": {
-    "cacheID": "e4b5e3527147f40ae0cffbad588749d4",
+    "cacheID": "ccb7556c560aa0bb3ca5c9973d06e4ef",
     "id": null,
     "metadata": {},
     "name": "SwapTokenDataQuery",
     "operationKind": "query",
-    "text": "query SwapTokenDataQuery(\n  $tokenInAddress: String!\n  $tokenOutAddress: String!\n  $skipTokenIn: Boolean!\n  $skipTokenOut: Boolean!\n) {\n  tokenIn: tokenByAddress(address: $tokenInAddress) @skip(if: $skipTokenIn) {\n    ...TokenPairFragment\n    decimals\n    symbol\n    name\n    id\n  }\n  tokenOut: tokenByAddress(address: $tokenOutAddress) @skip(if: $skipTokenOut) {\n    ...TokenPairFragment\n    decimals\n    symbol\n    name\n    id\n  }\n}\n\nfragment TokenPairFragment on Token {\n  id\n  address\n  name\n  symbol\n  decimals\n  imageURI\n}\n"
+    "text": "query SwapTokenDataQuery(\n  $tokenInAddress: String!\n  $tokenOutAddress: String!\n  $skipTokenIn: Boolean!\n  $skipTokenOut: Boolean!\n) {\n  tokenIn: tokenByAddress(address: $tokenInAddress) @skip(if: $skipTokenIn) {\n    ...TokenPairFragment\n    decimals\n    symbol\n    name\n    id\n  }\n  tokenOut: tokenByAddress(address: $tokenOutAddress) @skip(if: $skipTokenOut) {\n    ...TokenPairFragment\n    decimals\n    symbol\n    name\n    id\n  }\n}\n\nfragment TokenPairFragment on Token {\n  id\n  address\n  name\n  symbol\n  decimals\n  imageUri\n}\n"
   }
 };
 })();

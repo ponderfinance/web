@@ -1,5 +1,5 @@
 /**
- * @generated SignedSource<<53445a3d4a462549c4e4fd4c76a1ad3c>>
+ * @generated SignedSource<<56701789f7dc8c94e6737be2804be789>>
  * @lightSyntaxTransform
  * @nogrep
  */
@@ -11,7 +11,7 @@
 import { ConcreteRequest, Query } from 'relay-runtime';
 import { FragmentRefs } from "relay-runtime";
 export type OrderDirection = "asc" | "desc" | "%future added value";
-export type TokenOrderBy = "createdAt" | "name" | "priceChange24h" | "priceUSD" | "symbol" | "volumeUSD24h" | "%future added value";
+export type TokenOrderBy = "createdAt" | "name" | "priceChange24h" | "priceUsd" | "symbol" | "volumeUsd24h" | "%future added value";
 export type TokensPageQuery$variables = {
   after?: string | null;
   first: number;
@@ -143,7 +143,7 @@ return {
                     "alias": null,
                     "args": null,
                     "kind": "ScalarField",
-                    "name": "imageURI",
+                    "name": "imageUri",
                     "storageKey": null
                   },
                   {
@@ -164,7 +164,7 @@ return {
                     "alias": null,
                     "args": null,
                     "kind": "ScalarField",
-                    "name": "priceUSD",
+                    "name": "priceUsd",
                     "storageKey": null
                   },
                   {
@@ -185,7 +185,7 @@ return {
                     "alias": null,
                     "args": null,
                     "kind": "ScalarField",
-                    "name": "volumeUSD24h",
+                    "name": "volumeUsd24h",
                     "storageKey": null
                   },
                   {
@@ -279,12 +279,12 @@ return {
     ]
   },
   "params": {
-    "cacheID": "2e2a0a141b7398d8e7852f07a40ddf89",
+    "cacheID": "0b5d5ed81fe2980038b36ef72d7605ef",
     "id": null,
     "metadata": {},
     "name": "TokensPageQuery",
     "operationKind": "query",
-    "text": "query TokensPageQuery(\n  $first: Int!\n  $after: String\n  $orderBy: TokenOrderBy!\n  $orderDirection: OrderDirection!\n) {\n  ...TokensPage_tokens_3MMUTb\n}\n\nfragment TokenPairFragment on Token {\n  id\n  address\n  name\n  symbol\n  decimals\n  imageURI\n}\n\nfragment TokensPage_tokens_3MMUTb on Query {\n  tokens(first: $first, after: $after, orderBy: $orderBy, orderDirection: $orderDirection) {\n    edges {\n      node {\n        id\n        address\n        imageURI\n        name\n        symbol\n        priceUSD\n        priceChange1h\n        priceChange24h\n        volumeUSD24h\n        volume1h\n        fdv\n        ...TokenPairFragment\n        __typename\n      }\n      cursor\n    }\n    pageInfo {\n      hasNextPage\n      endCursor\n    }\n    totalCount\n  }\n}\n"
+    "text": "query TokensPageQuery(\n  $first: Int!\n  $after: String\n  $orderBy: TokenOrderBy!\n  $orderDirection: OrderDirection!\n) {\n  ...TokensPage_tokens_3MMUTb\n}\n\nfragment TokenPairFragment on Token {\n  id\n  address\n  name\n  symbol\n  decimals\n  imageUri\n}\n\nfragment TokensPage_tokens_3MMUTb on Query {\n  tokens(first: $first, after: $after, orderBy: $orderBy, orderDirection: $orderDirection) {\n    edges {\n      node {\n        id\n        address\n        imageUri\n        name\n        symbol\n        priceUsd\n        priceChange1h\n        priceChange24h\n        volumeUsd24h\n        volume1h\n        fdv\n        ...TokenPairFragment\n        __typename\n      }\n      cursor\n    }\n    pageInfo {\n      hasNextPage\n      endCursor\n    }\n    totalCount\n  }\n}\n"
   }
 };
 })();

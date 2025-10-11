@@ -615,7 +615,7 @@ export function SwapInterface({
                   width={8}
                 >
                   <Image
-                    src={tokenInData.imageURI ? getIpfsGateway(tokenInData.imageURI) : '/tokens/coin.svg'}
+                    src={tokenInData.imageUri ? getIpfsGateway(tokenInData.imageUri) : '/tokens/coin.svg'}
                     height={8}
                     width={8}
                     alt={tokenInData.symbol || 'Token'}
@@ -643,7 +643,7 @@ export function SwapInterface({
                   }}
                 >
                   <Image
-                    src={tokenOutData.imageURI ? getIpfsGateway(tokenOutData.imageURI) : '/tokens/coin.svg'}
+                    src={tokenOutData.imageUri ? getIpfsGateway(tokenOutData.imageUri) : '/tokens/coin.svg'}
                     height={8}
                     width={8}
                     alt={tokenOutData.symbol || 'Token'}

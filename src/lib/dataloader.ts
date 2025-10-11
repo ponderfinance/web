@@ -124,7 +124,7 @@ export function createLoaders(prisma: PrismaClient) {
     ),
 
     // Loader for latest reserve snapshots by pair ID
-    reserveUSDLoader: new DataLoader<string, string>(
+    reserveUsdLoader: new DataLoader<string, string>(
       async (pairIds: readonly string[]) => {
         // First try to get from cache in batch
         const cachedValues = await getCachedPairReserveUSDBulk([...pairIds])
@@ -147,7 +147,7 @@ export function createLoaders(prisma: PrismaClient) {
         // Create a map of snapshotted values
         const snapshotValues = snapshots.reduce(
           (acc, snapshot) => {
-            acc[snapshot.pairId] = snapshot.reserveUSD
+            acc[snapshot.pairId] = snapshot.reserveUsd
             return acc
           },
           {} as Record<string, string>

@@ -1,5 +1,5 @@
 /**
- * @generated SignedSource<<516c3bc500f91a3c10babf196edf2aa3>>
+ * @generated SignedSource<<1fa485a411eb3549f884ee643bbaa03a>>
  * @lightSyntaxTransform
  * @nogrep
  */
@@ -88,7 +88,7 @@ v3 = [
     "alias": null,
     "args": null,
     "kind": "ScalarField",
-    "name": "imageURI",
+    "name": "imageUri",
     "storageKey": null
   }
 ];
@@ -282,12 +282,12 @@ return {
     ]
   },
   "params": {
-    "cacheID": "2194ec10dbaed7f7ff49a41e1e2d8321",
+    "cacheID": "d596540e2a19af77b2ffe0532d440405",
     "id": null,
     "metadata": {},
     "name": "TransactionsPagePaginationQuery",
     "operationKind": "query",
-    "text": "query TransactionsPagePaginationQuery(\n  $after: String\n  $first: Int!\n) {\n  ...TransactionsPage_transactions_2HEEH6\n}\n\nfragment TokenPairFragment on Token {\n  id\n  address\n  name\n  symbol\n  decimals\n  imageURI\n}\n\nfragment TransactionsPage_transactions_2HEEH6 on Query {\n  recentTransactions(first: $first, after: $after) {\n    edges {\n      node {\n        id\n        txHash\n        timestamp\n        userAddress\n        token0 {\n          id\n          address\n          symbol\n          ...TokenPairFragment\n        }\n        token1 {\n          id\n          address\n          symbol\n          ...TokenPairFragment\n        }\n        amountIn0\n        amountIn1\n        amountOut0\n        amountOut1\n        valueUSD\n        __typename\n      }\n      cursor\n    }\n    pageInfo {\n      hasNextPage\n      endCursor\n    }\n    totalCount\n  }\n}\n"
+    "text": "query TransactionsPagePaginationQuery(\n  $after: String\n  $first: Int!\n) {\n  ...TransactionsPage_transactions_2HEEH6\n}\n\nfragment TokenPairFragment on Token {\n  id\n  address\n  name\n  symbol\n  decimals\n  imageUri\n}\n\nfragment TransactionsPage_transactions_2HEEH6 on Query {\n  recentTransactions(first: $first, after: $after) {\n    edges {\n      node {\n        id\n        txHash\n        timestamp\n        userAddress\n        token0 {\n          id\n          address\n          symbol\n          ...TokenPairFragment\n        }\n        token1 {\n          id\n          address\n          symbol\n          ...TokenPairFragment\n        }\n        amountIn0\n        amountIn1\n        amountOut0\n        amountOut1\n        valueUSD\n        __typename\n      }\n      cursor\n    }\n    pageInfo {\n      hasNextPage\n      endCursor\n    }\n    totalCount\n  }\n}\n"
   }
 };
 })();

@@ -31,7 +31,7 @@ const poolsListQuery = graphql`
             decimals
           }
           tvl
-          reserveUSD
+          reserveUsd
         }
       }
       pageInfo {
@@ -79,7 +79,7 @@ const ChevronIcon = ({ direction = 'down' }: { direction?: 'up' | 'down' }) => (
 
 const PoolsList: React.FC = () => {
   const [isMounted, setIsMounted] = useState(false)
-  const [orderBy, setOrderBy] = useState<string>('reserveUSD')
+  const [orderBy, setOrderBy] = useState<string>('reserveUsd')
   const [orderDirection, setOrderDirection] = useState<string>('desc')
 
   // Only render client-side data after component is mounted

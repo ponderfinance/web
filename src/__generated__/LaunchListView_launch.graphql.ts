@@ -1,5 +1,5 @@
 /**
- * @generated SignedSource<<d8ff60aa33f57cfdaa754d831fcc580c>>
+ * @generated SignedSource<<67f28a645282df440c96452ce4d175e0>>
  * @lightSyntaxTransform
  * @nogrep
  */
@@ -12,7 +12,7 @@ import { Fragment, ReaderFragment } from 'relay-runtime';
 import { FragmentRefs } from "relay-runtime";
 export type LaunchListView_launch$data = {
   readonly id: string;
-  readonly imageURI: string;
+  readonly imageUri: string;
   readonly kubRaised: string;
   readonly launchId: number;
   readonly ponderRaised: string;
@@ -48,7 +48,7 @@ const node: ReaderFragment = {
       "alias": null,
       "args": null,
       "kind": "ScalarField",
-      "name": "imageURI",
+      "name": "imageUri",
       "storageKey": null
     },
     {
@@ -77,6 +77,6 @@ const node: ReaderFragment = {
   "abstractKey": null
 };
 
-(node as any).hash = "5f0371d82bc5546a02414dc4bc05b44d";
+(node as any).hash = "aac80e5479595410e445448b407d6f46";
 
 export default node;

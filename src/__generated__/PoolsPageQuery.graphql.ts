@@ -1,5 +1,5 @@
 /**
- * @generated SignedSource<<70509cf977e0f0a91ec531ce6e6c1b95>>
+ * @generated SignedSource<<56b90f334424e2283dd17ad86b8ae352>>
  * @lightSyntaxTransform
  * @nogrep
  */
@@ -11,7 +11,7 @@
 import { ConcreteRequest, Query } from 'relay-runtime';
 import { FragmentRefs } from "relay-runtime";
 export type OrderDirection = "asc" | "desc" | "%future added value";
-export type PairOrderBy = "createdAt" | "reserveUSD" | "volumeUSD" | "%future added value";
+export type PairOrderBy = "createdAt" | "reserveUsd" | "volumeUsd" | "%future added value";
 export type PoolsPageQuery$variables = {
   after?: string | null;
   first: number;
@@ -111,7 +111,7 @@ v7 = [
     "alias": null,
     "args": null,
     "kind": "ScalarField",
-    "name": "imageURI",
+    "name": "imageUri",
     "storageKey": null
   }
 ];
@@ -204,21 +204,21 @@ return {
                     "alias": null,
                     "args": null,
                     "kind": "ScalarField",
-                    "name": "reserveUSD",
+                    "name": "reserveUsd",
                     "storageKey": null
                   },
                   {
                     "alias": null,
                     "args": null,
                     "kind": "ScalarField",
-                    "name": "poolAPR",
+                    "name": "poolApr",
                     "storageKey": null
                   },
                   {
                     "alias": null,
                     "args": null,
                     "kind": "ScalarField",
-                    "name": "rewardAPR",
+                    "name": "rewardApr",
                     "storageKey": null
                   },
                   {
@@ -305,12 +305,12 @@ return {
     ]
   },
   "params": {
-    "cacheID": "d892a98aff2b796eae6848be48c91f18",
+    "cacheID": "b41b53c8cf0f4ccaa4cf5764d037a72c",
     "id": null,
     "metadata": {},
     "name": "PoolsPageQuery",
     "operationKind": "query",
-    "text": "query PoolsPageQuery(\n  $first: Int!\n  $after: String\n  $orderBy: PairOrderBy!\n  $orderDirection: OrderDirection!\n) {\n  ...PoolsPage_pairs_3MMUTb\n}\n\nfragment PoolsPage_pairs_3MMUTb on Query {\n  pairs(first: $first, after: $after, orderBy: $orderBy, orderDirection: $orderDirection) {\n    edges {\n      node {\n        id\n        address\n        token0 {\n          id\n          address\n          symbol\n          decimals\n          ...TokenPairFragment\n        }\n        token1 {\n          id\n          address\n          symbol\n          decimals\n          ...TokenPairFragment\n        }\n        tvl\n        reserveUSD\n        poolAPR\n        rewardAPR\n        volume24h\n        volume30d\n        __typename\n      }\n      cursor\n    }\n    pageInfo {\n      hasNextPage\n      endCursor\n    }\n    totalCount\n  }\n}\n\nfragment TokenPairFragment on Token {\n  id\n  address\n  name\n  symbol\n  decimals\n  imageURI\n}\n"
+    "text": "query PoolsPageQuery(\n  $first: Int!\n  $after: String\n  $orderBy: PairOrderBy!\n  $orderDirection: OrderDirection!\n) {\n  ...PoolsPage_pairs_3MMUTb\n}\n\nfragment PoolsPage_pairs_3MMUTb on Query {\n  pairs(first: $first, after: $after, orderBy: $orderBy, orderDirection: $orderDirection) {\n    edges {\n      node {\n        id\n        address\n        token0 {\n          id\n          address\n          symbol\n          decimals\n          ...TokenPairFragment\n        }\n        token1 {\n          id\n          address\n          symbol\n          decimals\n          ...TokenPairFragment\n        }\n        tvl\n        reserveUsd\n        poolApr\n        rewardApr\n        volume24h\n        volume30d\n        __typename\n      }\n      cursor\n    }\n    pageInfo {\n      hasNextPage\n      endCursor\n    }\n    totalCount\n  }\n}\n\nfragment TokenPairFragment on Token {\n  id\n  address\n  name\n  symbol\n  decimals\n  imageUri\n}\n"
   }
 };
 })();

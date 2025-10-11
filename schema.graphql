@@ -111,14 +111,14 @@ enum LaunchOrderBy {
 }
 
 enum PairOrderBy {
-  volumeUSD
-  reserveUSD
+  volumeUsd
+  reserveUsd
   createdAt
 }
 
 enum TokenOrderBy {
-  priceUSD
-  volumeUSD24h
+  priceUsd
+  volumeUsd24h
   priceChange24h
   createdAt
   name
@@ -140,13 +140,13 @@ type Token {
   name: String
   symbol: String
   decimals: Int
-  imageURI: String
+  imageUri: String
   stablePair: String
-  priceUSD: String
+  priceUsd: String
   priceChange1h: Float
   priceChange24h: Float
   priceChange7d: Float
-  volumeUSD24h: String
+  volumeUsd24h: String
   volume1h: String
   volume7d: String
   volume30d: String
@@ -204,15 +204,15 @@ type Pair {
   swaps(first: Int, after: String): SwapConnection!
   priceHistory(days: Int!, interval: String): PriceSnapshotConnection!
   tvl: Float!
-  reserveUSD: String!
-  poolAPR: Float
-  rewardAPR: Float
+  reserveUsd: String!
+  poolApr: Float
+  rewardApr: Float
   volume1h: String
   volume24h: String
   volume7d: String
   volume30d: String
   volumeChange24h: Float
-  volumeTVLRatio: Float
+  volumeTvlRatio: Float
 }
 
 # Pair Connection
@@ -296,7 +296,7 @@ type User {
   stakingPosition: StakingPosition
   totalSwapCount: Int!
   totalLpCount: Int!
-  swapVolumeUSD: String!
+  swapVolumeUsd: String!
   liquidityProvidedUSD: String!
 }
 
@@ -394,18 +394,18 @@ type VolumeMetric {
 type ProtocolMetric {
   id: ID!
   timestamp: Int!
-  totalValueLockedUSD: String!
-  liquidityPoolsTVL: String!
-  stakingTVL: String!
-  farmingTVL: String!
-  dailyVolumeUSD: String!
-  weeklyVolumeUSD: String!
-  monthlyVolumeUSD: String!
-  totalVolumeUSD: String!
-  dailyFeesUSD: String!
-  weeklyFeesUSD: String!
-  monthlyFeesUSD: String!
-  totalFeesUSD: String!
+  totalValueLockedUsd: String!
+  liquidityPoolsTvl: String!
+  stakingTvl: String!
+  farmingTvl: String!
+  dailyVolumeUsd: String!
+  weeklyVolumeUsd: String!
+  monthlyVolumeUsd: String!
+  totalVolumeUsd: String!
+  dailyFeesUsd: String!
+  weeklyFeesUsd: String!
+  monthlyFeesUsd: String!
+  totalFeesUsd: String!
   totalUsers: Int!
   dailyActiveUsers: Int!
   weeklyActiveUsers: Int!
@@ -426,7 +426,7 @@ type StakingMetric {
   totalRewardsClaimed: String!
   totalStakers: Int!
   totalRebases: Int!
-  currentAPR: String
+  currentApr: String
 }
 
 # Token Launch
@@ -435,7 +435,7 @@ type Launch {
   launchId: Int!
   tokenAddress: String!
   creatorAddress: String!
-  imageURI: String!
+  imageUri: String!
   kubRaised: String!
   ponderRaised: String!
   status: String!

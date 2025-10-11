@@ -14,23 +14,23 @@ const PairDetailQuery = graphql`
       address
       reserve0
       reserve1
-      reserveUSD
+      reserveUsd
       tvl
       volume24h
       volumeChange24h
-      poolAPR
-      rewardAPR
+      poolApr
+      rewardApr
       token0 {
         id
         symbol
         address
-        priceUSD
+        priceUsd
       }
       token1 {
         id
         symbol
         address
-        priceUSD
+        priceUsd
       }
       ...PriceChartContainer_pair
     }
@@ -178,7 +178,7 @@ function PairDetailContent({ pairAddress }: { pairAddress: string }) {
               <View direction="column" gap={4}>
                 <Text color="neutral">TVL</Text>
                 <Text variant="title-4">
-                  ${formatValue((pair as any)?.tvl || (pair as any)?.reserveUSD)}
+                  ${formatValue((pair as any)?.tvl || (pair as any)?.reserveUsd)}
                 </Text>
               </View>
             </Grid>
@@ -195,15 +195,15 @@ function PairDetailContent({ pairAddress }: { pairAddress: string }) {
 
               <View direction="column" gap={4}>
                 <Text color="neutral">Pool APR</Text>
-                <Text variant="title-4" color={(pair as any)?.poolAPR > 0 ? "positive" : "neutral"}>
-                  {formatPercentage((pair as any)?.poolAPR)}
+                <Text variant="title-4" color={(pair as any)?.poolApr > 0 ? "positive" : "neutral"}>
+                  {formatPercentage((pair as any)?.poolApr)}
                 </Text>
               </View>
 
               <View direction="column" gap={4}>
                 <Text color="neutral">Reward APR</Text>
-                <Text variant="title-4" color={(pair as any)?.rewardAPR > 0 ? "positive" : "neutral"}>
-                  {formatPercentage((pair as any)?.rewardAPR)}
+                <Text variant="title-4" color={(pair as any)?.rewardApr > 0 ? "positive" : "neutral"}>
+                  {formatPercentage((pair as any)?.rewardApr)}
                 </Text>
               </View>
             </Grid>
@@ -214,14 +214,14 @@ function PairDetailContent({ pairAddress }: { pairAddress: string }) {
               <View direction="column" gap={4}>
                 <Text color="neutral">Price {pair.token0.symbol} in {pair.token1.symbol}</Text>
                 <Text variant="title-4">
-                  {formatNumber((pair as any)?.token0?.priceUSD / (pair as any)?.token1?.priceUSD)} {pair.token1.symbol}
+                  {formatNumber((pair as any)?.token0?.priceUsd / (pair as any)?.token1?.priceUsd)} {pair.token1.symbol}
                 </Text>
               </View>
 
               <View direction="column" gap={4}>
                 <Text color="neutral">Price {pair.token1.symbol} in {pair.token0.symbol}</Text>
                 <Text variant="title-4">
-                  {formatNumber((pair as any)?.token1?.priceUSD / (pair as any)?.token0?.priceUSD)} {pair.token0.symbol}
+                  {formatNumber((pair as any)?.token1?.priceUsd / (pair as any)?.token0?.priceUsd)} {pair.token0.symbol}
                 </Text>
               </View>
             </Grid>

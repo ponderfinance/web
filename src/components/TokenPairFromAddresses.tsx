@@ -25,7 +25,7 @@ const NATIVE_KUB_DATA = {
   name: 'Native KUB',
   symbol: 'KUB',
   decimals: 18,
-  imageURI: '/tokens/bitkub.png',
+  imageUri: '/tokens/bitkub.png',
 }
 
 // Default fallback images
@@ -44,13 +44,13 @@ const SimpleTokenPair: React.FC<{
 
   const firstTokenDisplay = {
     symbol: isTokenANative ? 'KUB' : tokenAData.symbol || 'Unknown',
-    icon: isTokenANative ? NATIVE_KUB_ICON : getIpfsGateway(tokenAData.imageURI || '') || DEFAULT_TOKEN_ICON,
+    icon: isTokenANative ? NATIVE_KUB_ICON : getIpfsGateway(tokenAData.imageUri || '') || DEFAULT_TOKEN_ICON,
     name: isTokenANative ? 'Native KUB' : tokenAData.name || 'Unknown Token',
   }
 
   const secondTokenDisplay = {
     symbol: isTokenBNative ? 'KUB' : tokenBData?.symbol || 'Unknown',
-    icon: isTokenBNative ? NATIVE_KUB_ICON : getIpfsGateway(tokenBData?.imageURI || '') || DEFAULT_TOKEN_ICON,
+    icon: isTokenBNative ? NATIVE_KUB_ICON : getIpfsGateway(tokenBData?.imageUri || '') || DEFAULT_TOKEN_ICON,
     name: isTokenBNative ? 'Native KUB' : tokenBData?.name || 'Unknown Token',
   }
 
@@ -170,35 +170,81 @@ const TokenPairWithData: React.FC<{
   }
 
   // Query for token data (only for non-native tokens)
+  // Ensure addresses are lowercase for case-insensitive matching
+  const normalizedTokenA = tokenAAddress.toLowerCase()
+  const normalizedTokenB = tokenBAddress.toLowerCase()
+
   const data = useLazyLoadQuery<TokenPairFromAddressesQuery>(
     tokenPairQuery,
     {
-      tokenAAddress: tokenAAddress,
-      tokenBAddress: tokenBAddress,
+      tokenAAddress: normalizedTokenA,
+      tokenBAddress: normalizedTokenB,
     },
     {
       fetchPolicy: 'store-or-network',
     }
   )
 
-  // Handle cases where tokens might not exist in the database - create fallback fragments
-  const createFallbackFragment = (address: string): TokenPairFragment$key => ({
-    id: `fallback-${address}`,
-    address,
-    name: 'Unknown Token',
-    symbol: 'UNK',
-    decimals: 18,
-    imageURI: null,
-    ' $fragmentSpreads': { TokenPairFragment: true }
-  } as any)
+  // Debug logging
+  console.log('[TokenPairFromAddresses] Query result:', {
+    tokenAAddress: normalizedTokenA,
+    tokenBAddress: normalizedTokenB,
+    hasTokenA: !!data.tokenA,
+    hasTokenB: !!data.tokenB,
+    tokenA: data.tokenA,
+    tokenB: data.tokenB
+  })
 
-  const tokenAResult = data.tokenA || createFallbackFragment(tokenAAddress)
-  const tokenBResult = data.tokenB || createFallbackFragment(tokenBAddress)
+  // Handle cases where tokens might not exist in the database
+  // Use SimpleTokenPair for fallback to avoid Relay fragment issues
+  if (!data.tokenA || !data.tokenB) {
+    const tokenAData = data.tokenA ? {
+      id: data.tokenA.id,
+      address: data.tokenA.address,
+      name: data.tokenA.name || 'Unknown Token',
+      symbol: data.tokenA.symbol || 'UNK',
+      decimals: data.tokenA.decimals || 18,
+      imageUri: data.tokenA.imageUri || null,
+    } : {
+      id: `fallback-${tokenAAddress}`,
+      address: tokenAAddress,
+      name: 'Unknown Token',
+      symbol: 'UNK',
+      decimals: 18,
+      imageUri: null,
+    }
 
+    const tokenBData = data.tokenB ? {
+      id: data.tokenB.id,
+      address: data.tokenB.address,
+      name: data.tokenB.name || 'Unknown Token',
+      symbol: data.tokenB.symbol || 'UNK',
+      decimals: data.tokenB.decimals || 18,
+      imageUri: data.tokenB.imageUri || null,
+    } : {
+      id: `fallback-${tokenBAddress}`,
+      address: tokenBAddress,
+      name: 'Unknown Token',
+      symbol: 'UNK',
+      decimals: 18,
+      imageUri: null,
+    }
+
+    return (
+      <SimpleTokenPair
+        tokenAData={tokenAData}
+        tokenBData={tokenBData}
+        size={size}
+        showSymbols={showSymbols}
+      />
+    )
+  }
+
+  // Both tokens exist - use proper Relay fragments
   return (
     <TokenPair
-      tokenA={tokenAResult}
-      tokenB={tokenBResult}
+      tokenA={data.tokenA}
+      tokenB={data.tokenB}
       size={size}
       showSymbols={showSymbols}
     />

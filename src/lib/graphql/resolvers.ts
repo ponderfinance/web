@@ -1,8 +1,9 @@
+// SWITCHED TO PONDER POSTGRES (Prisma still available as fallback)
 import prisma from '@/src/lib/db/prisma'
+import ponderDb from '@/src/lib/db/ponderDb'
 import { getRedisClient, getKey as safeRedisGet, setKey as safeRedisSet, deleteKey as safeRedisDelete } from '@/src/lib/redis'
 import { createPublicClient, http } from 'viem'
 import { CURRENT_CHAIN } from '@/src/constants/chains'
-// Removed indexer import - using direct Prisma queries instead
 
 // ERC20 ABI for token supply queries
 const ERC20_ABI = [
@@ -43,7 +44,7 @@ export const publicClient = createPublicClient({
 })
 
 type Context = {
-  prisma: typeof prisma
+  prisma: typeof ponderDb  // Using Ponder adapter (Prisma-compatible API)
 }
 
 interface ChartDataPoint {
@@ -169,8 +170,8 @@ class IndustryChartService {
           token0Id: true, 
           token1Id: true,
           // Get the other token for price calculation
-          token0: { select: { priceUSD: true } },
-          token1: { select: { priceUSD: true } }
+          token0: { select: { priceUsd: true } },
+          token1: { select: { priceUsd: true } }
         }
       })
       
@@ -214,13 +215,13 @@ class IndustryChartService {
         
         if (isToken0) {
           // Token is token0, use price0 and token1's USD price
-          const otherTokenPrice = parseFloat(pair.token1.priceUSD || '0')
+          const otherTokenPrice = parseFloat(pair.token1.priceUsd || '0')
           if (otherTokenPrice > 0) {
             tokenPrice = (parseFloat(snapshot.price0) / 1e18) * otherTokenPrice
           }
         } else {
           // Token is token1, use price1 and token0's USD price
-          const otherTokenPrice = parseFloat(pair.token0.priceUSD || '0')
+          const otherTokenPrice = parseFloat(pair.token0.priceUsd || '0')
           if (otherTokenPrice > 0) {
             tokenPrice = (parseFloat(snapshot.price1) / 1e18) * otherTokenPrice
           }
@@ -354,17 +355,16 @@ class FastTokenService {
     const token = await prisma.token.findFirst({
       where: { address: normalizedAddress },
       select: {
-        id: true,
         address: true,
         symbol: true,
         name: true,
         decimals: true,
-        imageURI: true,
-        priceUSD: true,
+        imageUri: true,
+        priceUsd: true,
         priceChange24h: true,
         priceChange1h: true,
         priceChange7d: true,
-        volumeUSD24h: true,
+        volumeUsd24h: true,
         lastPriceUpdate: true,
         createdAt: true,
         updatedAt: true
@@ -385,43 +385,43 @@ class FastTokenService {
     let fdv = '0'
     
     try {
-      const priceUSD = parseFloat(token.priceUSD || '0')
+      const priceUsd = parseFloat(token.priceUsd || '0')
       const decimals = token.decimals || 18
       
-      if (priceUSD > 0) {
+      if (priceUsd > 0) {
         // BLAZING FAST: Single aggregation query to get total reserves
         const tvlStartTime = performance.now()
         const pairs = await prisma.pair.findMany({
           where: {
             OR: [
-              { token0Id: token.id },
-              { token1Id: token.id }
+              { token0Address: token.address },
+              { token1Address: token.address }
             ]
           },
           select: {
-            token0Id: true,
-            token1Id: true,
+            token0Address: true,
+            token1Address: true,
             reserve0: true,
             reserve1: true
           }
         })
-        
+
         const tvlQueryTime = performance.now()
         console.log(`[ULTRA_FAST_TOKEN] TVL query: ${(tvlQueryTime - tvlStartTime).toFixed(1)}ms`)
-        
+
         // Calculate TVL from reserves
         let totalReserves = 0
         pairs.forEach(pair => {
-          if (pair.token0Id === token.id && pair.reserve0) {
+          if (pair.token0Address === token.address && pair.reserve0) {
             const reserveAmount = parseFloat(pair.reserve0) / Math.pow(10, decimals)
             totalReserves += reserveAmount
-          } else if (pair.token1Id === token.id && pair.reserve1) {
+          } else if (pair.token1Address === token.address && pair.reserve1) {
             const reserveAmount = parseFloat(pair.reserve1) / Math.pow(10, decimals)
             totalReserves += reserveAmount
           }
         })
         
-        tvl = totalReserves * priceUSD
+        tvl = totalReserves * priceUsd
         
         // Calculate accurate Market Cap and FDV using real token supply data
         if (totalReserves > 0) {
@@ -431,21 +431,21 @@ class FastTokenService {
             
             if (tokenSupply.totalSupply > 0) {
               // Use real total supply for accurate FDV
-              fdv = (tokenSupply.totalSupply * priceUSD).toFixed(0)
+              fdv = (tokenSupply.totalSupply * priceUsd).toFixed(0)
               
               // For market cap, use circulating supply if available, otherwise estimate as 70% of total
               const circulatingSupply = tokenSupply.circulatingSupply > 0 
                 ? tokenSupply.circulatingSupply 
                 : tokenSupply.totalSupply * 0.7 // Conservative 70% circulating estimate
               
-              marketCap = (circulatingSupply * priceUSD).toFixed(0)
+              marketCap = (circulatingSupply * priceUsd).toFixed(0)
             } else {
               // Fallback to TVL-based estimation only if blockchain data unavailable
               const estimatedCirculatingSupply = totalReserves * 2 // Conservative 2x multiplier
               const estimatedTotalSupply = totalReserves * 5 // Conservative 5x multiplier for FDV
               
-              marketCap = (estimatedCirculatingSupply * priceUSD).toFixed(0)
-              fdv = (estimatedTotalSupply * priceUSD).toFixed(0)
+              marketCap = (estimatedCirculatingSupply * priceUsd).toFixed(0)
+              fdv = (estimatedTotalSupply * priceUsd).toFixed(0)
             }
           } catch (supplyError) {
             console.log(`[TOKEN_SUPPLY_ERROR] Could not fetch supply for ${token.address}:`, supplyError)
@@ -453,8 +453,8 @@ class FastTokenService {
             const estimatedCirculatingSupply = totalReserves * 2
             const estimatedTotalSupply = totalReserves * 5
             
-            marketCap = (estimatedCirculatingSupply * priceUSD).toFixed(0)
-            fdv = (estimatedTotalSupply * priceUSD).toFixed(0)
+            marketCap = (estimatedCirculatingSupply * priceUsd).toFixed(0)
+            fdv = (estimatedTotalSupply * priceUsd).toFixed(0)
           }
         }
         
@@ -467,14 +467,15 @@ class FastTokenService {
     // Enhanced token data with calculated fields
     const enhancedToken = {
       ...token,
+      id: token.address, // Map address to id for GraphQL schema
       symbol: token.symbol || 'Unknown',
       name: token.name || 'Unknown Token',
       decimals: token.decimals || 18,
-      priceUSD: token.priceUSD || '0',
+      priceUsd: token.priceUsd || '0',
       priceChange24h: token.priceChange24h || 0,
       priceChange1h: token.priceChange1h || 0,
       priceChange7d: token.priceChange7d || 0,
-      volumeUSD24h: token.volumeUSD24h || '0',
+      volumeUsd24h: token.volumeUsd24h || '0',
       tvl: tvl > 0 ? tvl.toFixed(2) : '0',
       marketCap,
       fdv
@@ -536,31 +537,35 @@ export const resolvers = {
     // 🚀 BLAZING FAST TOKEN RESOLVER
     tokenByAddress: async (_parent: unknown, { address }: { address: string }, { prisma }: Context) => {
       try {
+        console.log(`[FAST_TOKEN] START - Looking for token: ${address}`)
         console.time(`[FAST_TOKEN] ${address}`)
         const result = await FastTokenService.getToken(address, prisma)
         console.timeEnd(`[FAST_TOKEN] ${address}`)
+        console.log(`[FAST_TOKEN] RESULT for ${address}:`, result ? 'Found' : 'NULL')
+        if (!result) {
+          console.error(`[FAST_TOKEN] Returned NULL for ${address} - check FastTokenService.getToken`)
+        }
         return result
       } catch (error) {
-        console.error(`[FAST_TOKEN] Error for ${address}:`, error)
+        console.error(`[FAST_TOKEN] EXCEPTION for ${address}:`, error)
         return null
       }
     },
 
-    // 🚀 FAST TOKEN BY ID
+    // 🚀 FAST TOKEN BY ID (using address as ID in Ponder)
     token: async (_parent: unknown, { id }: { id: string }, { prisma }: Context) => {
       try {
         const token = await prisma.token.findFirst({
-          where: { id },
+          where: { address: id },
           select: {
-            id: true,
             address: true,
             symbol: true,
             name: true,
             decimals: true,
-            imageURI: true,
-            priceUSD: true,
+            imageUri: true,
+            priceUsd: true,
             priceChange24h: true,
-            volumeUSD24h: true,
+            volumeUsd24h: true,
             lastPriceUpdate: true,
             createdAt: true,
             updatedAt: true
@@ -568,15 +573,16 @@ export const resolvers = {
         })
         
         if (!token) return null
-        
+
         return {
           ...token,
+          id: token.address, // Map address to id for GraphQL schema
           symbol: token.symbol || 'Unknown',
           name: token.name || 'Unknown Token',
           decimals: token.decimals || 18,
-          priceUSD: token.priceUSD || '0',
+          priceUsd: token.priceUsd || '0',
           priceChange24h: token.priceChange24h || 0,
-          volumeUSD24h: token.volumeUSD24h || '0',
+          volumeUsd24h: token.volumeUsd24h || '0',
           tvl: '0',
           marketCap: '0',
           fdv: '0'
@@ -591,31 +597,30 @@ export const resolvers = {
     tokens: async (_parent: unknown, { first = 50, where }: { first?: number; where?: any }, { prisma }: Context) => {
       try {
         console.time('[FAST_TOKENS_LIST]')
-        
+        console.log('[FAST_TOKENS_LIST] Fetching tokens with first:', first, 'where:', where)
+
         // Build where clause
         const whereClause: any = {}
         if (where?.address) whereClause.address = { contains: where.address.toLowerCase() }
         if (where?.symbol) whereClause.symbol = { contains: where.symbol, mode: 'insensitive' }
         if (where?.name) whereClause.name = { contains: where.name, mode: 'insensitive' }
-        
+
         const tokens = await prisma.token.findMany({
           where: whereClause,
-          take: Math.min(first, 100), // Limit to 100 max
-          orderBy: [
-            { volumeUSD24h: 'desc' }, // Order by volume (most traded first)
-            { priceUSD: 'desc' }
-          ]
+          take: Math.min(first, 100),
+          orderBy: { priceUsd: 'desc' } // Order by price (highest first)
         })
         
         // Transform tokens
         const transformedTokens = tokens.map((token: any) => ({
           ...token,
+          id: token.address, // Map address to id for GraphQL schema
           symbol: token.symbol || 'Unknown',
           name: token.name || 'Unknown Token',
           decimals: token.decimals || 18,
-          priceUSD: token.priceUSD || '0',
+          priceUsd: token.priceUsd || '0',
           priceChange24h: token.priceChange24h || 0,
-          volumeUSD24h: token.volumeUSD24h || '0',
+          volumeUsd24h: token.volumeUsd24h || '0',
           tvl: '0',
           marketCap: '0',
           fdv: '0'
@@ -646,15 +651,15 @@ export const resolvers = {
         return {
           ...pair,
           tvl: 0,
-          reserveUSD: '0',
-          poolAPR: 0,
-          rewardAPR: 0,
+          reserveUsd: '0',
+          poolApr: 0,
+          rewardApr: 0,
           volume1h: '0',
           volume24h: '0',
           volume7d: '0',
           volume30d: '0',
           volumeChange24h: 0,
-          volumeTVLRatio: 0
+          volumeTvlRatio: 0
         }
       } catch (error) {
         console.error(`[FAST_PAIR] Error for ${id}:`, error)
@@ -681,45 +686,49 @@ export const resolvers = {
         // Use existing pre-computed fields with fast TVL calculation
         const transformedPairs = pairs.map((pair: any) => {
           let tvl = 0
-          let reserveUSD = '0'
-          
+          let reserveUsd = '0'
+
           try {
             // Quick TVL calculation from reserves and token prices
-            const token0Price = parseFloat(pair.token0?.priceUSD || '0')
-            const token1Price = parseFloat(pair.token1?.priceUSD || '0')
+            const token0Price = parseFloat(pair.token0?.priceUsd || '0')
+            const token1Price = parseFloat(pair.token1?.priceUsd || '0')
             const reserve0 = parseFloat(pair.reserve0 || '0')
             const reserve1 = parseFloat(pair.reserve1 || '0')
             const token0Decimals = pair.token0?.decimals || 18
             const token1Decimals = pair.token1?.decimals || 18
-            
+
             if (token0Price > 0 && reserve0 > 0) {
               const token0ValueUSD = (reserve0 / Math.pow(10, token0Decimals)) * token0Price
               tvl += token0ValueUSD
             }
-            
+
             if (token1Price > 0 && reserve1 > 0) {
               const token1ValueUSD = (reserve1 / Math.pow(10, token1Decimals)) * token1Price
               tvl += token1ValueUSD
             }
-            
-            reserveUSD = tvl.toFixed(2)
+
+            reserveUsd = tvl.toFixed(2)
           } catch (error) {
             console.warn(`[PAIRS] Error calculating TVL for pair ${pair.id}:`, error)
           }
-          
+
           return {
             ...pair,
+            id: pair.address, // Map address to id for GraphQL schema
+            // Ensure tokens have id fields
+            token0: pair.token0 ? { ...pair.token0, id: pair.token0.address } : null,
+            token1: pair.token1 ? { ...pair.token1, id: pair.token1.address } : null,
             tvl: Math.round(tvl),
-            reserveUSD,
+            reserveUsd,
             // Use pre-computed fields from the database
-            poolAPR: pair.poolAPR || 0,
-            rewardAPR: 0, // This would come from farming data
+            poolApr: pair.poolApr || 0,
+            rewardApr: 0, // This would come from farming data
             volume1h: pair.volume1h || '0',
             volume24h: pair.volume24h || '0',
             volume7d: pair.volume7d || '0',
             volume30d: pair.volume30d || '0',
             volumeChange24h: pair.volumeChange24h || 0,
-            volumeTVLRatio: pair.volumeTVLRatio || 0
+            volumeTvlRatio: pair.volumeTvlRatio || 0
           }
         })
         
@@ -727,6 +736,69 @@ export const resolvers = {
       } catch (error) {
         console.error('[FAST_PAIRS] Error:', error)
         return createConnection([])
+      }
+    },
+
+    // 🚀 FAST PAIR BY ADDRESS
+    pairByAddress: async (_parent: unknown, { address }: { address: string }, { prisma }: Context) => {
+      try {
+        const normalizedAddress = address.toLowerCase()
+        const pair = await prisma.pair.findFirst({
+          where: { address: normalizedAddress },
+          include: {
+            token0: true,
+            token1: true
+          }
+        })
+
+        if (!pair) return null
+
+        // Calculate TVL from reserves
+        let tvl = 0
+        let reserveUsd = '0'
+
+        try {
+          const token0Price = parseFloat(pair.token0?.priceUsd || '0')
+          const token1Price = parseFloat(pair.token1?.priceUsd || '0')
+          const reserve0 = parseFloat(pair.reserve0 || '0')
+          const reserve1 = parseFloat(pair.reserve1 || '0')
+          const token0Decimals = pair.token0?.decimals || 18
+          const token1Decimals = pair.token1?.decimals || 18
+
+          if (token0Price > 0 && reserve0 > 0) {
+            const token0ValueUSD = (reserve0 / Math.pow(10, token0Decimals)) * token0Price
+            tvl += token0ValueUSD
+          }
+          if (token1Price > 0 && reserve1 > 0) {
+            const token1ValueUSD = (reserve1 / Math.pow(10, token1Decimals)) * token1Price
+            tvl += token1ValueUSD
+          }
+
+          reserveUsd = tvl.toFixed(2)
+        } catch (error) {
+          console.error(`[PAIR_BY_ADDRESS] TVL calculation error for ${address}:`, error)
+        }
+
+        return {
+          ...pair,
+          id: pair.address,
+          // Ensure tokens have id fields
+          token0: pair.token0 ? { ...pair.token0, id: pair.token0.address } : null,
+          token1: pair.token1 ? { ...pair.token1, id: pair.token1.address } : null,
+          tvl,
+          reserveUsd,
+          poolApr: 0,
+          rewardApr: 0,
+          volume1h: '0',
+          volume24h: pair.volume24h || '0',
+          volume7d: pair.volume7d || '0',
+          volume30d: pair.volume30d || '0',
+          volumeChange24h: pair.volumeChange24h || 0,
+          volumeTvlRatio: 0
+        }
+      } catch (error) {
+        console.error(`[PAIR_BY_ADDRESS] Error for ${address}:`, error)
+        return null
       }
     },
 
@@ -742,7 +814,7 @@ export const resolvers = {
         
         if (metrics) {
           console.timeEnd('[PROTOCOL_METRICS]')
-          console.log('[PROTOCOL_METRICS] ✅ Using indexer-computed metrics')
+          console.log('[PROTOCOL_METRICS] ✅ Using Ponder-computed metrics')
           return {
             ...metrics,
             // Ensure percentage changes are properly mapped
@@ -750,71 +822,25 @@ export const resolvers = {
             volume1hChange: metrics.volume1hChange || 0
           }
         }
-        
-        // Method 2: Fallback to cached Redis data from your indexer
-        try {
-          const redis = getRedisClient()
-          if (redis) {
-            const [tvl, volume24h, volume1h, volume24hChange, volume1hChange] = await Promise.all([
-              safeRedisGet(`${CACHE_PREFIXES.PROTOCOL}tvl`),
-              safeRedisGet(`${CACHE_PREFIXES.PROTOCOL}volume24h`), 
-              safeRedisGet(`${CACHE_PREFIXES.PROTOCOL}volume1h`),
-              safeRedisGet(`${CACHE_PREFIXES.PROTOCOL}volume24hChange`),
-              safeRedisGet(`${CACHE_PREFIXES.PROTOCOL}volume1hChange`)
-            ])
-            
-            if (tvl || volume24h) {
-              console.timeEnd('[PROTOCOL_METRICS]')
-              console.log('[PROTOCOL_METRICS] ✅ Using Redis-cached metrics from indexer')
-              return {
-                id: 'redis-metrics',
-                timestamp: Math.floor(Date.now() / 1000),
-                totalValueLockedUSD: tvl || '0',
-                liquidityPoolsTVL: tvl || '0',
-                stakingTVL: '0',
-                farmingTVL: '0', 
-                dailyVolumeUSD: volume24h || '0',
-                weeklyVolumeUSD: volume24h || '0', // Would need weekly cache
-                monthlyVolumeUSD: volume24h || '0', // Would need monthly cache
-                totalVolumeUSD: volume24h || '0',
-                dailyFeesUSD: '0',
-                weeklyFeesUSD: '0',
-                monthlyFeesUSD: '0',
-                totalFeesUSD: '0',
-                totalUsers: 0,
-                dailyActiveUsers: 0,
-                weeklyActiveUsers: 0,
-                monthlyActiveUsers: 0,
-                volume1h: volume1h || '0',
-                volume1hChange: parseFloat(volume1hChange as string) || 0,
-                volume24hChange: parseFloat(volume24hChange as string) || 0,
-                totalPairs: 0,
-                activePoolsCount: 0
-              }
-            }
-          }
-        } catch (redisError) {
-          console.warn('[PROTOCOL_METRICS] Redis fallback failed:', redisError)
-        }
-        
-        // Method 3: Last resort - return minimal data
-        console.log('[PROTOCOL_METRICS] ⚠️ No computed metrics available, returning minimal fallback')
+
+        // No metrics found - return minimal fallback
+        console.log('[PROTOCOL_METRICS] ⚠️ No computed metrics available yet, returning minimal fallback')
         console.timeEnd('[PROTOCOL_METRICS]')
         return {
           id: 'minimal-fallback',
           timestamp: Math.floor(Date.now() / 1000),
-          totalValueLockedUSD: '0',
-          liquidityPoolsTVL: '0',
-          stakingTVL: '0',
-          farmingTVL: '0',
-          dailyVolumeUSD: '0',
-          weeklyVolumeUSD: '0',
-          monthlyVolumeUSD: '0',
-          totalVolumeUSD: '0',
-          dailyFeesUSD: '0',
-          weeklyFeesUSD: '0',
-          monthlyFeesUSD: '0',
-          totalFeesUSD: '0',
+          totalValueLockedUsd: '0',
+          liquidityPoolsTvl: '0',
+          stakingTvl: '0',
+          farmingTvl: '0',
+          dailyVolumeUsd: '0',
+          weeklyVolumeUsd: '0',
+          monthlyVolumeUsd: '0',
+          totalVolumeUsd: '0',
+          dailyFeesUsd: '0',
+          weeklyFeesUsd: '0',
+          monthlyFeesUsd: '0',
+          totalFeesUsd: '0',
           totalUsers: 0,
           dailyActiveUsers: 0,
           weeklyActiveUsers: 0,
@@ -831,18 +857,18 @@ export const resolvers = {
         return {
           id: 'error-fallback',
           timestamp: Math.floor(Date.now() / 1000),
-          totalValueLockedUSD: '0',
-          liquidityPoolsTVL: '0',
-          stakingTVL: '0',
-          farmingTVL: '0',
-          dailyVolumeUSD: '0',
-          weeklyVolumeUSD: '0',
-          monthlyVolumeUSD: '0',
-          totalVolumeUSD: '0',
-          dailyFeesUSD: '0',
-          weeklyFeesUSD: '0',
-          monthlyFeesUSD: '0',
-          totalFeesUSD: '0',
+          totalValueLockedUsd: '0',
+          liquidityPoolsTvl: '0',
+          stakingTvl: '0',
+          farmingTvl: '0',
+          dailyVolumeUsd: '0',
+          weeklyVolumeUsd: '0',
+          monthlyVolumeUsd: '0',
+          totalVolumeUsd: '0',
+          dailyFeesUsd: '0',
+          weeklyFeesUsd: '0',
+          monthlyFeesUsd: '0',
+          totalFeesUsd: '0',
           totalUsers: 0,
           dailyActiveUsers: 0,
           weeklyActiveUsers: 0,
@@ -902,9 +928,9 @@ export const resolvers = {
           // Calculate USD value from amounts and token prices
           let valueUSD = '0'
           try {
-            if (swap.pair?.token0?.priceUSD || swap.pair?.token1?.priceUSD) {
-              const token0Price = parseFloat(swap.pair.token0?.priceUSD || '0')
-              const token1Price = parseFloat(swap.pair.token1?.priceUSD || '0')
+            if (swap.pair?.token0?.priceUsd || swap.pair?.token1?.priceUsd) {
+              const token0Price = parseFloat(swap.pair.token0?.priceUsd || '0')
+              const token1Price = parseFloat(swap.pair.token1?.priceUsd || '0')
               
               let usdValue = 0
               
@@ -931,26 +957,26 @@ export const resolvers = {
             timestamp: swap.timestamp.toString(),
             userAddress: swap.userAddress,
             amountIn0: swap.amountIn0 || '0',
-            amountIn1: swap.amountIn1 || '0', 
+            amountIn1: swap.amountIn1 || '0',
             amountOut0: swap.amountOut0 || '0',
             amountOut1: swap.amountOut1 || '0',
             valueUSD,
-            // Ensure token objects have all required fields
+            // Ensure token objects have all required fields (use address as id)
             token0: swap.pair?.token0 ? {
-              id: swap.pair.token0.id,
+              id: swap.pair.token0.address,
               address: swap.pair.token0.address,
               name: swap.pair.token0.name || 'Unknown',
               symbol: swap.pair.token0.symbol || 'UNK',
               decimals: swap.pair.token0.decimals || 18,
-              imageURI: swap.pair.token0.imageURI || null
+              imageUri: swap.pair.token0.imageUri || null
             } : null,
             token1: swap.pair?.token1 ? {
-              id: swap.pair.token1.id,
+              id: swap.pair.token1.address,
               address: swap.pair.token1.address,
               name: swap.pair.token1.name || 'Unknown',
               symbol: swap.pair.token1.symbol || 'UNK',
               decimals: swap.pair.token1.decimals || 18,
-              imageURI: swap.pair.token1.imageURI || null
+              imageUri: swap.pair.token1.imageUri || null
             } : null
           }
         })
@@ -979,7 +1005,7 @@ export const resolvers = {
         // Step 1: Lightning-fast token lookup
         const token = await prisma.token.findFirst({
           where: { address: tokenAddress.toLowerCase() },
-          select: { id: true, priceUSD: true }
+          select: { id: true, priceUsd: true }
         })
         
         if (!token) {
@@ -1014,136 +1040,87 @@ export const resolvers = {
         const now = Math.floor(Date.now() / 1000)
         const startTime = now - config.duration
         
-        // Step 4: 🚀 BLAZING FAST: Query pre-aggregated OHLC candles
-        try {
-          const candles = await prisma.priceCandle.findMany({
-            where: {
-              tokenId: token.id,
-              intervalType: config.interval,
-              timestamp: {
-                gte: startTime,
-                lte: now
-              }
-            },
-            orderBy: {
-              timestamp: 'asc'
-            },
-            take: config.limit
-          })
-          
-          if (candles.length > 0) {
-            // Convert OHLC candles to simple chart points (use close prices)
-            const chartData = candles.map(candle => ({
-              time: candle.timestamp,
-              value: parseFloat(candle.closePrice)
-            }))
-            
-            // Step 5: Ultra-aggressive caching for blazing performance
-            try {
-              const redis = getRedisClient()
-              if (redis) {
-                await redis.set(cacheKey, JSON.stringify(chartData), 'EX', 30) // 30 seconds for blazing fresh data
-                console.log(`[BLAZING_CHART] ⚡ Cached ${chartData.length} candle points`)
-              }
-            } catch {}
-            
-            console.timeEnd(`[BLAZING_CHART] ${tokenAddress}-${timeframe}`)
-            console.log(`[BLAZING_CHART] 🚀 BLAZING FAST: ${chartData.length} points from pre-aggregated candles`)
-            return chartData
+        // Step 4: Find most liquid pair containing this token
+        const normalizedAddress = tokenAddress.toLowerCase()
+        const pairs = await prisma.pair.findMany({
+          where: {
+            OR: [
+              { token0Address: normalizedAddress },
+              { token1Address: normalizedAddress }
+            ]
+          },
+          orderBy: {
+            tvlUSD: 'desc' // Most liquid pair first
+          },
+          take: 1
+        })
+
+        if (pairs.length === 0) {
+          console.log(`[TOKEN_CHART] No pairs found for token ${tokenAddress}`)
+          // Emergency fallback using current price
+          if (token.priceUsd) {
+            const currentPrice = parseFloat(token.priceUsd)
+            return [
+              { time: startTime, value: currentPrice },
+              { time: now, value: currentPrice }
+            ]
           }
-        } catch (candleError) {
-          console.warn(`[BLAZING_CHART] Candle fallback for ${tokenAddress}:`, candleError.message)
+          return []
         }
-        
-        // Step 6: Fallback to MetricSnapshots (legacy support) - but still fast!
-        console.log(`[BLAZING_CHART] Falling back to MetricSnapshots for ${tokenAddress}`)
-        
-        // Import MongoDB connection for fallback
-        const { MongoClient } = await import('mongodb')
-        const MONGODB_URI = process.env.MONGO_URI || "mongodb://localhost:27017/ponder"
-        
-        let mongoClient = null
-        let chartData: ChartDataPoint[] = []
-        
-        try {
-          mongoClient = new MongoClient(MONGODB_URI)
-          await mongoClient.connect()
-          const db = mongoClient.db()
-          
-          // Optimized MongoDB aggregation for fast fallback
-          const snapshots = await db.collection("MetricSnapshot").aggregate([
-            {
-              $match: {
-                entity: "token",
-                entityId: token.id,
-                metricType: "price",
-                timestamp: { $gte: startTime },
-                value: { $ne: "0", $ne: null }
-              }
-            },
-            {
-              $sort: { timestamp: 1 }
-            },
-            {
-              $group: {
-                _id: {
-                  // Time bucket grouping for sampling
-                  bucket: {
-                    $floor: {
-                      $divide: [
-                        { $subtract: ["$timestamp", startTime] },
-                        Math.floor(config.duration / config.limit)
-                      ]
-                    }
-                  }
-                },
-                // Use last value in each bucket (latest price)
-                value: { $last: "$value" },
-                timestamp: { $last: "$timestamp" }
-              }
-            },
-            {
-              $sort: { timestamp: 1 }
-            },
-            {
-              $limit: config.limit
+
+        const pair = pairs[0]
+        const isToken0 = pair.token0Address?.toLowerCase() === normalizedAddress
+
+        console.log(`[TOKEN_CHART] Using pair ${pair.address} (token is ${isToken0 ? 'token0' : 'token1'})`)
+
+        // Step 5: Query price observations from Ponder
+        const observations = await prisma.priceObservation.findMany({
+          where: {
+            pairAddress: pair.address,
+            blockTimestamp: {
+              gte: startTime,
+              lte: now
             }
-          ]).toArray()
-          
-          if (snapshots.length > 0) {
-            chartData = snapshots.map(s => ({
-              time: s.timestamp,
-              value: parseFloat(s.value)
-            })).filter(p => p.value > 0)
-            
-            console.log(`[BLAZING_CHART] Fallback: ${chartData.length} points from snapshots`)
-          }
-          
-        } catch (mongoError) {
-          console.error(`[BLAZING_CHART] MongoDB fallback error:`, mongoError)
-        } finally {
-          if (mongoClient) {
-            await mongoClient.close()
-          }
+          },
+          orderBy: {
+            blockTimestamp: 'asc'
+          },
+          take: config.limit
+        })
+
+        console.log(`[TOKEN_CHART] Found ${observations.length} price observations`)
+
+        let chartData: ChartDataPoint[] = []
+
+        if (observations.length > 0) {
+          // Extract price based on token position
+          chartData = observations
+            .map(obs => ({
+              time: obs.blockTimestamp,
+              value: isToken0 ? (obs.token0PriceUSD || 0) : (obs.token1PriceUSD || 0)
+            }))
+            .filter(p => p.value > 0)
+
+          console.log(`[TOKEN_CHART] Generated ${chartData.length} chart points`)
         }
-        
-        // Step 7: Final fallback using current price
-        if (chartData.length === 0 && token.priceUSD) {
-          const currentPrice = parseFloat(token.priceUSD)
+
+        // Step 6: Fallback using current price if no observations
+        if (chartData.length === 0 && token.priceUsd) {
+          const currentPrice = parseFloat(token.priceUsd)
           chartData = [
             { time: startTime, value: currentPrice },
             { time: now, value: currentPrice }
           ]
-          console.log(`[BLAZING_CHART] Using emergency fallback for ${tokenAddress}`)
+          console.log(`[TOKEN_CHART] Using current price fallback`)
         }
-        
-        // Step 8: Cache results even for fallback
+
+        // Step 7: Cache results
         if (chartData.length > 0) {
           try {
             const redis = getRedisClient()
             if (redis) {
-              await redis.set(cacheKey, JSON.stringify(chartData), 'EX', 60) // 1 minute for fallback data
-              console.log(`[BLAZING_CHART] Cached ${chartData.length} fallback points`)
+              await redis.set(cacheKey, JSON.stringify(chartData), 'EX', 60) // 1 minute cache
+              console.log(`[TOKEN_CHART] Cached ${chartData.length} points`)
             }
           } catch {}
         }
@@ -1164,82 +1141,245 @@ export const resolvers = {
       }
     },
 
+    // 🚀 PAIR PRICE CHART RESOLVER
+    pairPriceChart: async (
+      _parent: unknown,
+      { pairAddress, timeframe = '1d', limit = 100 }: { pairAddress: string; timeframe?: string; limit?: number },
+      { prisma }: Context
+    ): Promise<ChartDataPoint[]> => {
+      try {
+        const normalizedAddress = pairAddress.toLowerCase()
+
+        // Calculate timeframe duration
+        const durations: Record<string, number> = {
+          '1h': 3600,
+          '1d': 86400,
+          '1w': 604800,
+          '1m': 2629746,
+          '1y': 31557600
+        }
+        const duration = durations[timeframe] || durations['1d']
+        const now = Math.floor(Date.now() / 1000)
+        const startTime = now - duration
+
+        // Query price observations from PonderDB
+        const observations = await prisma.priceObservation.findMany({
+          where: {
+            pairAddress: normalizedAddress
+          },
+          orderBy: { blockTimestamp: 'asc' },
+          take: limit
+        })
+
+        if (observations.length > 0) {
+          // Use token0 price (or token1 if token0 is null)
+          const chartData = observations
+            .map(obs => ({
+              time: obs.blockTimestamp,
+              value: obs.token0PriceUSD || obs.token1PriceUSD || 0
+            }))
+            .filter(point => point.value > 0)
+
+          if (chartData.length > 0) return chartData
+        }
+
+        // Fallback: Get pair's current data for emergency chart
+        const pair = await prisma.pair.findFirst({
+          where: { address: normalizedAddress },
+          include: { token0: true, token1: true }
+        })
+
+        if (!pair) return []
+
+        // Calculate current price from reserves
+        const reserve0 = parseFloat(pair.reserve0 || '0')
+        const reserve1 = parseFloat(pair.reserve1 || '0')
+        const token0Decimals = pair.token0?.decimals || 18
+        const token1Decimals = pair.token1?.decimals || 18
+
+        let currentPrice = 1.0
+        if (reserve0 > 0 && reserve1 > 0) {
+          const adjustedReserve0 = reserve0 / Math.pow(10, token0Decimals)
+          const adjustedReserve1 = reserve1 / Math.pow(10, token1Decimals)
+          currentPrice = adjustedReserve1 / adjustedReserve0
+        }
+
+        // Return emergency fallback with 2 points
+        return [
+          { time: startTime, value: currentPrice },
+          { time: now, value: currentPrice }
+        ]
+      } catch (error) {
+        console.error('[PAIR_PRICE_CHART] Error:', error)
+        return []
+      }
+    },
+
+    // 🚀 PAIR VOLUME CHART RESOLVER
+    pairVolumeChart: async (
+      _parent: unknown,
+      { pairAddress, timeframe = '1d', limit = 100 }: { pairAddress: string; timeframe?: string; limit?: number },
+      { prisma }: Context
+    ) => {
+      try {
+        const normalizedAddress = pairAddress.toLowerCase()
+
+        // Calculate timeframe duration
+        const durations: Record<string, number> = {
+          '1h': 3600,
+          '1d': 86400,
+          '1w': 604800,
+          '1m': 2629746,
+          '1y': 31557600
+        }
+        const duration = durations[timeframe] || durations['1d']
+        const now = Math.floor(Date.now() / 1000)
+        const startTime = now - duration
+
+        // Query swaps from PonderDB to calculate volume
+        const swaps = await prisma.swap.findMany({
+          where: {
+            pairAddress: normalizedAddress
+          },
+          orderBy: { timestamp: 'asc' },
+          take: limit * 10 // Get more swaps to aggregate into buckets
+        })
+
+        if (swaps.length > 0) {
+          // Group swaps into time buckets
+          const bucketSize = Math.floor(duration / limit)
+          const buckets: Record<number, { volume0: number; volume1: number; count: number }> = {}
+
+          swaps.forEach(swap => {
+            const swapTime = parseInt(swap.timestamp)
+            const bucketTime = Math.floor((swapTime - startTime) / bucketSize) * bucketSize + startTime
+
+            if (!buckets[bucketTime]) {
+              buckets[bucketTime] = { volume0: 0, volume1: 0, count: 0 }
+            }
+
+            buckets[bucketTime].volume0 += parseFloat(swap.amountIn0 || '0') + parseFloat(swap.amountOut0 || '0')
+            buckets[bucketTime].volume1 += parseFloat(swap.amountIn1 || '0') + parseFloat(swap.amountOut1 || '0')
+            buckets[bucketTime].count++
+          })
+
+          // Convert buckets to chart data
+          const chartData = Object.entries(buckets)
+            .map(([time, data]) => ({
+              time: parseInt(time),
+              value: data.volume0, // Primary value is volume in token0
+              volume0: data.volume0,
+              volume1: data.volume1,
+              count: data.count
+            }))
+            .sort((a, b) => a.time - b.time)
+
+          if (chartData.length > 0) return chartData
+        }
+
+        // Fallback: Return empty chart if no swap data
+        return []
+      } catch (error) {
+        console.error('[PAIR_VOLUME_CHART] Error:', error)
+        return []
+      }
+    },
+
     // 🚀 USER POSITIONS RESOLVER
     userPositions: async (_parent: unknown, { userAddress }: { userAddress: string }, { prisma }: Context) => {
       try {
         console.time(`[USER_POSITIONS] ${userAddress}`)
-        
+
         if (!userAddress) {
           return {
             liquidityPositions: [],
             farmingPositions: [],
-            stakingPositions: []
+            stakingPosition: null
           }
         }
+
+        const normalizedAddress = userAddress.toLowerCase()
 
         // Fetch all position types in parallel
         const [liquidityPositions, farmingPositions, stakingPositions] = await Promise.all([
           prisma.liquidityPosition.findMany({
-            where: {
-              userAddress: { equals: userAddress, mode: 'insensitive' }
-            },
-            include: {
-              pair: {
-                include: {
-                  token0: true,
-                  token1: true
-                }
-              }
-            }
+            where: { userAddress: normalizedAddress }
           }),
           prisma.farmingPosition.findMany({
-            where: {
-              userAddress: { equals: userAddress, mode: 'insensitive' }
-            }
+            where: { userAddress: normalizedAddress }
           }),
           prisma.stakingPosition.findMany({
-            where: {
-              userAddress: { equals: userAddress, mode: 'insensitive' }
-            }
+            where: { userAddress: normalizedAddress }
           })
         ])
 
-        // Serialize BigInt fields to strings
-        const serializedLiquidityPositions = liquidityPositions.map(pos => ({
-          ...pos,
-          liquidity: pos.liquidity?.toString() || '0',
-          token0Amount: pos.token0Amount?.toString() || '0',
-          token1Amount: pos.token1Amount?.toString() || '0'
-        }))
-
-        const serializedFarmingPositions = farmingPositions.map(pos => ({
-          ...pos,
-          amount: pos.amount?.toString() || '0',
-          rewardDebt: pos.rewardDebt?.toString() || '0',
-          ponderStaked: pos.ponderStaked?.toString() || '0',
-          weightedShares: pos.weightedShares?.toString() || '0'
-        }))
-
-        const serializedStakingPositions = stakingPositions.map(pos => ({
-          ...pos,
-          amount: pos.amount?.toString() || '0',
-          rewardDebt: pos.rewardDebt?.toString() || '0'
-        }))
+        // Manually fetch related pair data for liquidity positions
+        const enrichedLiquidityPositions = await Promise.all(
+          liquidityPositions.map(async (pos) => {
+            const pairData = await prisma.pair.findFirst({
+              where: { address: pos.pairAddress },
+              include: { token0: true, token1: true }
+            })
+            return {
+              ...pos,
+              pair: pairData ? {
+                ...pairData,
+                id: pairData.address,
+                token0: pairData.token0 ? { ...pairData.token0, id: pairData.token0.address } : null,
+                token1: pairData.token1 ? { ...pairData.token1, id: pairData.token1.address } : null
+              } : null
+            }
+          })
+        )
 
         console.timeEnd(`[USER_POSITIONS] ${userAddress}`)
-        
+
         return {
-          liquidityPositions: serializedLiquidityPositions,
-          farmingPositions: serializedFarmingPositions,
-          stakingPositions: serializedStakingPositions
+          liquidityPositions: enrichedLiquidityPositions,
+          farmingPositions: farmingPositions,
+          stakingPosition: stakingPositions[0] || null
         }
       } catch (error) {
         console.error(`[USER_POSITIONS] Error for ${userAddress}:`, error)
         return {
           liquidityPositions: [],
           farmingPositions: [],
-          stakingPositions: []
+          stakingPosition: null
         }
+      }
+    },
+
+    // 🚀 LAUNCH RESOLVER
+    launch: async (_parent: unknown, { launchId }: { launchId: number }, { prisma }: Context) => {
+      try {
+        console.time(`[LAUNCH] ${launchId}`)
+
+        const launchData = await prisma.launch.findFirst({
+          where: { launchId }
+        })
+
+        if (!launchData) {
+          console.timeEnd(`[LAUNCH] ${launchId}`)
+          console.log(`[LAUNCH] Launch ${launchId} not found`)
+          return null
+        }
+
+        // Fetch contributions for this launch
+        const contributions = await prisma.launchContribution.findMany({
+          where: { launchId },
+          orderBy: { createdAt: 'desc' }
+        })
+
+        console.timeEnd(`[LAUNCH] ${launchId}`)
+        console.log(`[LAUNCH] Found launch ${launchId} with ${contributions.length} contributions`)
+
+        return {
+          ...launchData,
+          contributions
+        }
+      } catch (error) {
+        console.error(`[LAUNCH] Error for ${launchId}:`, error)
+        return null
       }
     },
 

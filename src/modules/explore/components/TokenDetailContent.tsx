@@ -85,13 +85,13 @@ export const TokenDetailQuery = graphql`
       symbol
       address
       decimals
-      priceUSD
+      priceUsd
       priceChange24h
-      volumeUSD24h
+      volumeUsd24h
       tvl
       marketCap
       fdv
-      imageURI
+      imageUri
       ...TokenPriceChartContainer_token
     }
     tokenPriceChart(tokenAddress: $tokenAddress, timeframe: $timeframe, limit: $limit) {
@@ -129,7 +129,7 @@ const ShimmerCSS = () => (
 )
 
 // Component to display token icon with loading state
-function TokenIcon({ imageURI, name, isLoading }: { imageURI?: string | null, name?: string | null, isLoading: boolean }) {
+function TokenIcon({ imageUri, name, isLoading }: { imageUri?: string | null, name?: string | null, isLoading: boolean }) {
   if (isLoading) {
     return (
       <View width={8} height={8} overflow="hidden" borderRadius="large">
@@ -139,7 +139,7 @@ function TokenIcon({ imageURI, name, isLoading }: { imageURI?: string | null, na
   }
 
   // Handle IPFS URI
-  const imageSource = imageURI ? getIpfsGateway(imageURI) : undefined
+  const imageSource = imageUri ? getIpfsGateway(imageUri) : undefined
 
   return (
     <Image
@@ -399,7 +399,7 @@ function TokenDetailContent({
       <View direction="row" justify="space-between" align="center">
         <View direction="row" gap={3} align="center">
           <TokenIcon 
-            imageURI={data.tokenByAddress?.imageURI} 
+            imageUri={data.tokenByAddress?.imageUri} 
             name={data.tokenByAddress?.name}
             isLoading={false} 
           />
@@ -416,7 +416,7 @@ function TokenDetailContent({
 
       {/* Price and percent change */}
       <PriceDisplay 
-        price={data.tokenByAddress?.priceUSD}
+        price={data.tokenByAddress?.priceUsd}
         priceChange={data.tokenByAddress?.priceChange24h}
         isLoadingPrice={false}
       />
@@ -487,7 +487,7 @@ function TokenDetailContent({
                   24h volume
                 </Text>
                 <Text variant="featured-3" weight="medium" color="neutral">
-                  {formatLargeNumber(data.tokenByAddress?.volumeUSD24h)}
+                  {formatLargeNumber(data.tokenByAddress?.volumeUsd24h)}
                 </Text>
               </View>
             </View>

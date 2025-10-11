@@ -489,8 +489,8 @@ export function registerTokenPriceUpdater() {
       if (!tokenRecord) return;
       
       // Update price fields
-      if (data.priceUSD !== undefined) {
-        tokenRecord.setValue(data.priceUSD, 'priceUSD');
+      if (data.priceUsd !== undefined) {
+        tokenRecord.setValue(data.priceUsd, 'priceUsd');
       }
       
       // Handle price changes
@@ -503,10 +503,10 @@ export function registerTokenPriceUpdater() {
       }
       
       // Handle volume fields - handle both naming conventions
-      if (data.volumeUSD24h !== undefined) {
-        tokenRecord.setValue(data.volumeUSD24h, 'volumeUSD24h');
+      if (data.volumeUsd24h !== undefined) {
+        tokenRecord.setValue(data.volumeUsd24h, 'volumeUsd24h');
       } else if (data.volume24h !== undefined) {
-        tokenRecord.setValue(data.volume24h, 'volumeUSD24h');
+        tokenRecord.setValue(data.volume24h, 'volumeUsd24h');
       }
       
       // Handle 1h volume

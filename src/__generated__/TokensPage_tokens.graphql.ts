@@ -1,5 +1,5 @@
 /**
- * @generated SignedSource<<ab99abcd06a89d13eda580f7015abc2c>>
+ * @generated SignedSource<<54db6512e90d413f3cf7542431017dec>>
  * @lightSyntaxTransform
  * @nogrep
  */
@@ -17,14 +17,14 @@ export type TokensPage_tokens$data = {
         readonly address: string;
         readonly fdv: string;
         readonly id: string;
-        readonly imageURI: string | null;
+        readonly imageUri: string | null;
         readonly name: string | null;
         readonly priceChange1h: number | null;
         readonly priceChange24h: number | null;
-        readonly priceUSD: string | null;
+        readonly priceUsd: string | null;
         readonly symbol: string | null;
         readonly volume1h: string | null;
-        readonly volumeUSD24h: string | null;
+        readonly volumeUsd24h: string | null;
         readonly " $fragmentSpreads": FragmentRefs<"TokenPairFragment">;
       };
     }>;
@@ -146,7 +146,7 @@ return {
                   "alias": null,
                   "args": null,
                   "kind": "ScalarField",
-                  "name": "imageURI",
+                  "name": "imageUri",
                   "storageKey": null
                 },
                 {
@@ -167,7 +167,7 @@ return {
                   "alias": null,
                   "args": null,
                   "kind": "ScalarField",
-                  "name": "priceUSD",
+                  "name": "priceUsd",
                   "storageKey": null
                 },
                 {
@@ -188,7 +188,7 @@ return {
                   "alias": null,
                   "args": null,
                   "kind": "ScalarField",
-                  "name": "volumeUSD24h",
+                  "name": "volumeUsd24h",
                   "storageKey": null
                 },
                 {
@@ -271,6 +271,6 @@ return {
 };
 })();
 
-(node as any).hash = "353cef019789740f312b0c67938b5d4c";
+(node as any).hash = "d2edcf0bf02f4c8cfd0c5e94bab9c33e";
 
 export default node;

@@ -1,5 +1,5 @@
 /**
- * @generated SignedSource<<1e366099e42a7e6714b0b467a16eb8b9>>
+ * @generated SignedSource<<6ec28891a4f977f8a0044eea0faad804>>
  * @lightSyntaxTransform
  * @nogrep
  */
@@ -82,7 +82,7 @@ v4 = [
     "alias": null,
     "args": null,
     "kind": "ScalarField",
-    "name": "imageURI",
+    "name": "imageUri",
     "storageKey": null
   }
 ];
@@ -196,12 +196,12 @@ return {
     ]
   },
   "params": {
-    "cacheID": "8871dd2bbad2435a5355ca6cfad73992",
+    "cacheID": "5781585c053ee477e20f5fefcf0e2015",
     "id": null,
     "metadata": {},
     "name": "PoolPageQuery",
     "operationKind": "query",
-    "text": "query PoolPageQuery(\n  $userAddress: String!\n) {\n  userPositions(userAddress: $userAddress) {\n    liquidityPositions {\n      ...LiquidityPositionItem_position\n      id\n    }\n  }\n}\n\nfragment LiquidityPositionItem_position on LiquidityPosition {\n  id\n  pair {\n    id\n    address\n    token0 {\n      id\n      address\n      symbol\n      ...TokenPairFragment\n    }\n    token1 {\n      id\n      address\n      symbol\n      ...TokenPairFragment\n    }\n  }\n  liquidityTokens\n}\n\nfragment TokenPairFragment on Token {\n  id\n  address\n  name\n  symbol\n  decimals\n  imageURI\n}\n"
+    "text": "query PoolPageQuery(\n  $userAddress: String!\n) {\n  userPositions(userAddress: $userAddress) {\n    liquidityPositions {\n      ...LiquidityPositionItem_position\n      id\n    }\n  }\n}\n\nfragment LiquidityPositionItem_position on LiquidityPosition {\n  id\n  pair {\n    id\n    address\n    token0 {\n      id\n      address\n      symbol\n      ...TokenPairFragment\n    }\n    token1 {\n      id\n      address\n      symbol\n      ...TokenPairFragment\n    }\n  }\n  liquidityTokens\n}\n\nfragment TokenPairFragment on Token {\n  id\n  address\n  name\n  symbol\n  decimals\n  imageUri\n}\n"
   }
 };
 })();

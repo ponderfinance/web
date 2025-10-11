@@ -58,13 +58,13 @@ async function main() {
       {}, // Update all pairs
       {
         $set: {
-          poolAPR: 0,
+          poolApr: 0,
           volume1h: '0',
           volume24h: '0',
           volume7d: '0',
           volume30d: '0',
           volumeChange24h: 0,
-          volumeTVLRatio: 0
+          volumeTvlRatio: 0
         }
       }
     )
@@ -80,18 +80,18 @@ async function main() {
       // Create a new protocol metric document
       await db.collection('ProtocolMetric').insertOne({
         timestamp: Math.floor(Date.now() / 1000),
-        totalValueLockedUSD: '0',
-        liquidityPoolsTVL: '0',
-        stakingTVL: '0',
-        farmingTVL: '0',
-        dailyVolumeUSD: '0',
-        weeklyVolumeUSD: '0',
-        monthlyVolumeUSD: '0',
-        totalVolumeUSD: '0',
-        dailyFeesUSD: '0',
-        weeklyFeesUSD: '0',
-        monthlyFeesUSD: '0',
-        totalFeesUSD: '0',
+        totalValueLockedUsd: '0',
+        liquidityPoolsTvl: '0',
+        stakingTvl: '0',
+        farmingTvl: '0',
+        dailyVolumeUsd: '0',
+        weeklyVolumeUsd: '0',
+        monthlyVolumeUsd: '0',
+        totalVolumeUsd: '0',
+        dailyFeesUsd: '0',
+        weeklyFeesUsd: '0',
+        monthlyFeesUsd: '0',
+        totalFeesUsd: '0',
         totalUsers: 0,
         dailyActiveUsers: 0,
         weeklyActiveUsers: 0,

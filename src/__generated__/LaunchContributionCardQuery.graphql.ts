@@ -1,5 +1,5 @@
 /**
- * @generated SignedSource<<534a95f04aa1b79fd3b0bd7fc93bceb4>>
+ * @generated SignedSource<<588f3db28b59f7987127b0deef1647b9>>
  * @lightSyntaxTransform
  * @nogrep
  */
@@ -111,7 +111,7 @@ return {
             "alias": null,
             "args": null,
             "kind": "ScalarField",
-            "name": "imageURI",
+            "name": "imageUri",
             "storageKey": null
           },
           {
@@ -232,12 +232,12 @@ return {
     ]
   },
   "params": {
-    "cacheID": "baee54b8b2f184cc9531a4794dd96ebc",
+    "cacheID": "3ed1b93c05efa07a6fe993bfde392b49",
     "id": null,
     "metadata": {},
     "name": "LaunchContributionCardQuery",
     "operationKind": "query",
-    "text": "query LaunchContributionCardQuery(\n  $launchId: Int!\n) {\n  launch(launchId: $launchId) {\n    ...LaunchContributionCard_launch\n    id\n  }\n}\n\nfragment LaunchContributionCard_launch on Launch {\n  id\n  launchId\n  tokenAddress\n  creatorAddress\n  imageURI\n  kubRaised\n  ponderRaised\n  status\n  kubPairAddress\n  ponderPairAddress\n  hasDualPools\n  ponderPoolSkipped\n  kubLiquidity\n  ponderLiquidity\n  ponderBurned\n  lpWithdrawn\n  lpWithdrawnAt\n  completedAt\n  cancelledAt\n  createdAt\n  updatedAt\n}\n"
+    "text": "query LaunchContributionCardQuery(\n  $launchId: Int!\n) {\n  launch(launchId: $launchId) {\n    ...LaunchContributionCard_launch\n    id\n  }\n}\n\nfragment LaunchContributionCard_launch on Launch {\n  id\n  launchId\n  tokenAddress\n  creatorAddress\n  imageUri\n  kubRaised\n  ponderRaised\n  status\n  kubPairAddress\n  ponderPairAddress\n  hasDualPools\n  ponderPoolSkipped\n  kubLiquidity\n  ponderLiquidity\n  ponderBurned\n  lpWithdrawn\n  lpWithdrawnAt\n  completedAt\n  cancelledAt\n  createdAt\n  updatedAt\n}\n"
   }
 };
 })();

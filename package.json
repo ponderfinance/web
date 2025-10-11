@@ -36,6 +36,7 @@
     "mongodb": "^6.15.0",
     "next": "14.2.17",
     "node-fetch": "^2.7.0",
+    "postgres": "^3.4.7",
     "react": "18.2.0",
     "react-dom": "18.2.0",
     "react-error-boundary": "^6.0.0",
@@ -78,5 +79,6 @@
     "overrides": {
       "viem": "2.23.6"
     }
-  }
+  },
+  "packageManager": "pnpm@10.17.1+sha256.a1e0133f6801c13039ae41309e5e5a7d1058a3a1e1edd020a4944a83c5368d04"
 }

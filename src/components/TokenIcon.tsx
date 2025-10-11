@@ -27,10 +27,10 @@ function extractTokenData(token: any): {
   address: string, 
   symbol: string, 
   name: string, 
-  imageURI: string 
+  imageUri: string 
 } {
   if (!token) {
-    return { address: '', symbol: 'Unknown', name: 'Unknown Token', imageURI: '' };
+    return { address: '', symbol: 'Unknown', name: 'Unknown Token', imageUri: '' };
   }
   
   // If it's a plain object (not a fragment), extract data directly
@@ -39,12 +39,12 @@ function extractTokenData(token: any): {
       address: token.address || '',
       symbol: token.symbol || 'Unknown',
       name: token.name || 'Unknown Token',
-      imageURI: token.imageURI || ''
+      imageUri: token.imageUri || ''
     };
   }
   
   // Otherwise return placeholder data that will be overridden by the fragment
-  return { address: '', symbol: 'Unknown', name: 'Unknown Token', imageURI: '' };
+  return { address: '', symbol: 'Unknown', name: 'Unknown Token', imageUri: '' };
 }
 
 export const TokenIcon: React.FC<TokenIconProps> = ({
@@ -69,7 +69,7 @@ export const TokenIcon: React.FC<TokenIconProps> = ({
   const tokenDisplay = {
     icon: isTokenNative
       ? NATIVE_KUB_ICON
-      : getIpfsGateway(tokenData.imageURI || '') || DEFAULT_TOKEN_ICON,
+      : getIpfsGateway(tokenData.imageUri || '') || DEFAULT_TOKEN_ICON,
     alt: isTokenNative ? 'Native KUB' : tokenData.symbol || 'Unknown Token',
   }
 

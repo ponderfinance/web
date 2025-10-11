@@ -18,7 +18,7 @@ export const tokenFragment = graphql`
     name
     symbol
     decimals
-    imageURI
+    imageUri
   }
 `
 
@@ -45,7 +45,7 @@ export const TokenPair: React.FC<TokenPairProps> = ({
     symbol: isTokenANative ? 'KUB' : tokenAData.symbol || 'Unknown',
     icon: isTokenANative
       ? NATIVE_KUB_ICON
-      : getIpfsGateway(tokenAData.imageURI || '') || DEFAULT_TOKEN_ICON,
+      : getIpfsGateway(tokenAData.imageUri || '') || DEFAULT_TOKEN_ICON,
     name: isTokenANative ? 'Native KUB' : tokenAData.name || 'Unknown Token',
   }
 
@@ -54,7 +54,7 @@ export const TokenPair: React.FC<TokenPairProps> = ({
     symbol: isTokenBNative ? 'KUB' : tokenBData?.symbol || 'Unknown',
     icon: isTokenBNative
       ? NATIVE_KUB_ICON
-      : getIpfsGateway(tokenBData?.imageURI || '') || DEFAULT_TOKEN_ICON,
+      : getIpfsGateway(tokenBData?.imageUri || '') || DEFAULT_TOKEN_ICON,
     name: isTokenBNative ? 'Native KUB' : tokenBData?.name || 'Unknown Token',
   }
 

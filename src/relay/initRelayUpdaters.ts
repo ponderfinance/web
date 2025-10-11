@@ -41,9 +41,9 @@ function registerPairUpdater() {
         if (!pairRecord) return;
         
         // Update volume fields - handle both field naming conventions
-        // volumeUSD24h is the Redis event field, volume24h is the GraphQL field
-        if (data.volumeUSD24h !== undefined) {
-          pairRecord.setValue(data.volumeUSD24h, 'volume24h');
+        // volumeUsd24h is the Redis event field, volume24h is the GraphQL field
+        if (data.volumeUsd24h !== undefined) {
+          pairRecord.setValue(data.volumeUsd24h, 'volume24h');
         } else if (data.volume24h !== undefined) {
           pairRecord.setValue(data.volume24h, 'volume24h');
         }
@@ -54,19 +54,19 @@ function registerPairUpdater() {
         }
         
         // Handle TVL/reserves with both naming conventions
-        if (data.reserveUSD !== undefined) {
-          pairRecord.setValue(data.reserveUSD, 'reserveUSD');
+        if (data.reserveUsd !== undefined) {
+          pairRecord.setValue(data.reserveUsd, 'reserveUsd');
           // Also update tvl field if it exists in the record
           if (pairRecord.getType() === 'Pair') {
-            pairRecord.setValue(data.reserveUSD, 'tvl');
+            pairRecord.setValue(data.reserveUsd, 'tvl');
           }
         }
         
         if (data.tvl !== undefined) {
           pairRecord.setValue(data.tvl, 'tvl');
-          // Also update reserveUSD if it exists
+          // Also update reserveUsd if it exists
           if (pairRecord.getType() === 'Pair') {
-            pairRecord.setValue(data.tvl, 'reserveUSD');
+            pairRecord.setValue(data.tvl, 'reserveUsd');
           }
         }
         
@@ -80,12 +80,12 @@ function registerPairUpdater() {
         }
         
         // Handle APR fields
-        if (data.poolAPR !== undefined) {
-          pairRecord.setValue(data.poolAPR, 'poolAPR');
+        if (data.poolApr !== undefined) {
+          pairRecord.setValue(data.poolApr, 'poolApr');
         }
         
-        if (data.rewardAPR !== undefined) {
-          pairRecord.setValue(data.rewardAPR, 'rewardAPR');
+        if (data.rewardApr !== undefined) {
+          pairRecord.setValue(data.rewardApr, 'rewardApr');
         }
         
         // Add last updated timestamp
@@ -116,12 +116,12 @@ function registerMetricsUpdater() {
         }
         
         // Update metrics fields - handle main metrics
-        if (data.dailyVolumeUSD !== undefined) {
-          metricsRecord.setValue(data.dailyVolumeUSD, 'dailyVolumeUSD');
+        if (data.dailyVolumeUsd !== undefined) {
+          metricsRecord.setValue(data.dailyVolumeUsd, 'dailyVolumeUsd');
         }
         
-        if (data.totalValueLockedUSD !== undefined) {
-          metricsRecord.setValue(data.totalValueLockedUSD, 'totalValueLockedUSD');
+        if (data.totalValueLockedUsd !== undefined) {
+          metricsRecord.setValue(data.totalValueLockedUsd, 'totalValueLockedUsd');
         }
         
         // Handle volume change percentages
@@ -134,10 +134,10 @@ function registerMetricsUpdater() {
         }
         
         // Handle weekly volume with different possible field names
-        if (data.weeklyVolumeUSD !== undefined) {
-          metricsRecord.setValue(data.weeklyVolumeUSD, 'weeklyVolumeUSD');
+        if (data.weeklyVolumeUsd !== undefined) {
+          metricsRecord.setValue(data.weeklyVolumeUsd, 'weeklyVolumeUsd');
         } else if (data.volume7d !== undefined) {
-          metricsRecord.setValue(data.volume7d, 'weeklyVolumeUSD');
+          metricsRecord.setValue(data.volume7d, 'weeklyVolumeUsd');
         }
         
         // Handle additional metrics if they exist

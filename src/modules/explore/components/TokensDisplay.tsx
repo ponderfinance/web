@@ -141,9 +141,9 @@ export const TokensDisplay: React.FC<TokensDisplayProps> = ({
         </View.Item>
 
         <View.Item columns={2}>
-          <Actionable onClick={() => handleSort('priceUSD')}>
+          <Actionable onClick={() => handleSort('priceUsd')}>
             <Text color="neutral-faded" weight="medium">
-              Price {orderBy === 'priceUSD' && (orderDirection === 'asc' ? '↑' : '↓')}
+              Price {orderBy === 'priceUsd' && (orderDirection === 'asc' ? '↑' : '↓')}
             </Text>
           </Actionable>
         </View.Item>
@@ -173,9 +173,9 @@ export const TokensDisplay: React.FC<TokensDisplayProps> = ({
         </View.Item>
 
         <View.Item columns={2}>
-          <Actionable onClick={() => handleSort('volumeUSD24h')}>
+          <Actionable onClick={() => handleSort('volumeUsd24h')}>
             <Text color="neutral-faded" weight="medium">
-              Volume {orderBy === 'volumeUSD24h' && (orderDirection === 'asc' ? '↑' : '↓')}
+              Volume {orderBy === 'volumeUsd24h' && (orderDirection === 'asc' ? '↑' : '↓')}
             </Text>
           </Actionable>
         </View.Item>
@@ -201,7 +201,7 @@ export const TokensDisplay: React.FC<TokensDisplayProps> = ({
                 <View direction="row" gap={2} align="center">
                   <div className="flex items-center">
                     <Image
-                      src={getIpfsGateway(node.imageURI ?? '/tokens/coin.svg')}
+                      src={getIpfsGateway(node.imageUri ?? '/tokens/coin.svg')}
                       width={8}
                       height={8}
                       alt={node.symbol || 'Token'}
@@ -217,7 +217,7 @@ export const TokensDisplay: React.FC<TokensDisplayProps> = ({
               </View.Item>
 
               <View.Item columns={2}>
-                <Text>{formatCurrency(node.priceUSD)}</Text>
+                <Text>{formatCurrency(node.priceUsd)}</Text>
               </View.Item>
 
               <View.Item columns={1}>
@@ -237,7 +237,7 @@ export const TokensDisplay: React.FC<TokensDisplayProps> = ({
               </View.Item>
 
               <View.Item columns={2}>
-                <Text>{formatCurrency(node.volumeUSD24h)}</Text>
+                <Text>{formatCurrency(node.volumeUsd24h)}</Text>
               </View.Item>
             </View>
           </Link>

@@ -1,5 +1,5 @@
 /**
- * @generated SignedSource<<1d712f47c9d5044c0e18fd83d3463a2c>>
+ * @generated SignedSource<<21e9ae709388f5f49ee69c23dd3b3781>>
  * @lightSyntaxTransform
  * @nogrep
  */
@@ -17,7 +17,7 @@ export type LaunchContributionCard_launch$data = {
   readonly creatorAddress: string;
   readonly hasDualPools: boolean | null;
   readonly id: string;
-  readonly imageURI: string;
+  readonly imageUri: string;
   readonly kubLiquidity: string | null;
   readonly kubPairAddress: string | null;
   readonly kubRaised: string;
@@ -77,7 +77,7 @@ const node: ReaderFragment = {
       "alias": null,
       "args": null,
       "kind": "ScalarField",
-      "name": "imageURI",
+      "name": "imageUri",
       "storageKey": null
     },
     {
@@ -197,6 +197,6 @@ const node: ReaderFragment = {
   "abstractKey": null
 };
 
-(node as any).hash = "04fa44662ec088a087c26014cb8c990d";
+(node as any).hash = "fd36ff7bcfedfc7db6f979183fc709c0";
 
 export default node;

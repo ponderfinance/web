@@ -11,8 +11,8 @@ import { withRelayBoundary } from '@/src/lib/relay/withRelayBoundary'
 export const protocolMetricsQuery = graphql`
   query ProtocolMetricsQuery {
     protocolMetrics {
-      dailyVolumeUSD
-      totalValueLockedUSD
+      dailyVolumeUsd
+      totalValueLockedUsd
       volume24hChange
     }
   }
@@ -77,8 +77,8 @@ const ProtocolMetricsContent = () => {
   )
   
   // Access data directly from the response structure
-  const dailyVolume = data.protocolMetrics?.dailyVolumeUSD || '0'
-  const tvl = data.protocolMetrics?.totalValueLockedUSD || '0'
+  const dailyVolume = data.protocolMetrics?.dailyVolumeUsd || '0'
+  const tvl = data.protocolMetrics?.totalValueLockedUsd || '0'
   const volumeChange = data.protocolMetrics?.volume24hChange || 0
   
   return (

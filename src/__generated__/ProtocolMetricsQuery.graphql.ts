@@ -1,5 +1,5 @@
 /**
- * @generated SignedSource<<6d519bdc77d8372345532d806e0d0642>>
+ * @generated SignedSource<<d393dc368bef0d4f8501edbc7ec07266>>
  * @lightSyntaxTransform
  * @nogrep
  */
@@ -12,8 +12,8 @@ import { ConcreteRequest, Query } from 'relay-runtime';
 export type ProtocolMetricsQuery$variables = {};
 export type ProtocolMetricsQuery$data = {
   readonly protocolMetrics: {
-    readonly dailyVolumeUSD: string;
-    readonly totalValueLockedUSD: string;
+    readonly dailyVolumeUsd: string;
+    readonly totalValueLockedUsd: string;
     readonly volume24hChange: number | null;
   };
 };
@@ -27,14 +27,14 @@ var v0 = {
   "alias": null,
   "args": null,
   "kind": "ScalarField",
-  "name": "dailyVolumeUSD",
+  "name": "dailyVolumeUsd",
   "storageKey": null
 },
 v1 = {
   "alias": null,
   "args": null,
   "kind": "ScalarField",
-  "name": "totalValueLockedUSD",
+  "name": "totalValueLockedUsd",
   "storageKey": null
 },
 v2 = {
@@ -99,16 +99,16 @@ return {
     ]
   },
   "params": {
-    "cacheID": "a5042b92301efa569fcfe71512728fd5",
+    "cacheID": "54995847ca5a5e50053655d2e8115012",
     "id": null,
     "metadata": {},
     "name": "ProtocolMetricsQuery",
     "operationKind": "query",
-    "text": "query ProtocolMetricsQuery {\n  protocolMetrics {\n    dailyVolumeUSD\n    totalValueLockedUSD\n    volume24hChange\n    id\n  }\n}\n"
+    "text": "query ProtocolMetricsQuery {\n  protocolMetrics {\n    dailyVolumeUsd\n    totalValueLockedUsd\n    volume24hChange\n    id\n  }\n}\n"
   }
 };
 })();
 
-(node as any).hash = "e3815741cd1c8c84770975ab22ba1662";
+(node as any).hash = "c600c0627372acacf8f4f5adb655ddf4";
 
 export default node;

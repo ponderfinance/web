@@ -59,9 +59,9 @@ export const poolsPageFragment = graphql`
             ...TokenPairFragment
           }
           tvl
-          reserveUSD
-          poolAPR
-          rewardAPR
+          reserveUsd
+          poolApr
+          rewardApr
           volume24h
           volume30d
         }
@@ -287,11 +287,11 @@ const PoolsPageContent = () => {
   const getInitialSortParams = () => {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
-      const orderBy = params.get('orderBy') as PairOrderBy || 'reserveUSD';
+      const orderBy = params.get('orderBy') as PairOrderBy || 'reserveUsd';
       const orderDirection = params.get('orderDirection') as OrderDirection || 'desc';
       return { orderBy, orderDirection };
     }
-    return { orderBy: 'reserveUSD' as PairOrderBy, orderDirection: 'desc' as OrderDirection };
+    return { orderBy: 'reserveUsd' as PairOrderBy, orderDirection: 'desc' as OrderDirection };
   };
 
   const [sortParams, setSortParams] = React.useState(getInitialSortParams);

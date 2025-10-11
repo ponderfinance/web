@@ -1,5 +1,5 @@
 /**
- * @generated SignedSource<<f21363d169f35a33ace023b222896ddd>>
+ * @generated SignedSource<<bf906a5c9e64a332a59f93736cd24615>>
  * @lightSyntaxTransform
  * @nogrep
  */
@@ -11,7 +11,7 @@
 import { ConcreteRequest, Query } from 'relay-runtime';
 import { FragmentRefs } from "relay-runtime";
 export type OrderDirection = "asc" | "desc" | "%future added value";
-export type PairOrderBy = "createdAt" | "reserveUSD" | "volumeUSD" | "%future added value";
+export type PairOrderBy = "createdAt" | "reserveUsd" | "volumeUsd" | "%future added value";
 export type PoolsPagePaginationQuery$variables = {
   after?: string | null;
   first: number;
@@ -113,7 +113,7 @@ v4 = [
     "alias": null,
     "args": null,
     "kind": "ScalarField",
-    "name": "imageURI",
+    "name": "imageUri",
     "storageKey": null
   }
 ];
@@ -196,21 +196,21 @@ return {
                     "alias": null,
                     "args": null,
                     "kind": "ScalarField",
-                    "name": "reserveUSD",
+                    "name": "reserveUsd",
                     "storageKey": null
                   },
                   {
                     "alias": null,
                     "args": null,
                     "kind": "ScalarField",
-                    "name": "poolAPR",
+                    "name": "poolApr",
                     "storageKey": null
                   },
                   {
                     "alias": null,
                     "args": null,
                     "kind": "ScalarField",
-                    "name": "rewardAPR",
+                    "name": "rewardApr",
                     "storageKey": null
                   },
                   {
@@ -297,16 +297,16 @@ return {
     ]
   },
   "params": {
-    "cacheID": "87a6e9a8c5da25d7e10a21bc9e95516f",
+    "cacheID": "8c7189bd0695ed0e7306cfa1c1f0f772",
     "id": null,
     "metadata": {},
     "name": "PoolsPagePaginationQuery",
     "operationKind": "query",
-    "text": "query PoolsPagePaginationQuery(\n  $after: String\n  $first: Int!\n  $orderBy: PairOrderBy!\n  $orderDirection: OrderDirection!\n) {\n  ...PoolsPage_pairs_3MMUTb\n}\n\nfragment PoolsPage_pairs_3MMUTb on Query {\n  pairs(first: $first, after: $after, orderBy: $orderBy, orderDirection: $orderDirection) {\n    edges {\n      node {\n        id\n        address\n        token0 {\n          id\n          address\n          symbol\n          decimals\n          ...TokenPairFragment\n        }\n        token1 {\n          id\n          address\n          symbol\n          decimals\n          ...TokenPairFragment\n        }\n        tvl\n        reserveUSD\n        poolAPR\n        rewardAPR\n        volume24h\n        volume30d\n        __typename\n      }\n      cursor\n    }\n    pageInfo {\n      hasNextPage\n      endCursor\n    }\n    totalCount\n  }\n}\n\nfragment TokenPairFragment on Token {\n  id\n  address\n  name\n  symbol\n  decimals\n  imageURI\n}\n"
+    "text": "query PoolsPagePaginationQuery(\n  $after: String\n  $first: Int!\n  $orderBy: PairOrderBy!\n  $orderDirection: OrderDirection!\n) {\n  ...PoolsPage_pairs_3MMUTb\n}\n\nfragment PoolsPage_pairs_3MMUTb on Query {\n  pairs(first: $first, after: $after, orderBy: $orderBy, orderDirection: $orderDirection) {\n    edges {\n      node {\n        id\n        address\n        token0 {\n          id\n          address\n          symbol\n          decimals\n          ...TokenPairFragment\n        }\n        token1 {\n          id\n          address\n          symbol\n          decimals\n          ...TokenPairFragment\n        }\n        tvl\n        reserveUsd\n        poolApr\n        rewardApr\n        volume24h\n        volume30d\n        __typename\n      }\n      cursor\n    }\n    pageInfo {\n      hasNextPage\n      endCursor\n    }\n    totalCount\n  }\n}\n\nfragment TokenPairFragment on Token {\n  id\n  address\n  name\n  symbol\n  decimals\n  imageUri\n}\n"
   }
 };
 })();
 
-(node as any).hash = "562e70d168feed344726d5c98ef72069";
+(node as any).hash = "65e867f55da377f965142e768093b4d2";
 
 export default node;

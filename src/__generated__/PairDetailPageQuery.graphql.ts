@@ -1,5 +1,5 @@
 /**
- * @generated SignedSource<<f1e57a75427f381d2b75cfcb0d0aa76d>>
+ * @generated SignedSource<<be641ff6d51d1ccf7f3327a3171ca161>>
  * @lightSyntaxTransform
  * @nogrep
  */
@@ -19,21 +19,21 @@ export type PairDetailPageQuery$data = {
   readonly pairByAddress: {
     readonly address: string;
     readonly id: string;
-    readonly poolAPR: number | null;
+    readonly poolApr: number | null;
     readonly reserve0: string;
     readonly reserve1: string;
-    readonly reserveUSD: string;
-    readonly rewardAPR: number | null;
+    readonly reserveUsd: string;
+    readonly rewardApr: number | null;
     readonly token0: {
       readonly address: string;
       readonly id: string;
-      readonly priceUSD: string | null;
+      readonly priceUsd: string | null;
       readonly symbol: string | null;
     };
     readonly token1: {
       readonly address: string;
       readonly id: string;
-      readonly priceUSD: string | null;
+      readonly priceUsd: string | null;
       readonly symbol: string | null;
     };
     readonly tvl: number;
@@ -108,7 +108,7 @@ v8 = {
   "alias": null,
   "args": null,
   "kind": "ScalarField",
-  "name": "reserveUSD",
+  "name": "reserveUsd",
   "storageKey": null
 },
 v9 = {
@@ -136,14 +136,14 @@ v12 = {
   "alias": null,
   "args": null,
   "kind": "ScalarField",
-  "name": "poolAPR",
+  "name": "poolApr",
   "storageKey": null
 },
 v13 = {
   "alias": null,
   "args": null,
   "kind": "ScalarField",
-  "name": "rewardAPR",
+  "name": "rewardApr",
   "storageKey": null
 },
 v14 = [
@@ -160,7 +160,7 @@ v14 = [
     "alias": null,
     "args": null,
     "kind": "ScalarField",
-    "name": "priceUSD",
+    "name": "priceUsd",
     "storageKey": null
   }
 ],
@@ -373,16 +373,16 @@ return {
     ]
   },
   "params": {
-    "cacheID": "da0e41334afd8e0c1c235a0cb0526564",
+    "cacheID": "5d673781617b35fe002da1a8d977adeb",
     "id": null,
     "metadata": {},
     "name": "PairDetailPageQuery",
     "operationKind": "query",
-    "text": "query PairDetailPageQuery(\n  $pairAddress: String!\n  $timeframe: String!\n  $limit: Int!\n) {\n  pairByAddress(address: $pairAddress) {\n    id\n    address\n    reserve0\n    reserve1\n    reserveUSD\n    tvl\n    volume24h\n    volumeChange24h\n    poolAPR\n    rewardAPR\n    token0 {\n      id\n      symbol\n      address\n      priceUSD\n    }\n    token1 {\n      id\n      symbol\n      address\n      priceUSD\n    }\n    ...PriceChartContainer_pair\n  }\n  pairPriceChart(pairAddress: $pairAddress, timeframe: $timeframe, limit: $limit) {\n    ...PriceChartContainer_priceData\n  }\n  pairVolumeChart(pairAddress: $pairAddress, timeframe: $timeframe, limit: $limit) {\n    ...PriceChartContainer_volumeData\n  }\n}\n\nfragment PriceChartContainer_pair on Pair {\n  id\n  address\n  token0 {\n    id\n    symbol\n  }\n  token1 {\n    id\n    symbol\n  }\n}\n\nfragment PriceChartContainer_priceData on ChartDataPoint {\n  time\n  value\n}\n\nfragment PriceChartContainer_volumeData on VolumeChartData {\n  time\n  value\n  volume0\n  volume1\n  count\n}\n"
+    "text": "query PairDetailPageQuery(\n  $pairAddress: String!\n  $timeframe: String!\n  $limit: Int!\n) {\n  pairByAddress(address: $pairAddress) {\n    id\n    address\n    reserve0\n    reserve1\n    reserveUsd\n    tvl\n    volume24h\n    volumeChange24h\n    poolApr\n    rewardApr\n    token0 {\n      id\n      symbol\n      address\n      priceUsd\n    }\n    token1 {\n      id\n      symbol\n      address\n      priceUsd\n    }\n    ...PriceChartContainer_pair\n  }\n  pairPriceChart(pairAddress: $pairAddress, timeframe: $timeframe, limit: $limit) {\n    ...PriceChartContainer_priceData\n  }\n  pairVolumeChart(pairAddress: $pairAddress, timeframe: $timeframe, limit: $limit) {\n    ...PriceChartContainer_volumeData\n  }\n}\n\nfragment PriceChartContainer_pair on Pair {\n  id\n  address\n  token0 {\n    id\n    symbol\n  }\n  token1 {\n    id\n    symbol\n  }\n}\n\nfragment PriceChartContainer_priceData on ChartDataPoint {\n  time\n  value\n}\n\nfragment PriceChartContainer_volumeData on VolumeChartData {\n  time\n  value\n  volume0\n  volume1\n  count\n}\n"
   }
 };
 })();
 
-(node as any).hash = "e445a9dfd3c5cc8c06b748d225bd644e";
+(node as any).hash = "d1906a7abc00d10dfa1eddb3ab6d489d";
 
 export default node;

@@ -8,5 +8,6 @@ export const privyConfig: PrivyClientConfig = {
   appearance: {
     theme: 'dark',
     walletList: ['okx_wallet', 'detected_wallets', 'metamask', 'wallet_connect'],
+    showWalletLoginFirst: true,
   },
 }

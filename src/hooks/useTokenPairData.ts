@@ -18,7 +18,7 @@ function createNativeKubFragment(): TokenPairFragment$key {
     name: 'Native KUB',
     symbol: 'KUB',
     decimals: 18,
-    imageURI: NATIVE_KUB_ICON,
+    imageUri: NATIVE_KUB_ICON,
     ' $fragmentSpreads': {
       TokenPairFragment: true
     }

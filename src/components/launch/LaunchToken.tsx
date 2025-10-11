@@ -11,7 +11,7 @@ const LaunchTokenFragment = graphql`
     launchId
     tokenAddress
     creatorAddress
-    imageURI
+    imageUri
     kubRaised
     ponderRaised
     status
@@ -44,7 +44,7 @@ export default function LaunchToken({ launch }: LaunchTokenProps) {
         {/* Launch Image */}
         <View position="relative" height={400}>
           <Image
-            src={getIpfsGateway(data.imageURI ?? '')}
+            src={getIpfsGateway(data.imageUri ?? '')}
             alt={`Launch #${data.launchId}`}
             width="100%"
             height="100%"

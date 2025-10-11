@@ -1,5 +1,5 @@
 /**
- * @generated SignedSource<<440453b2b5b4331d1f2ef5cf503b8987>>
+ * @generated SignedSource<<83261079b0043062580c84f12808cb99>>
  * @lightSyntaxTransform
  * @nogrep
  */
@@ -10,7 +10,7 @@
 
 import { ConcreteRequest, Query } from 'relay-runtime';
 export type OrderDirection = "asc" | "desc" | "%future added value";
-export type PairOrderBy = "createdAt" | "reserveUSD" | "volumeUSD" | "%future added value";
+export type PairOrderBy = "createdAt" | "reserveUsd" | "volumeUsd" | "%future added value";
 export type PoolsListQuery$variables = {
   first: number;
   orderBy: PairOrderBy;
@@ -22,7 +22,7 @@ export type PoolsListQuery$data = {
       readonly node: {
         readonly address: string;
         readonly id: string;
-        readonly reserveUSD: string;
+        readonly reserveUsd: string;
         readonly token0: {
           readonly address: string;
           readonly decimals: number | null;
@@ -174,7 +174,7 @@ v4 = [
                 "alias": null,
                 "args": null,
                 "kind": "ScalarField",
-                "name": "reserveUSD",
+                "name": "reserveUsd",
                 "storageKey": null
               }
             ],
@@ -237,16 +237,16 @@ return {
     "selections": (v4/*: any*/)
   },
   "params": {
-    "cacheID": "77794d02be0c46ffffe5bfd49f14aa45",
+    "cacheID": "e4ea6bea780168e3f831719439061d74",
     "id": null,
     "metadata": {},
     "name": "PoolsListQuery",
     "operationKind": "query",
-    "text": "query PoolsListQuery(\n  $first: Int!\n  $orderBy: PairOrderBy!\n  $orderDirection: OrderDirection!\n) {\n  pairs(first: $first, orderBy: $orderBy, orderDirection: $orderDirection) {\n    edges {\n      node {\n        id\n        address\n        token0 {\n          id\n          address\n          symbol\n          decimals\n        }\n        token1 {\n          id\n          address\n          symbol\n          decimals\n        }\n        tvl\n        reserveUSD\n      }\n    }\n    pageInfo {\n      hasNextPage\n      endCursor\n    }\n    totalCount\n  }\n}\n"
+    "text": "query PoolsListQuery(\n  $first: Int!\n  $orderBy: PairOrderBy!\n  $orderDirection: OrderDirection!\n) {\n  pairs(first: $first, orderBy: $orderBy, orderDirection: $orderDirection) {\n    edges {\n      node {\n        id\n        address\n        token0 {\n          id\n          address\n          symbol\n          decimals\n        }\n        token1 {\n          id\n          address\n          symbol\n          decimals\n        }\n        tvl\n        reserveUsd\n      }\n    }\n    pageInfo {\n      hasNextPage\n      endCursor\n    }\n    totalCount\n  }\n}\n"
   }
 };
 })();
 
-(node as any).hash = "57fcf02ac2895c908c6a8175af909b9a";
+(node as any).hash = "995e2d85979d398cc0501541af47f51a";
 
 export default node;

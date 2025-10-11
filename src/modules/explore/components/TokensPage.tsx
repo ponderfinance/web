@@ -44,13 +44,13 @@ export const tokensPageFragment = graphql`
         node {
           id
           address
-          imageURI
+          imageUri
           name
           symbol
-          priceUSD
+          priceUsd
           priceChange1h
           priceChange24h
-          volumeUSD24h
+          volumeUsd24h
           volume1h
           fdv
           ...TokenPairFragment
@@ -277,11 +277,11 @@ const TokensPageContent = () => {
   const getInitialSortParams = () => {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
-      const orderBy = params.get('orderBy') as TokenOrderBy || 'volumeUSD24h';
+      const orderBy = params.get('orderBy') as TokenOrderBy || 'volumeUsd24h';
       const orderDirection = params.get('orderDirection') as OrderDirection || 'desc';
       return { orderBy, orderDirection };
     }
-    return { orderBy: 'volumeUSD24h' as TokenOrderBy, orderDirection: 'desc' as OrderDirection };
+    return { orderBy: 'volumeUsd24h' as TokenOrderBy, orderDirection: 'desc' as OrderDirection };
   };
 
   const [sortParams, setSortParams] = React.useState(getInitialSortParams);

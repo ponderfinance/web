@@ -1,5 +1,5 @@
 /**
- * @generated SignedSource<<78bd2a72fc71e859862a1f1a5fb1a1ef>>
+ * @generated SignedSource<<b78219ea12869ae977db73e466c64fcb>>
  * @lightSyntaxTransform
  * @nogrep
  */
@@ -101,7 +101,7 @@ v4 = [
     "alias": null,
     "args": null,
     "kind": "ScalarField",
-    "name": "imageURI",
+    "name": "imageUri",
     "storageKey": null
   }
 ];
@@ -165,12 +165,12 @@ return {
     ]
   },
   "params": {
-    "cacheID": "7576b6df94d9e3a0de8ba6ae9e16164b",
+    "cacheID": "7eb32d36294903983cdb58aa58c46f7f",
     "id": null,
     "metadata": {},
     "name": "TokenPairFromAddressesQuery",
     "operationKind": "query",
-    "text": "query TokenPairFromAddressesQuery(\n  $tokenAAddress: String!\n  $tokenBAddress: String!\n) {\n  tokenA: tokenByAddress(address: $tokenAAddress) {\n    ...TokenPairFragment\n    id\n  }\n  tokenB: tokenByAddress(address: $tokenBAddress) {\n    ...TokenPairFragment\n    id\n  }\n}\n\nfragment TokenPairFragment on Token {\n  id\n  address\n  name\n  symbol\n  decimals\n  imageURI\n}\n"
+    "text": "query TokenPairFromAddressesQuery(\n  $tokenAAddress: String!\n  $tokenBAddress: String!\n) {\n  tokenA: tokenByAddress(address: $tokenAAddress) {\n    ...TokenPairFragment\n    id\n  }\n  tokenB: tokenByAddress(address: $tokenBAddress) {\n    ...TokenPairFragment\n    id\n  }\n}\n\nfragment TokenPairFragment on Token {\n  id\n  address\n  name\n  symbol\n  decimals\n  imageUri\n}\n"
   }
 };
 })();

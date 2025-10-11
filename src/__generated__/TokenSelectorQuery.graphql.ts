@@ -1,5 +1,5 @@
 /**
- * @generated SignedSource<<dd7ea09d25073cd537c730a85a2332d3>>
+ * @generated SignedSource<<c661396dfb42fe8fca95caa110746c29>>
  * @lightSyntaxTransform
  * @nogrep
  */
@@ -35,7 +35,7 @@ var v0 = [
   {
     "kind": "Literal",
     "name": "orderBy",
-    "value": "priceUSD"
+    "value": "priceUsd"
   },
   {
     "kind": "Literal",
@@ -86,7 +86,7 @@ return {
             "storageKey": null
           }
         ],
-        "storageKey": "tokens(first:12,orderBy:\"priceUSD\",orderDirection:\"desc\")"
+        "storageKey": "tokens(first:12,orderBy:\"priceUsd\",orderDirection:\"desc\")"
       }
     ],
     "type": "Query",
@@ -161,14 +161,14 @@ return {
                     "alias": null,
                     "args": null,
                     "kind": "ScalarField",
-                    "name": "imageURI",
+                    "name": "imageUri",
                     "storageKey": null
                   },
                   {
                     "alias": null,
                     "args": null,
                     "kind": "ScalarField",
-                    "name": "priceUSD",
+                    "name": "priceUsd",
                     "storageKey": null
                   }
                 ],
@@ -178,21 +178,21 @@ return {
             "storageKey": null
           }
         ],
-        "storageKey": "tokens(first:12,orderBy:\"priceUSD\",orderDirection:\"desc\")"
+        "storageKey": "tokens(first:12,orderBy:\"priceUsd\",orderDirection:\"desc\")"
       }
     ]
   },
   "params": {
-    "cacheID": "746f43f5eb26563e63ad6f90b4b64a00",
+    "cacheID": "712591fd941ec58c7505171c19af8bd0",
     "id": null,
     "metadata": {},
     "name": "TokenSelectorQuery",
     "operationKind": "query",
-    "text": "query TokenSelectorQuery {\n  tokens(first: 12, orderBy: priceUSD, orderDirection: desc) {\n    edges {\n      node {\n        ...TokenSelectorTokenFragment\n        id\n      }\n    }\n  }\n}\n\nfragment TokenSelectorTokenFragment on Token {\n  id\n  address\n  name\n  symbol\n  decimals\n  imageURI\n  priceUSD\n}\n"
+    "text": "query TokenSelectorQuery {\n  tokens(first: 12, orderBy: priceUsd, orderDirection: desc) {\n    edges {\n      node {\n        ...TokenSelectorTokenFragment\n        id\n      }\n    }\n  }\n}\n\nfragment TokenSelectorTokenFragment on Token {\n  id\n  address\n  name\n  symbol\n  decimals\n  imageUri\n  priceUsd\n}\n"
   }
 };
 })();
 
-(node as any).hash = "70851f65ea99a2d785cf7023611b7a87";
+(node as any).hash = "29e389336ff237f4ea8431370edf0264";
 
 export default node;

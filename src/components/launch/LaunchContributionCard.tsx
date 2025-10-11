@@ -20,7 +20,7 @@ const LaunchContributionCardFragment = graphql`
     launchId
     tokenAddress
     creatorAddress
-    imageURI
+    imageUri
     kubRaised
     ponderRaised
     status
