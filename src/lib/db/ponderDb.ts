@@ -14,12 +14,14 @@ if (!DATABASE_URL) {
   throw new Error('PONDER_DATABASE_URL or DATABASE_URL must be set');
 }
 
+const DATABASE_SCHEMA = process.env.DATABASE_SCHEMA || 'ponder';
+
 const sql = postgres(DATABASE_URL, {
   ssl: 'require',
   max: 10,
-  // Set search_path to 'ponder' schema so all queries use Ponder's tables
+  // Set search_path to schema so all queries use Ponder's tables
   connection: {
-    search_path: 'ponder'
+    search_path: DATABASE_SCHEMA
   }
 });
 
@@ -83,13 +85,17 @@ function buildWhereClause(where: any): { sql: string; values: any[] } {
   for (const [key, value] of Object.entries(where)) {
     // Handle OR operator
     if (key === 'OR' && Array.isArray(value)) {
+      console.log('[buildWhereClause] Processing OR with', value.length, 'conditions');
       const orConditions: string[] = [];
       value.forEach(orWhere => {
+        console.log('[buildWhereClause] OR condition:', orWhere);
         for (const [orKey, orValue] of Object.entries(orWhere)) {
           const snakeKey = toSnakeCase(orKey);
+          console.log(`[buildWhereClause] Field ${orKey} -> ${snakeKey}, value: ${orValue}`);
           // Special case: address fields should be case-insensitive
           if (snakeKey === 'address' || snakeKey.endsWith('_address')) {
             orConditions.push(`LOWER(${snakeKey}) = LOWER($${paramIndex})`);
+            console.log(`[buildWhereClause] Added address condition: LOWER(${snakeKey}) = LOWER($${paramIndex})`);
           } else {
             orConditions.push(`${snakeKey} = $${paramIndex}`);
           }
@@ -98,15 +104,54 @@ function buildWhereClause(where: any): { sql: string; values: any[] } {
         }
       });
       if (orConditions.length > 0) {
-        conditions.push(`(${orConditions.join(' OR ')})`);
+        const finalCondition = `(${orConditions.join(' OR ')})`;
+        conditions.push(finalCondition);
+        console.log('[buildWhereClause] Final OR clause:', finalCondition);
+        console.log('[buildWhereClause] Values:', values);
       }
       continue;
     }
 
     const snakeKey = toSnakeCase(key);
 
-    // Handle Prisma operators (contains, mode, etc.)
+    // Handle Prisma operators (contains, gte, lte, gt, lt, in, etc.)
     if (typeof value === 'object' && value !== null) {
+      // Handle range operators
+      if (value.gte !== undefined) {
+        conditions.push(`${snakeKey} >= $${paramIndex}`);
+        values.push(value.gte);
+        paramIndex++;
+      }
+      if (value.lte !== undefined) {
+        conditions.push(`${snakeKey} <= $${paramIndex}`);
+        values.push(value.lte);
+        paramIndex++;
+      }
+      if (value.gt !== undefined) {
+        conditions.push(`${snakeKey} > $${paramIndex}`);
+        values.push(value.gt);
+        paramIndex++;
+      }
+      if (value.lt !== undefined) {
+        conditions.push(`${snakeKey} < $${paramIndex}`);
+        values.push(value.lt);
+        paramIndex++;
+      }
+      // Handle IN operator
+      if (value.in !== undefined && Array.isArray(value.in)) {
+        const placeholders = value.in.map((_, i) => `$${paramIndex + i}`).join(', ');
+        conditions.push(`${snakeKey} IN (${placeholders})`);
+        values.push(...value.in);
+        paramIndex += value.in.length;
+      }
+      // Handle NOT IN operator
+      if (value.notIn !== undefined && Array.isArray(value.notIn)) {
+        const placeholders = value.notIn.map((_, i) => `$${paramIndex + i}`).join(', ');
+        conditions.push(`${snakeKey} NOT IN (${placeholders})`);
+        values.push(...value.notIn);
+        paramIndex += value.notIn.length;
+      }
+      // Handle contains
       if (value.contains !== undefined) {
         // Case-insensitive LIKE for contains
         if (value.mode === 'insensitive') {
@@ -115,11 +160,6 @@ function buildWhereClause(where: any): { sql: string; values: any[] } {
           conditions.push(`${snakeKey} LIKE $${paramIndex}`);
         }
         values.push(`%${value.contains}%`);
-        paramIndex++;
-      } else {
-        // Default to equality for other object values
-        conditions.push(`${snakeKey} = $${paramIndex}`);
-        values.push(JSON.stringify(value));
         paramIndex++;
       }
     } else {
@@ -199,10 +239,10 @@ const token = {
     const orderByClause = buildOrderByClause(orderBy);
 
     let cursorClause = '';
-    if (cursor && cursor.id) {
+    if (cursor && cursor.address) {
       const cursorIndex = values.length + 1;
-      cursorClause = `AND id > $${cursorIndex}`;
-      values.push(cursor.id);
+      cursorClause = `AND address > $${cursorIndex}`;
+      values.push(cursor.address);
     }
 
     const limitClause = take ? `LIMIT ${take}` : '';
@@ -293,7 +333,11 @@ const pair = {
       ${offsetClause}
     `;
 
+    console.log('[PonderDB] pair.findMany query:', query);
+    console.log('[PonderDB] pair.findMany values:', values);
+
     const result = await sql.unsafe(query, values);
+    console.log('[PonderDB] pair.findMany result count:', result.length);
     const pairs = result.map(transformRow);
 
     // Fetch related tokens if needed
@@ -444,6 +488,33 @@ const priceObservation = {
     const query = `
       SELECT ${selectClause}
       FROM price_observation
+      ${whereSql}
+      ${orderByClause}
+      ${limitClause}
+      ${offsetClause}
+    `;
+
+    const result = await sql.unsafe(query, values);
+    return result.map(transformRow);
+  }
+};
+
+/**
+ * HourlyPriceSnapshot model adapter (for OHLC chart data)
+ */
+const hourlyPriceSnapshot = {
+  async findMany(params: { where?: any; select?: any; orderBy?: any; take?: number; skip?: number }) {
+    const { where, select, orderBy, take, skip } = params;
+    const selectClause = buildSelectClause(select);
+    const { sql: whereSql, values } = buildWhereClause(where);
+    const orderByClause = buildOrderByClause(orderBy);
+
+    const limitClause = take ? `LIMIT ${take}` : '';
+    const offsetClause = skip ? `OFFSET ${skip}` : '';
+
+    const query = `
+      SELECT ${selectClause}
+      FROM hourly_price_snapshot
       ${whereSql}
       ${orderByClause}
       ${limitClause}
@@ -612,6 +683,7 @@ export const ponderDb = {
   swap,
   liquidityPosition,
   priceObservation,
+  hourlyPriceSnapshot,
   protocolMetric,
   farmingPosition,
   stakingPosition,

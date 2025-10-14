@@ -1,7 +1,6 @@
 // SWITCHED TO PONDER POSTGRES (Prisma still available as fallback)
 import prisma from '@/src/lib/db/prisma'
 import ponderDb from '@/src/lib/db/ponderDb'
-import { getRedisClient, getKey as safeRedisGet, setKey as safeRedisSet, deleteKey as safeRedisDelete } from '@/src/lib/redis'
 import { createPublicClient, http } from 'viem'
 import { CURRENT_CHAIN } from '@/src/constants/chains'
 
@@ -22,20 +21,6 @@ const ERC20_ABI = [
     type: 'function'
   }
 ] as const
-
-// Cache constants
-const CACHE_PREFIXES = {
-  TOKEN: 'token:',
-  CHART: 'chart:',
-  PAIR: 'pair:',
-  PROTOCOL: 'protocol:'
-}
-
-const CACHE_TTLS = {
-  SHORT: 60,
-  MEDIUM: 300,
-  LONG: 1800
-}
 
 // Create publicClient for blockchain interactions
 export const publicClient = createPublicClient({
@@ -312,43 +297,11 @@ class IndustryChartService {
 // LIGHTNING-FAST TOKEN SERVICE
 class FastTokenService {
   
-  // Get token with ULTRA-AGGRESSIVE caching for SUB-1-SECOND performance
+  // Get token directly from database
   static async getToken(address: string, prisma: any): Promise<any> {
     const normalizedAddress = address.toLowerCase()
-    
-    console.log(`[ULTRA_FAST_TOKEN] Looking for token: ${normalizedAddress}`)
-    
-    // ULTRA-AGGRESSIVE CACHING with multiple fallback levels
-    try {
-      const redis = getRedisClient()
-      if (redis) {
-        // Level 1: Lightning cache (15 seconds - fastest possible)
-        const lightningCached = await safeRedisGet(`${CACHE_PREFIXES.TOKEN}${normalizedAddress}:lightning`)
-        if (lightningCached && typeof lightningCached === 'string') {
-          console.log(`[CACHE_HIT] ⚡ Lightning cache for ${normalizedAddress}`)
-          return JSON.parse(lightningCached)
-        }
-        
-        // Level 2: Hot cache (1 minute)
-        const hotCached = await safeRedisGet(`${CACHE_PREFIXES.TOKEN}${normalizedAddress}:hot`)
-        if (hotCached && typeof hotCached === 'string') {
-          console.log(`[CACHE_HIT] 🔥 Hot cache for ${normalizedAddress}`)
-          return JSON.parse(hotCached)
-        }
-        
-        // Level 3: Warm cache (5 minutes)
-        const warmCached = await safeRedisGet(`${CACHE_PREFIXES.TOKEN}${normalizedAddress}:warm`)
-        if (warmCached && typeof warmCached === 'string') {
-          console.log(`[CACHE_HIT] 🌟 Warm cache for ${normalizedAddress}`)
-          return JSON.parse(warmCached)
-        }
-      }
-    } catch (cacheError) {
-      console.log(`[CACHE_ERROR] ${cacheError}`)
-    }
-    
-    // ULTRA-FAST DB QUERY with minimal data fetching
-    console.log(`[ULTRA_FAST_TOKEN] Querying database for ${normalizedAddress}`)
+
+    console.log(`[TOKEN] Fetching token: ${normalizedAddress}`)
     const startTime = performance.now()
     
     // Step 1: Get basic token data super fast
@@ -366,16 +319,18 @@ class FastTokenService {
         priceChange7d: true,
         volumeUsd24h: true,
         lastPriceUpdate: true,
+        totalSupply: true,
+        fdv: true,
         createdAt: true,
         updatedAt: true
       }
     })
-    
+
+
     const dbTime = performance.now()
-    console.log(`[ULTRA_FAST_TOKEN] Token query: ${(dbTime - startTime).toFixed(1)}ms`, !!token, token ? `(${token.symbol})` : '')
-    
+    console.log(`[TOKEN] Query time: ${(dbTime - startTime).toFixed(1)}ms`, token ? `(${token.symbol})` : 'Not found')
+
     if (!token) {
-      console.log(`[ULTRA_FAST_TOKEN] No token found for ${normalizedAddress}`)
       return null
     }
     
@@ -383,14 +338,18 @@ class FastTokenService {
     let tvl = 0
     let marketCap = '0'
     let fdv = '0'
-    
+
+    // Use pre-calculated FDV from database if available
+    if (token.fdv !== null && token.fdv !== undefined) {
+      fdv = token.fdv.toString()
+    }
+
     try {
       const priceUsd = parseFloat(token.priceUsd || '0')
       const decimals = token.decimals || 18
-      
+
       if (priceUsd > 0) {
-        // BLAZING FAST: Single aggregation query to get total reserves
-        const tvlStartTime = performance.now()
+        // Query pairs for TVL calculation
         const pairs = await prisma.pair.findMany({
           where: {
             OR: [
@@ -406,9 +365,6 @@ class FastTokenService {
           }
         })
 
-        const tvlQueryTime = performance.now()
-        console.log(`[ULTRA_FAST_TOKEN] TVL query: ${(tvlQueryTime - tvlStartTime).toFixed(1)}ms`)
-
         // Calculate TVL from reserves
         let totalReserves = 0
         pairs.forEach(pair => {
@@ -420,50 +376,68 @@ class FastTokenService {
             totalReserves += reserveAmount
           }
         })
-        
+
         tvl = totalReserves * priceUsd
-        
-        // Calculate accurate Market Cap and FDV using real token supply data
+
+        // Calculate accurate Market Cap and FDV using database or blockchain data
         if (totalReserves > 0) {
-          try {
-            // Try to get actual token supply from blockchain
-            const tokenSupply = await getTokenSupply(token.address)
-            
-            if (tokenSupply.totalSupply > 0) {
-              // Use real total supply for accurate FDV
-              fdv = (tokenSupply.totalSupply * priceUsd).toFixed(0)
-              
-              // For market cap, use circulating supply if available, otherwise estimate as 70% of total
-              const circulatingSupply = tokenSupply.circulatingSupply > 0 
-                ? tokenSupply.circulatingSupply 
-                : tokenSupply.totalSupply * 0.7 // Conservative 70% circulating estimate
-              
-              marketCap = (circulatingSupply * priceUsd).toFixed(0)
-            } else {
-              // Fallback to TVL-based estimation only if blockchain data unavailable
-              const estimatedCirculatingSupply = totalReserves * 2 // Conservative 2x multiplier
-              const estimatedTotalSupply = totalReserves * 5 // Conservative 5x multiplier for FDV
-              
-              marketCap = (estimatedCirculatingSupply * priceUsd).toFixed(0)
-              fdv = (estimatedTotalSupply * priceUsd).toFixed(0)
+          // If database has totalSupply, use it (faster)
+          if (token.totalSupply && token.totalSupply !== '0') {
+            const totalSupplyNormalized = Number(token.totalSupply) / Math.pow(10, decimals)
+
+            // Only calculate FDV if not already set from database
+            if (!token.fdv) {
+              fdv = (totalSupplyNormalized * priceUsd).toFixed(0)
             }
-          } catch (supplyError) {
-            console.log(`[TOKEN_SUPPLY_ERROR] Could not fetch supply for ${token.address}:`, supplyError)
-            // Fallback to TVL-based estimation
-            const estimatedCirculatingSupply = totalReserves * 2
-            const estimatedTotalSupply = totalReserves * 5
-            
-            marketCap = (estimatedCirculatingSupply * priceUsd).toFixed(0)
-            fdv = (estimatedTotalSupply * priceUsd).toFixed(0)
+
+            // Estimate market cap as 70% of total supply
+            const circulatingSupply = totalSupplyNormalized * 0.7
+            marketCap = (circulatingSupply * priceUsd).toFixed(0)
+          } else{
+            // Fallback: try blockchain or use TVL-based estimation
+            try {
+              const tokenSupply = await getTokenSupply(token.address)
+
+              if (tokenSupply.totalSupply > 0) {
+                // Use real total supply for accurate FDV
+                if (!token.fdv) {
+                  fdv = (tokenSupply.totalSupply * priceUsd).toFixed(0)
+                }
+
+                // For market cap, use circulating supply if available, otherwise estimate as 70% of total
+                const circulatingSupply = tokenSupply.circulatingSupply > 0
+                  ? tokenSupply.circulatingSupply
+                  : tokenSupply.totalSupply * 0.7
+
+                marketCap = (circulatingSupply * priceUsd).toFixed(0)
+              } else {
+                // Fallback to TVL-based estimation only if blockchain data unavailable
+                const estimatedCirculatingSupply = totalReserves * 2
+                const estimatedTotalSupply = totalReserves * 5
+
+                marketCap = (estimatedCirculatingSupply * priceUsd).toFixed(0)
+                if (!token.fdv) {
+                  fdv = (estimatedTotalSupply * priceUsd).toFixed(0)
+                }
+              }
+            } catch (supplyError) {
+              console.log(`[TOKEN_SUPPLY_ERROR] Could not fetch supply for ${token.address}:`, supplyError)
+              // Fallback to TVL-based estimation
+              const estimatedCirculatingSupply = totalReserves * 2
+              const estimatedTotalSupply = totalReserves * 5
+
+              marketCap = (estimatedCirculatingSupply * priceUsd).toFixed(0)
+              if (!token.fdv) {
+                fdv = (estimatedTotalSupply * priceUsd).toFixed(0)
+              }
+            }
           }
         }
-        
-        console.log(`[ULTRA_FAST_TOKEN] TVL: $${tvl.toFixed(2)}, Market Cap: $${marketCap}, FDV: $${fdv}`)
       }
     } catch (error) {
-      console.error('TVL/Market Cap calculation error:', error)
+      console.error('[TOKEN] TVL/Market Cap calculation error:', error)
     }
-    
+
     // Enhanced token data with calculated fields
     const enhancedToken = {
       ...token,
@@ -480,36 +454,10 @@ class FastTokenService {
       marketCap,
       fdv
     }
-    
-    // ULTRA-AGGRESSIVE MULTI-LEVEL CACHING for SUB-1-SECOND performance
-    try {
-      const redis = getRedisClient()
-      if (redis) {
-        // Level 1: Lightning cache (15 seconds - absolute fastest)
-        await safeRedisSet(
-          `${CACHE_PREFIXES.TOKEN}${normalizedAddress}:lightning`,
-          JSON.stringify(enhancedToken),
-          15
-        )
-        
-        // Level 2: Hot cache (1 minute)
-        await safeRedisSet(
-          `${CACHE_PREFIXES.TOKEN}${normalizedAddress}:hot`,
-          JSON.stringify(enhancedToken),
-          60
-        )
-        
-        // Level 3: Warm cache (5 minutes - fallback)
-        await safeRedisSet(
-          `${CACHE_PREFIXES.TOKEN}${normalizedAddress}:warm`,
-          JSON.stringify(enhancedToken),
-          300
-        )
-        
-        console.log(`[ULTRA_CACHE_SET] ⚡🔥🌟 Triple-cached token ${normalizedAddress} with TVL: $${enhancedToken.tvl}, Market Cap: $${enhancedToken.marketCap}, FDV: $${enhancedToken.fdv}`)
-      }
-    } catch {}
-    
+
+    const endTime = performance.now()
+    console.log(`[TOKEN] ${token.symbol}: FDV=$${fdv}, MarketCap=$${marketCap}, TVL=$${enhancedToken.tvl} (${(endTime - startTime).toFixed(1)}ms)`)
+
     return enhancedToken
   }
 }
@@ -534,20 +482,13 @@ function createConnection(items: any[], hasNext = false, hasPrev = false) {
 // INDUSTRY-GRADE RESOLVERS
 export const resolvers = {
   Query: {
-    // 🚀 BLAZING FAST TOKEN RESOLVER
+    // 🚀 TOKEN RESOLVER
     tokenByAddress: async (_parent: unknown, { address }: { address: string }, { prisma }: Context) => {
       try {
-        console.log(`[FAST_TOKEN] START - Looking for token: ${address}`)
-        console.time(`[FAST_TOKEN] ${address}`)
         const result = await FastTokenService.getToken(address, prisma)
-        console.timeEnd(`[FAST_TOKEN] ${address}`)
-        console.log(`[FAST_TOKEN] RESULT for ${address}:`, result ? 'Found' : 'NULL')
-        if (!result) {
-          console.error(`[FAST_TOKEN] Returned NULL for ${address} - check FastTokenService.getToken`)
-        }
         return result
       } catch (error) {
-        console.error(`[FAST_TOKEN] EXCEPTION for ${address}:`, error)
+        console.error(`[TOKEN] Error fetching ${address}:`, error)
         return null
       }
     },
@@ -608,9 +549,25 @@ export const resolvers = {
         const tokens = await prisma.token.findMany({
           where: whereClause,
           take: Math.min(first, 100),
-          orderBy: { priceUsd: 'desc' } // Order by price (highest first)
+          orderBy: { priceUsd: 'desc' }, // Order by price (highest first)
+          select: {
+            address: true,
+            symbol: true,
+            name: true,
+            decimals: true,
+            imageUri: true,
+            priceUsd: true,
+            priceChange24h: true,
+            priceChange1h: true,
+            priceChange7d: true,
+            volumeUsd24h: true,
+            fdv: true,
+            totalSupply: true,
+            createdAt: true,
+            updatedAt: true
+          }
         })
-        
+
         // Transform tokens
         const transformedTokens = tokens.map((token: any) => ({
           ...token,
@@ -620,12 +577,14 @@ export const resolvers = {
           decimals: token.decimals || 18,
           priceUsd: token.priceUsd || '0',
           priceChange24h: token.priceChange24h || 0,
+          priceChange1h: token.priceChange1h || 0,
+          priceChange7d: token.priceChange7d || 0,
           volumeUsd24h: token.volumeUsd24h || '0',
-          tvl: '0',
-          marketCap: '0',
-          fdv: '0'
+          fdv: token.fdv?.toString() || '0',
+          marketCap: '0', // Would need calculation
+          tvl: '0' // Would need calculation
         }))
-        
+
         console.timeEnd('[FAST_TOKENS_LIST]')
         return createConnection(transformedTokens)
       } catch (error) {
@@ -993,41 +952,27 @@ export const resolvers = {
       }
     },
 
-    // 🚀 BLAZING FAST CHART RESOLVER USING INDUSTRY-STANDARD OHLC CANDLES
+    // 🚀 TOKEN PRICE CHART RESOLVER
     tokenPriceChart: async (
       _parent: Empty,
       { tokenAddress, timeframe = '1d' }: TokenPriceChartArgs,
       { prisma }: Context
     ): Promise<ChartDataPoint[]> => {
       try {
-        console.time(`[BLAZING_CHART] ${tokenAddress}-${timeframe}`)
-        
+        console.time(`[CHART] ${tokenAddress}-${timeframe}`)
+
         // Step 1: Lightning-fast token lookup
         const token = await prisma.token.findFirst({
           where: { address: tokenAddress.toLowerCase() },
-          select: { id: true, priceUsd: true }
+          select: { address: true, priceUsd: true }
         })
-        
+
         if (!token) {
-          console.timeEnd(`[BLAZING_CHART] ${tokenAddress}-${timeframe}`)
+          console.timeEnd(`[CHART] ${tokenAddress}-${timeframe}`)
           return []
         }
-        
-        // Step 2: Multi-level cache strategy (Redis + in-memory)
-        const cacheKey = `candle:${tokenAddress.toLowerCase()}:${timeframe}:v2`
-        try {
-          const redis = getRedisClient()
-          if (redis) {
-            const cached = await redis.get(cacheKey)
-            if (cached) {
-              console.timeEnd(`[BLAZING_CHART] ${tokenAddress}-${timeframe}`)
-              console.log(`[BLAZING_CHART] ⚡ Cache hit for ${tokenAddress}`)
-              return JSON.parse(cached)
-            }
-          }
-        } catch {}
-        
-        // Step 3: Map timeframe to optimal candle interval
+
+        // Step 2: Map timeframe to optimal candle interval
         const candleMapping = {
           '1h': { interval: '1m', duration: 3600, limit: 60 },      // 1 minute candles for 1 hour
           '1d': { interval: '5m', duration: 86400, limit: 288 },    // 5 minute candles for 1 day
@@ -1039,7 +984,9 @@ export const resolvers = {
         const config = candleMapping[timeframe as keyof typeof candleMapping] || candleMapping['1d']
         const now = Math.floor(Date.now() / 1000)
         const startTime = now - config.duration
-        
+        // Round to nearest minute for minute-level snapshots
+        const startMinute = Math.floor(startTime / 60) * 60
+
         // Step 4: Find most liquid pair containing this token
         const normalizedAddress = tokenAddress.toLowerCase()
         const pairs = await prisma.pair.findMany({
@@ -1073,35 +1020,67 @@ export const resolvers = {
 
         console.log(`[TOKEN_CHART] Using pair ${pair.address} (token is ${isToken0 ? 'token0' : 'token1'})`)
 
-        // Step 5: Query price observations from Ponder
-        const observations = await prisma.priceObservation.findMany({
+        // Step 5: Query minute-level price snapshots from Ponder (OHLC data)
+        const snapshots = await prisma.hourlyPriceSnapshot.findMany({
           where: {
             pairAddress: pair.address,
-            blockTimestamp: {
-              gte: startTime,
+            hour: {
+              gte: startMinute,
               lte: now
             }
           },
           orderBy: {
-            blockTimestamp: 'asc'
+            hour: 'asc'
           },
           take: config.limit
         })
 
-        console.log(`[TOKEN_CHART] Found ${observations.length} price observations`)
+        console.log(`[TOKEN_CHART] Found ${snapshots.length} minute-level snapshots`)
 
         let chartData: ChartDataPoint[] = []
 
-        if (observations.length > 0) {
-          // Extract price based on token position
-          chartData = observations
-            .map(obs => ({
-              time: obs.blockTimestamp,
-              value: isToken0 ? (obs.token0PriceUSD || 0) : (obs.token1PriceUSD || 0)
-            }))
-            .filter(p => p.value > 0)
+        if (snapshots.length > 0) {
+          // Extract prices from snapshots based on token position
+          const rawPrices = snapshots.map(snapshot => ({
+            time: snapshot.hour,
+            value: isToken0 ? snapshot.close : (snapshot.token1PriceUsd || 0)
+          })).filter(p => p.value > 0)
 
-          console.log(`[TOKEN_CHART] Generated ${chartData.length} chart points`)
+          // Aggregate based on timeframe interval
+          // 1h = 60s (no aggregation needed)
+          // 1d = 300s (aggregate every 5 minutes)
+          // 1w = 1800s (aggregate every 30 minutes)
+          // 1m = 3600s (aggregate every 60 minutes)
+          const aggregationInterval = config.interval === '1m' ? 60 :
+                                      config.interval === '5m' ? 300 :
+                                      config.interval === '30m' ? 1800 :
+                                      config.interval === '1h' ? 3600 : 60
+
+          if (aggregationInterval === 60) {
+            // No aggregation needed for 1h timeframe
+            chartData = rawPrices
+          } else {
+            // Aggregate into larger buckets
+            const buckets = new Map<number, number[]>()
+
+            rawPrices.forEach(point => {
+              const bucketTime = Math.floor(point.time / aggregationInterval) * aggregationInterval
+              if (!buckets.has(bucketTime)) {
+                buckets.set(bucketTime, [])
+              }
+              buckets.get(bucketTime)!.push(point.value)
+            })
+
+            // Average prices in each bucket
+            chartData = Array.from(buckets.entries())
+              .map(([time, values]) => ({
+                time,
+                value: values.reduce((sum, v) => sum + v, 0) / values.length
+              }))
+              .sort((a, b) => a.time - b.time)
+          }
+
+          console.log(`[TOKEN_CHART] Generated ${chartData.length} chart points for ${isToken0 ? 'token0' : 'token1'} (interval: ${config.interval})`)
         }
 
         // Step 6: Fallback using current price if no observations
@@ -1111,25 +1090,14 @@ export const resolvers = {
             { time: startTime, value: currentPrice },
             { time: now, value: currentPrice }
           ]
-          console.log(`[TOKEN_CHART] Using current price fallback`)
+          console.log(`[CHART] Using current price fallback`)
         }
 
-        // Step 7: Cache results
-        if (chartData.length > 0) {
-          try {
-            const redis = getRedisClient()
-            if (redis) {
-              await redis.set(cacheKey, JSON.stringify(chartData), 'EX', 60) // 1 minute cache
-              console.log(`[TOKEN_CHART] Cached ${chartData.length} points`)
-            }
-          } catch {}
-        }
-        
-        console.timeEnd(`[BLAZING_CHART] ${tokenAddress}-${timeframe}`)
+        console.timeEnd(`[CHART] ${tokenAddress}-${timeframe}`)
         return chartData
-        
+
       } catch (error) {
-        console.error(`[BLAZING_CHART] Critical error for ${tokenAddress}:`, error)
+        console.error(`[CHART] Error for ${tokenAddress}:`, error)
         
         // Emergency fallback
         const now = Math.floor(Date.now() / 1000)
