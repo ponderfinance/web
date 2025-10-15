@@ -851,7 +851,13 @@ export const resolvers = {
         if (after) {
           try {
             const decodedCursor = Buffer.from(after, 'base64').toString('utf-8')
-            const [id] = decodedCursor.split('-')
+            // Cursor format is: {swapId}-{arrayIndex}
+            // Swap ID format is: {txHash}-{logIndex}
+            // So full cursor is: {txHash}-{logIndex}-{arrayIndex}
+            // We need to split on the LAST dash to get the swap ID
+            const lastDashIndex = decodedCursor.lastIndexOf('-')
+            const id = decodedCursor.substring(0, lastDashIndex)
+
             if (id) {
               // Find the timestamp of the cursor item for proper pagination
               const cursorSwap = await prisma.swap.findFirst({ where: { id } })
@@ -866,9 +872,11 @@ export const resolvers = {
           }
         }
         
+        // Query for one extra item to check if there are more pages
+        const limit = Math.min(first, 100)
         const swaps = await prisma.swap.findMany({
           where: whereClause,
-          take: Math.min(first, 100),
+          take: limit + 1, // Fetch one extra to check for next page
           orderBy: { timestamp: 'desc' },
           include: {
             pair: {
@@ -879,11 +887,15 @@ export const resolvers = {
             }
           }
         })
-        
-        console.log(`[FAST_RECENT_TRANSACTIONS] Found ${swaps.length} swaps`)
-        
+
+        // Check if there are more items (pagination)
+        const hasNextPage = swaps.length > limit
+        const itemsToReturn = hasNextPage ? swaps.slice(0, limit) : swaps
+
+        console.log(`[FAST_RECENT_TRANSACTIONS] Found ${swaps.length} swaps, hasNextPage: ${hasNextPage}, returning: ${itemsToReturn.length}`)
+
         // Transform swaps with ALL required fields for client
-        const transformedSwaps = swaps.map((swap: any) => {
+        const transformedSwaps = itemsToReturn.map((swap: any) => {
           // Calculate USD value from amounts and token prices
           let valueUSD = '0'
           try {
@@ -941,10 +953,7 @@ export const resolvers = {
         })
         
         console.timeEnd('[FAST_RECENT_TRANSACTIONS]')
-        
-        // Check if there are more items for pagination
-        const hasNextPage = transformedSwaps.length === Math.min(first, 100)
-        
+
         return createConnection(transformedSwaps, hasNextPage)
       } catch (error) {
         console.error('[FAST_RECENT_TRANSACTIONS] Error:', error)

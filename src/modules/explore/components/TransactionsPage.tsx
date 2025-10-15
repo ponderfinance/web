@@ -160,13 +160,13 @@ function TransactionsLoading() {
 }
 
 // Paginated transactions component
-function PaginatedTransactions({ 
-  fragmentRef 
-}: { 
-  fragmentRef: TransactionsPage_transactions$key 
+function PaginatedTransactions({
+  fragmentRef
+}: {
+  fragmentRef: TransactionsPage_transactions$key
 }) {
   const { data, loadNext, hasNext, isLoadingNext } = usePaginationFragment(
-    transactionsPageFragment, 
+    transactionsPageFragment,
     fragmentRef
   );
   const loaderRef = React.useRef<HTMLDivElement>(null);

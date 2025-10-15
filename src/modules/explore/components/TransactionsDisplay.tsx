@@ -224,7 +224,7 @@ export const TransactionsDisplay: React.FC<TransactionsDisplayProps> = ({
           )
         })}
         
-        {/* Loading indicator row */}
+        {/* Loading indicator row - only show loader when actively loading */}
         {hasMore && (
           <View
             direction="row"
@@ -236,8 +236,10 @@ export const TransactionsDisplay: React.FC<TransactionsDisplayProps> = ({
           >
             <View.Item columns={12}>
               <View align="center" width="100%">
-                <div ref={loaderRef}>
-                  <Loader size="medium" />
+                {/* Intersection observer trigger - always rendered when hasMore */}
+                <div ref={loaderRef} style={{ minHeight: '1px' }}>
+                  {/* Only show spinner when actually loading */}
+                  {isLoading && <Loader size="medium" />}
                 </div>
               </View>
             </View.Item>
