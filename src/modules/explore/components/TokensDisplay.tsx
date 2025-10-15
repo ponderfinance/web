@@ -1,17 +1,10 @@
 'use client'
 
-import React, { useEffect, useCallback } from 'react'
+import React from 'react'
 import { View, Text, Actionable, Image, Skeleton, Loader } from 'reshaped'
-import { TokensPageQuery } from '@/src/__generated__/TokensPageQuery.graphql'
 import { getIpfsGateway } from '@/src/utils/ipfs'
-import { roundDecimal } from '@/src/utils/numbers'
 import Link from 'next/link'
-import { TokenPair } from '@/src/components/TokenPair'
-import { useRedisSubscriber } from '@/src/providers/RedisSubscriberProvider'
-import { useQueryLoader } from 'react-relay'
-import { tokensPageQuery } from './TokensPage'
 import ScrollableTable from '@/src/components/ScrollableTable'
-import { withRedisRecovery } from '@/src/lib/redis/recovery'
 import { TokensPage_tokens$data } from '@/src/__generated__/TokensPage_tokens.graphql'
 
 // Helper to format currency values
@@ -70,41 +63,6 @@ export const TokensDisplay: React.FC<TokensDisplayProps> = ({
   isLoading = false,
   loaderRef
 }) => {
-  // Get Redis subscriber context
-  const { tokenLastUpdated, refreshData } = useRedisSubscriber();
-  
-  // Get query loader
-  const [queryRef, loadQuery] = useQueryLoader<TokensPageQuery>(tokensPageQuery);
-  
-  // Debounced refresh function to avoid too many refreshes
-  const refreshTokensData = useCallback(() => {
-    try {
-      loadQuery({
-        first: 20,
-        orderBy: orderBy as any,
-        orderDirection: orderDirection as any,
-      }, { fetchPolicy: 'network-only' });
-    } catch (error) {
-    }
-  }, [orderBy, orderDirection, loadQuery]);
-  
-  // Handle token updates from Redis
-  useEffect(() => {
-    if (Object.keys(tokenLastUpdated).length > 0) {
-      refreshTokensData();
-    }
-  }, [tokenLastUpdated, refreshTokensData]);
-  
-  // Set up auto-refresh for token prices
-  useEffect(() => {
-    // Refresh data every 60 seconds as a backup
-    const interval = setInterval(() => {
-      refreshTokensData();
-    }, 60000);
-    
-    return () => clearInterval(interval);
-  }, [refreshTokensData]);
-  
   // Handle sorting
   const handleSort = (column: string) => {
     if (orderBy === column) {
@@ -149,11 +107,9 @@ export const TokensDisplay: React.FC<TokensDisplayProps> = ({
         </View.Item>
 
         <View.Item columns={1}>
-          <Actionable onClick={() => handleSort('priceChange1h')}>
-            <Text color="neutral-faded" weight="medium">
-              1H {orderBy === 'priceChange1h' && (orderDirection === 'asc' ? '↑' : '↓')}
-            </Text>
-          </Actionable>
+          <Text color="neutral-faded" weight="medium">
+            1H
+          </Text>
         </View.Item>
 
         <View.Item columns={1}>
@@ -165,11 +121,9 @@ export const TokensDisplay: React.FC<TokensDisplayProps> = ({
         </View.Item>
 
         <View.Item columns={2}>
-          <Actionable onClick={() => handleSort('fdv')}>
-            <Text color="neutral-faded" weight="medium">
-              FDV {orderBy === 'fdv' && (orderDirection === 'asc' ? '↑' : '↓')}
-            </Text>
-          </Actionable>
+          <Text color="neutral-faded" weight="medium">
+            FDV
+          </Text>
         </View.Item>
 
         <View.Item columns={2}>

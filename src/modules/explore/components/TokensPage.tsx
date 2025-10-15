@@ -1,7 +1,7 @@
 'use client'
 
 import React, { Suspense, useEffect, useCallback } from 'react'
-import { graphql, useQueryLoader, usePaginationFragment, useLazyLoadQuery } from 'react-relay'
+import { graphql, usePaginationFragment, useLazyLoadQuery } from 'react-relay'
 import { TokensPageQuery, TokenOrderBy, OrderDirection } from '@/src/__generated__/TokensPageQuery.graphql'
 import { TokensPage_tokens$key } from '@/src/__generated__/TokensPage_tokens.graphql'
 import { TokensDisplay } from '@/src/modules/explore/components/TokensDisplay'
@@ -240,12 +240,10 @@ function PaginatedTokens({
 
 // Component that consumes the query and passes the fragment reference
 function TokensQueryRenderer({
-  queryReference,
   orderBy,
   orderDirection,
   onSortChange
 }: {
-  queryReference: any;
   orderBy: TokenOrderBy;
   orderDirection: OrderDirection;
   onSortChange: (orderBy: TokenOrderBy, orderDirection: OrderDirection) => void;
@@ -258,7 +256,7 @@ function TokensQueryRenderer({
       orderBy,
       orderDirection
     },
-    { fetchPolicy: 'store-or-network', fetchKey: queryReference }
+    { fetchPolicy: 'network-only' }
   );
 
   return (
@@ -286,9 +284,7 @@ const TokensPageContent = () => {
 
   const [sortParams, setSortParams] = React.useState(getInitialSortParams);
   const [mounted, setMounted] = React.useState(false);
-  const [queryRef, loadQuery] = useQueryLoader<TokensPageQuery>(tokensPageQuery);
-  // Use a counter to force re-render of the query renderer
-  const [queryRefreshCounter, setQueryRefreshCounter] = React.useState(0);
+  const [refreshKey, setRefreshKey] = React.useState(0);
 
   // Sync URL params with state
   useEffect(() => {
@@ -296,34 +292,21 @@ const TokensPageContent = () => {
       const handleRouteChange = () => {
         setSortParams(getInitialSortParams());
       };
-      
+
       window.addEventListener('popstate', handleRouteChange);
       setMounted(true);
-      
+
       return () => {
         window.removeEventListener('popstate', handleRouteChange);
       };
     }
   }, []);
 
-  // Initial data load
-  useEffect(() => {
-    if (mounted) {
-      loadQuery({
-        first: 20,
-        after: null,
-        orderBy: sortParams.orderBy,
-        orderDirection: sortParams.orderDirection
-      });
-      setQueryRefreshCounter(prev => prev + 1); // Increment to trigger re-render
-    }
-  }, [mounted, loadQuery, sortParams]);
-
   // Handle sort change
   const handleSortChange = useCallback((orderBy: TokenOrderBy, orderDirection: OrderDirection) => {
     window.history.pushState(
-      {}, 
-      '', 
+      {},
+      '',
       `?orderBy=${orderBy}&orderDirection=${orderDirection}`
     );
     setSortParams({ orderBy, orderDirection });
@@ -333,13 +316,7 @@ const TokensPageContent = () => {
   useRefreshOnUpdate({
     entityType: 'token',
     onUpdate: () => {
-      loadQuery({
-        first: 20,
-        after: null,
-        orderBy: sortParams.orderBy,
-        orderDirection: sortParams.orderDirection
-      });
-      setQueryRefreshCounter(prev => prev + 1); // Increment to trigger re-render
+      setRefreshKey(prev => prev + 1);
     },
     minRefreshInterval: 5000,
     shouldRefetch: true
@@ -351,9 +328,8 @@ const TokensPageContent = () => {
 
   return (
     <View gap={6}>
-      <Suspense fallback={<TokensLoading />}>
+      <Suspense fallback={<TokensLoading />} key={`${sortParams.orderBy}-${sortParams.orderDirection}-${refreshKey}`}>
         <TokensQueryRenderer
-          queryReference={queryRefreshCounter}
           orderBy={sortParams.orderBy}
           orderDirection={sortParams.orderDirection}
           onSortChange={handleSortChange}

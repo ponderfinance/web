@@ -2,7 +2,6 @@ import { useState, useEffect, useMemo, useCallback, Suspense } from 'react'
 import { Text, Button, View, Actionable, Icon, useToast, Image } from 'reshaped'
 import { type Address, formatUnits, parseUnits } from 'viem'
 import { useAccount, useBalance } from 'wagmi'
-import { useQuery } from '@tanstack/react-query'
 import { useLazyLoadQuery, graphql, useRelayEnvironment } from 'react-relay'
 import {
   useGasEstimate,
@@ -21,6 +20,7 @@ import { InterfaceTabs } from '@/src/modules/swap/components/InterfaceTabs'
 import { TokenBalanceDisplay } from '@/src/modules/swap/components/TokenBalanceDisplay'
 import TokenSelector from '@/src/components/TokenSelector'
 import { CURRENT_CHAIN } from '@/src/constants/chains'
+import { KKUB_ADDRESS } from '@/src/constants/addresses'
 import { formatNumber, roundDecimal } from '@/src/utils/numbers'
 import { TokenPair, tokenFragment } from '@/src/components/TokenPair'
 import { SwapTokenDataQuery } from '@/src/__generated__/SwapTokenDataQuery.graphql'
@@ -275,28 +275,25 @@ export function SwapInterface({
     }
   }, [amountIn, tokenInInfo, tokenIn])
 
-  const { data: wkubAddress } = useQuery({
-    queryKey: ['ponder', 'router', 'wkub'],
-    queryFn: () => sdk.router.KKUB(),
-    enabled: !!sdk.router,
-  })
+  // Use the KKUB address constant based on current chain
+  const wkubAddress = KKUB_ADDRESS[CURRENT_CHAIN.id as keyof typeof KKUB_ADDRESS]
 
   const routeTokenIn = useMemo(() => {
-    if (isNativeKUB(tokenIn) && wkubAddress) {
+    if (isNativeKUB(tokenIn)) {
       return wkubAddress
     }
     return tokenIn as Address
   }, [tokenIn, wkubAddress])
 
   const routeTokenOut = useMemo(() => {
-    if (isNativeKUB(tokenOut) && wkubAddress) {
+    if (isNativeKUB(tokenOut)) {
       return wkubAddress
     }
     return tokenOut as Address
   }, [tokenOut, wkubAddress])
 
   const isDirectKubWkubSwap = useMemo(() => {
-    if (!wkubAddress) return false
+    if (!tokenIn || !tokenOut || !wkubAddress) return false
 
     const isKubToWkub =
       isNativeKUB(tokenIn) && tokenOut?.toLowerCase() === wkubAddress.toLowerCase()
@@ -304,7 +301,20 @@ export function SwapInterface({
     const isWkubToKub =
       tokenIn?.toLowerCase() === wkubAddress.toLowerCase() && isNativeKUB(tokenOut)
 
-    return isKubToWkub || isWkubToKub
+    const result = isKubToWkub || isWkubToKub
+
+    console.log('Direct swap check:', {
+      tokenIn,
+      tokenOut,
+      wkubAddress,
+      isNativeKUBIn: isNativeKUB(tokenIn),
+      isNativeKUBOut: isNativeKUB(tokenOut),
+      isKubToWkub,
+      isWkubToKub,
+      isDirectKubWkubSwap: result
+    })
+
+    return result
   }, [tokenIn, tokenOut, wkubAddress])
 
   const syntheticDirectRoute = useMemo(() => {
@@ -361,7 +371,6 @@ export function SwapInterface({
         tokenOut &&
         parsedAmountIn > BigInt(0) &&
         (tokenInInfo || isNativeKUB(tokenIn)) &&
-        wkubAddress &&
         !isDirectKubWkubSwap
     )
   )
@@ -748,18 +757,39 @@ export function SwapInterface({
         }
       }
 
-      // Special case for WKUB -> KUB (try unwrapKKUB first, then fallback to router)
+      // Special case for WKUB -> KUB (via unwrapper contract)
       if (
         tokenIn &&
         wkubAddress &&
         tokenIn.toLowerCase() === wkubAddress.toLowerCase() &&
         isNativeKUB(tokenOut)
       ) {
-        // Try with direct unwrapper first
         try {
-          console.log('Using direct unwrapKKUB for WKUB -> KUB')
+          console.log('Using unwrapper for WKUB -> KUB')
 
-          // Check current allowance
+          // Check KKUB balance first
+          const kkubBalance = await sdk.publicClient.readContract({
+            address: wkubAddress,
+            abi: [
+              {
+                name: 'balanceOf',
+                type: 'function',
+                stateMutability: 'view',
+                inputs: [{ name: 'account', type: 'address' }],
+                outputs: [{ name: '', type: 'uint256' }],
+              },
+            ],
+            functionName: 'balanceOf',
+            args: [account],
+          })
+
+          console.log('KKUB balance:', kkubBalance.toString(), 'needed:', parsedAmountIn.toString())
+
+          if (kkubBalance < parsedAmountIn) {
+            throw new Error('Insufficient KKUB balance')
+          }
+
+          // Check current allowance for unwrapper
           const unwrapperAllowance = await sdk.publicClient.readContract({
             address: wkubAddress,
             abi: kubTokenAbi,
@@ -767,37 +797,80 @@ export function SwapInterface({
             args: [account, sdk.kkubUnwrapper.address],
           })
 
-          // If allowance is insufficient, we need to approve
+          console.log('Current unwrapper allowance:', unwrapperAllowance.toString())
+
+          // If allowance is insufficient, approve
           if (unwrapperAllowance < parsedAmountIn) {
             console.log('Approving WKUB for unwrapper...')
+
+            // Try unlimited approval to bypass potential validation issues
+            const approvalAmount = MAX_UINT256
+            console.log('Using unlimited approval amount:', approvalAmount.toString())
+
+            // First simulate the approval to get detailed error if it fails
+            try {
+              console.log('Simulating approval...')
+              await sdk.publicClient.simulateContract({
+                address: wkubAddress,
+                abi: kubTokenAbi,
+                functionName: 'approve',
+                args: [sdk.kkubUnwrapper.address, approvalAmount],
+                account,
+              })
+              console.log('✅ Approval simulation passed')
+            } catch (simError: any) {
+              console.error('❌ Approval simulation failed:', simError)
+              console.error('Simulation error details:', {
+                message: simError.message,
+                shortMessage: simError.shortMessage,
+                cause: simError.cause,
+                details: simError.details,
+              })
+              throw new Error(`Approval would fail: ${simError.shortMessage || simError.message || 'Unknown error'}`)
+            }
+
             setApprovalsPending((prev) => new Set(prev).add(wkubAddress))
 
-            // For WKUB -> KUB, approve directly without using the approval function
-            // This ensures we're setting the exact allowance needed
+            // Estimate gas for the approval
+            let gasLimit: bigint | undefined
+            try {
+              gasLimit = await sdk.publicClient.estimateContractGas({
+                address: wkubAddress,
+                abi: kubTokenAbi,
+                functionName: 'approve',
+                args: [sdk.kkubUnwrapper.address, approvalAmount],
+                account,
+              })
+              console.log('Estimated gas:', gasLimit.toString())
+              // Add 50% buffer to gas estimate for safety
+              gasLimit = (gasLimit * BigInt(150)) / BigInt(100)
+              console.log('Gas with buffer:', gasLimit.toString())
+            } catch (gasError: any) {
+              console.error('Gas estimation failed:', gasError)
+              // Use a reasonable default for ERC20 approve
+              gasLimit = BigInt(100000)
+              console.log('Using default gas:', gasLimit.toString())
+            }
+
             const approveHash = await sdk?.walletClient?.writeContract({
               address: wkubAddress,
               abi: kubTokenAbi,
               functionName: 'approve',
-              args: [sdk.kkubUnwrapper.address, parsedAmountIn],
+              args: [sdk.kkubUnwrapper.address, approvalAmount],
               account,
               chain: CURRENT_CHAIN,
+              gas: gasLimit,
             })
 
-            // Wait for approval transaction to be confirmed
+            if (!approveHash) throw new Error('Failed to get approval hash')
+
+            // Wait for approval
             await sdk.publicClient.waitForTransactionReceipt({
               hash: approveHash as `0x${string}`,
               confirmations: 1,
             })
 
-            // Verify the new allowance after approval
-            const newAllowance = await sdk.publicClient.readContract({
-              address: wkubAddress,
-              abi: kubTokenAbi,
-              functionName: 'allowance',
-              args: [account, sdk.kkubUnwrapper.address],
-            })
-
-            console.log('New allowance after approval:', newAllowance?.toString())
+            console.log('✅ Approval confirmed')
 
             setApprovalsPending((prev) => {
               const next = new Set(prev)
@@ -806,20 +879,35 @@ export function SwapInterface({
             })
           }
 
-          // Now call unwrapKKUB with the approved amount
+          // Now unwrap via unwrapper contract
+          console.log('Calling unwrapKKUB...')
           const hash = await sdk.unwrapKKUB(parsedAmountIn, account)
 
+          if (!hash) throw new Error('Failed to get unwrap hash')
+
           setTxHash(hash)
-          setAmountIn('')
 
           await sdk.publicClient.waitForTransactionReceipt({
             hash,
             confirmations: 1,
           })
 
+          showSuccessToast(parsedAmountIn, parsedAmountIn, hash as string)
+
+          // Refresh balances
+          await refreshAllBalances()
+
+          setAmountIn('')
+          setTxHash(undefined)
+          setError(null)
+          setIsProcessing(false)
+
           return
-        } catch (unwrapErr: any) {
-          console.error('Direct WKUB unwrap failed, trying router:', unwrapErr)
+        } catch (err: any) {
+          console.error('WKUB unwrap failed:', err)
+          setError(`WKUB unwrap failed: ${err.shortMessage || err.message || 'Unknown error'}`)
+          setIsProcessing(false)
+          return
         }
       }
 
