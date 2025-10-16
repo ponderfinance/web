@@ -22,6 +22,7 @@ import { CURRENT_CHAIN } from '@/src/constants/chains'
 import { formatNumber } from '@/src/utils/numbers'
 import { useRefreshOnUpdate } from '@/src/hooks/useRefreshOnUpdate'
 import { withRelayBoundary } from '@/src/lib/relay/withRelayBoundary'
+import { TokenActivityTabs } from './TokenActivityTabs'
 
 // For the missing constants and utilities, let's define them here
 const NATIVE_KUB_ADDRESS = '0x0000000000000000000000000000000000000000' as const
@@ -422,8 +423,8 @@ function TokenDetailContent({
       />
 
       {/* Main content area - use ChartContainer for the chart section */}
-      <View 
-        direction={isMobile ? "column" : "row"} 
+      <View
+        direction={isMobile ? "column" : "row"}
         gap={6}
         width="100%"
         justify="space-between"
@@ -431,16 +432,16 @@ function TokenDetailContent({
         <View
           direction="column"
           gap={6}
-          attributes={{ 
-            style: { 
+          attributes={{
+            style: {
               flex: isMobile ? 'auto' : '3',
-              width: '100%'
-            } 
+              minWidth: 0
+            }
           }}
         >
           {/* Use our improved chart container with separate Suspense boundary */}
           {data.tokenByAddress ? (
-            <SuspenseChartContainer 
+            <SuspenseChartContainer
               tokenAddress={data.tokenByAddress.address}
               tokenRef={data.tokenByAddress}
               initialTimeframe={currentTimeframe}
@@ -492,15 +493,18 @@ function TokenDetailContent({
               </View>
             </View>
           </View>
+
+          {/* Transactions and Pools Tabs */}
+          <TokenActivityTabs tokenAddress={tokenAddress} />
         </View>
 
         {/* Swap Interface - on the right side on desktop */}
         <View
-          attributes={{ 
-            style: { 
+          attributes={{
+            style: {
               flex: isMobile ? 'auto' : '2',
-              width: '100%'
-            } 
+              minWidth: 0
+            }
           }}
         >
           {/* Swap interface with no heading */}

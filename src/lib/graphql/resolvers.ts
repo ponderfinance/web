@@ -1361,7 +1361,233 @@ export const resolvers = {
     },
 
     // Add other resolvers as needed...
-    
+
+  },
+
+  // TYPE RESOLVERS
+  Pair: {
+    swaps: async (parent: any, { first = 20, after }: { first?: number; after?: string }, { prisma }: Context) => {
+      try {
+        if (!parent.address) return createConnection([])
+
+        // Handle cursor-based pagination
+        let whereClause: any = { pairAddress: parent.address }
+        if (after) {
+          try {
+            const decodedCursor = Buffer.from(after, 'base64').toString('utf-8')
+            const lastDashIndex = decodedCursor.lastIndexOf('-')
+            const id = decodedCursor.substring(0, lastDashIndex)
+
+            if (id) {
+              const cursorSwap = await prisma.swap.findFirst({ where: { id } })
+              if (cursorSwap) {
+                whereClause.timestamp = { lt: cursorSwap.timestamp }
+              }
+            }
+          } catch (e) {
+            console.warn('[Pair.swaps] Invalid cursor:', after)
+          }
+        }
+
+        const limit = Math.min(first, 100)
+        const swaps = await prisma.swap.findMany({
+          where: whereClause,
+          take: limit + 1,
+          orderBy: { timestamp: 'desc' },
+          include: {
+            pair: {
+              include: {
+                token0: true,
+                token1: true
+              }
+            }
+          }
+        })
+
+        const hasNextPage = swaps.length > limit
+        const itemsToReturn = hasNextPage ? swaps.slice(0, limit) : swaps
+
+        // Transform swaps with USD value calculation
+        const transformedSwaps = itemsToReturn.map((swap: any) => {
+          // Calculate USD value from amounts and token prices
+          let valueUSD = '0'
+          try {
+            if (swap.pair?.token0?.priceUsd || swap.pair?.token1?.priceUsd) {
+              const token0Price = parseFloat(swap.pair.token0?.priceUsd || '0')
+              const token1Price = parseFloat(swap.pair.token1?.priceUsd || '0')
+
+              let usdValue = 0
+
+              // Calculate from outgoing amounts (more accurate)
+              if (swap.amountOut0 && swap.amountOut0 !== '0' && token0Price > 0) {
+                const amount = parseFloat(swap.amountOut0) / Math.pow(10, swap.pair.token0?.decimals || 18)
+                usdValue = amount * token0Price
+              } else if (swap.amountOut1 && swap.amountOut1 !== '0' && token1Price > 0) {
+                const amount = parseFloat(swap.amountOut1) / Math.pow(10, swap.pair.token1?.decimals || 18)
+                usdValue = amount * token1Price
+              }
+
+              if (usdValue > 0) {
+                valueUSD = usdValue.toFixed(2)
+              }
+            }
+          } catch (e) {
+            console.warn('[Pair.swaps] Error calculating valueUSD:', e)
+          }
+
+          return {
+            id: swap.id,
+            pairId: swap.pairAddress,
+            txHash: swap.txHash,
+            userAddress: swap.userAddress,
+            amountIn0: swap.amountIn0 || '0',
+            amountIn1: swap.amountIn1 || '0',
+            amountOut0: swap.amountOut0 || '0',
+            amountOut1: swap.amountOut1 || '0',
+            blockNumber: swap.blockNumber?.toString() || '0',
+            timestamp: swap.timestamp.toString(),
+            valueUSD
+          }
+        })
+
+        return createConnection(transformedSwaps, hasNextPage)
+      } catch (error) {
+        console.error('[Pair.swaps] Error:', error)
+        return createConnection([])
+      }
+    }
+  },
+
+  Token: {
+    pairsAsToken0: async (parent: any, _args: unknown, { prisma }: Context) => {
+      try {
+        if (!parent.address) return []
+
+        // Use the address directly from the database (no lowercasing)
+        console.log(`[Token.pairsAsToken0] Querying for token0Address: ${parent.address}`)
+
+        const pairs = await prisma.pair.findMany({
+          where: { token0Address: parent.address },
+          include: {
+            token0: true,
+            token1: true
+          }
+        })
+
+        // Transform pairs to include computed fields
+        return pairs.map((pair: any) => {
+          let tvl = 0
+          let reserveUsd = '0'
+
+          try {
+            const token0Price = parseFloat(pair.token0?.priceUsd || '0')
+            const token1Price = parseFloat(pair.token1?.priceUsd || '0')
+            const reserve0 = parseFloat(pair.reserve0 || '0')
+            const reserve1 = parseFloat(pair.reserve1 || '0')
+            const token0Decimals = pair.token0?.decimals || 18
+            const token1Decimals = pair.token1?.decimals || 18
+
+            if (token0Price > 0 && reserve0 > 0) {
+              const token0ValueUSD = (reserve0 / Math.pow(10, token0Decimals)) * token0Price
+              tvl += token0ValueUSD
+            }
+            if (token1Price > 0 && reserve1 > 0) {
+              const token1ValueUSD = (reserve1 / Math.pow(10, token1Decimals)) * token1Price
+              tvl += token1ValueUSD
+            }
+
+            reserveUsd = tvl.toFixed(2)
+          } catch (error) {
+            console.warn(`[Token.pairsAsToken0] Error calculating TVL for pair ${pair.id}:`, error)
+          }
+
+          return {
+            ...pair,
+            id: pair.address,
+            token0: pair.token0 ? { ...pair.token0, id: pair.token0.address } : null,
+            token1: pair.token1 ? { ...pair.token1, id: pair.token1.address } : null,
+            tvl,
+            reserveUsd,
+            poolApr: pair.poolApr || 0,
+            rewardApr: 0,
+            volume1h: pair.volume1h || '0',
+            volume24h: pair.volume24h || '0',
+            volume7d: pair.volume7d || '0',
+            volume30d: pair.volume30d || '0',
+            volumeChange24h: pair.volumeChange24h || 0,
+            volumeTvlRatio: pair.volumeTvlRatio || 0
+          }
+        })
+      } catch (error) {
+        console.error('[Token.pairsAsToken0] Error:', error)
+        return []
+      }
+    },
+
+    pairsAsToken1: async (parent: any, _args: unknown, { prisma }: Context) => {
+      try {
+        if (!parent.address) return []
+
+        // Use the address directly from the database (no lowercasing)
+        console.log(`[Token.pairsAsToken1] Querying for token1Address: ${parent.address}`)
+
+        const pairs = await prisma.pair.findMany({
+          where: { token1Address: parent.address },
+          include: {
+            token0: true,
+            token1: true
+          }
+        })
+
+        // Transform pairs to include computed fields
+        return pairs.map((pair: any) => {
+          let tvl = 0
+          let reserveUsd = '0'
+
+          try {
+            const token0Price = parseFloat(pair.token0?.priceUsd || '0')
+            const token1Price = parseFloat(pair.token1?.priceUsd || '0')
+            const reserve0 = parseFloat(pair.reserve0 || '0')
+            const reserve1 = parseFloat(pair.reserve1 || '0')
+            const token0Decimals = pair.token0?.decimals || 18
+            const token1Decimals = pair.token1?.decimals || 18
+
+            if (token0Price > 0 && reserve0 > 0) {
+              const token0ValueUSD = (reserve0 / Math.pow(10, token0Decimals)) * token0Price
+              tvl += token0ValueUSD
+            }
+            if (token1Price > 0 && reserve1 > 0) {
+              const token1ValueUSD = (reserve1 / Math.pow(10, token1Decimals)) * token1Price
+              tvl += token1ValueUSD
+            }
+
+            reserveUsd = tvl.toFixed(2)
+          } catch (error) {
+            console.warn(`[Token.pairsAsToken1] Error calculating TVL for pair ${pair.id}:`, error)
+          }
+
+          return {
+            ...pair,
+            id: pair.address,
+            token0: pair.token0 ? { ...pair.token0, id: pair.token0.address } : null,
+            token1: pair.token1 ? { ...pair.token1, id: pair.token1.address } : null,
+            tvl,
+            reserveUsd,
+            poolApr: pair.poolApr || 0,
+            rewardApr: 0,
+            volume1h: pair.volume1h || '0',
+            volume24h: pair.volume24h || '0',
+            volume7d: pair.volume7d || '0',
+            volume30d: pair.volume30d || '0',
+            volumeChange24h: pair.volumeChange24h || 0,
+            volumeTvlRatio: pair.volumeTvlRatio || 0
+          }
+        })
+      } catch (error) {
+        console.error('[Token.pairsAsToken1] Error:', error)
+        return []
+      }
+    }
   }
 }
 
