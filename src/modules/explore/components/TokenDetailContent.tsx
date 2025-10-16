@@ -353,7 +353,6 @@ function TokenDetailContent({
   tokenAddress
 }: TokenDetailContentProps): JSX.Element {
   const data = usePreloadedQuery(TokenDetailQuery, queryRef)
-  const isMobile = typeof window !== 'undefined' && window.innerWidth < 768
 
   // Format metrics
   const formatLargeNumber = (value: string | null | undefined): string => {
@@ -399,13 +398,13 @@ function TokenDetailContent({
       {/* Token header with logo and name */}
       <View direction="row" justify="space-between" align="center">
         <View direction="row" gap={3} align="center">
-          <TokenIcon 
-            imageUri={data.tokenByAddress?.imageUri} 
+          <TokenIcon
+            imageUri={data.tokenByAddress?.imageUri}
             name={data.tokenByAddress?.name}
-            isLoading={false} 
+            isLoading={false}
           />
           <View direction="column" gap={2}>
-            <TokenNameDisplay 
+            <TokenNameDisplay
               name={data.tokenByAddress?.name}
               symbol={data.tokenByAddress?.symbol}
               address={data.tokenByAddress?.address || ''}
@@ -416,7 +415,7 @@ function TokenDetailContent({
       </View>
 
       {/* Price and percent change */}
-      <PriceDisplay 
+      <PriceDisplay
         price={data.tokenByAddress?.priceUsd}
         priceChange={data.tokenByAddress?.priceChange24h}
         isLoadingPrice={false}
@@ -424,7 +423,7 @@ function TokenDetailContent({
 
       {/* Main content area - use ChartContainer for the chart section */}
       <View
-        direction={isMobile ? "column" : "row"}
+        direction={{ s: 'column', m: 'row' }}
         gap={6}
         width="100%"
         justify="space-between"
@@ -432,9 +431,10 @@ function TokenDetailContent({
         <View
           direction="column"
           gap={6}
+          width={{ s: '100%', m: 'auto' }}
           attributes={{
             style: {
-              flex: isMobile ? 'auto' : '3',
+              flex: '3',
               minWidth: 0
             }
           }}
@@ -500,9 +500,10 @@ function TokenDetailContent({
 
         {/* Swap Interface - on the right side on desktop */}
         <View
+          width={{ s: '100%', m: 'auto' }}
           attributes={{
             style: {
-              flex: isMobile ? 'auto' : '2',
+              flex: '2',
               minWidth: 0
             }
           }}
