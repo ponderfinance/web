@@ -222,32 +222,32 @@ export function getRedisClient(forSubscriber = false): Redis | null {
       eventEmitter.emit(ConnectionEvent.DISCONNECTED, { timestamp: Date.now() });
     });
     
-    // Heartbeat to keep connection alive and detect issues early
-    const heartbeatInterval = setInterval(() => {
-      if (redis.status === 'ready') {
-        redis.ping()
-          .then(() => {
-            if (REDIS_CONFIG.debugMode) {
-              console.log('[REDIS] Heartbeat ping successful');
-            }
-          })
-          .catch(err => {
-            console.error('[REDIS] Heartbeat ping failed:', err);
-            
-            // If connection fails heartbeat, force reconnection
-            if (forSubscriber && __GLOBAL_REDIS_SUBSCRIBER === redis) {
-              __GLOBAL_REDIS_SUBSCRIBER = null;
-            } else if (!forSubscriber && __GLOBAL_REDIS_CLIENT === redis) {
-              __GLOBAL_REDIS_CLIENT = null;
-            }
-          });
-      }
-    }, REDIS_CONFIG.heartbeatIntervalMs);
-    
-    // Clean up heartbeat on close
-    redis.on('end', () => {
-      clearInterval(heartbeatInterval);
-    });
+    // Heartbeat DISABLED - not needed anymore
+    // const heartbeatInterval = setInterval(() => {
+    //   if (redis.status === 'ready') {
+    //     redis.ping()
+    //       .then(() => {
+    //         if (REDIS_CONFIG.debugMode) {
+    //           console.log('[REDIS] Heartbeat ping successful');
+    //         }
+    //       })
+    //       .catch(err => {
+    //         console.error('[REDIS] Heartbeat ping failed:', err);
+    //
+    //         // If connection fails heartbeat, force reconnection
+    //         if (forSubscriber && __GLOBAL_REDIS_SUBSCRIBER === redis) {
+    //           __GLOBAL_REDIS_SUBSCRIBER = null;
+    //         } else if (!forSubscriber && __GLOBAL_REDIS_CLIENT === redis) {
+    //           __GLOBAL_REDIS_CLIENT = null;
+    //         }
+    //       });
+    //   }
+    // }, REDIS_CONFIG.heartbeatIntervalMs);
+
+    // Clean up heartbeat on close - DISABLED
+    // redis.on('end', () => {
+    //   clearInterval(heartbeatInterval);
+    // });
     
     // Store in global reference to enforce singleton pattern
     if (forSubscriber) {

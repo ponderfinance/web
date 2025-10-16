@@ -7,6 +7,7 @@ interface LoadMoreProps {
   isLoading?: boolean;
   threshold?: number;
   rootMargin?: string;
+  root?: HTMLElement | null;
 }
 
 /**
@@ -19,6 +20,7 @@ export const LoadMore: React.FC<LoadMoreProps> = ({
   isLoading = false,
   threshold = 0.5,
   rootMargin = '0px 0px 200px 0px', // Load more when within 200px of the bottom
+  root = null,
 }) => {
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
 
@@ -32,6 +34,7 @@ export const LoadMore: React.FC<LoadMoreProps> = ({
         }
       },
       {
+        root,
         threshold,
         rootMargin,
       }
@@ -48,7 +51,7 @@ export const LoadMore: React.FC<LoadMoreProps> = ({
         observer.unobserve(loadMoreRef.current);
       }
     };
-  }, [hasMore, isLoading, onLoadMore, threshold, rootMargin]);
+  }, [hasMore, isLoading, onLoadMore, threshold, rootMargin, root]);
 
   // If there are no more items to load, don't render anything
   if (!hasMore && !isLoading) {

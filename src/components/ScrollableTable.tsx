@@ -6,6 +6,7 @@ import { View, ViewProps } from 'reshaped'
 export interface ScrollableTableProps extends ViewProps {
   children: ReactNode;
   minWidth?: string;
+  maxHeight?: string;
 }
 
 /**
@@ -15,25 +16,27 @@ export interface ScrollableTableProps extends ViewProps {
 export const ScrollableTable: React.FC<ScrollableTableProps> = ({
   children,
   minWidth = '900px',
+  maxHeight,
   ...props
 }) => {
   return (
-    <View 
-      borderRadius="medium" 
-      borderColor="neutral-faded" 
+    <View
+      borderRadius="medium"
+      borderColor="neutral-faded"
       width="100%"
-      overflow="hidden" 
+      overflow="hidden"
       {...props}
     >
-      {/* Outer container with defined width */}
+      {/* Outer container with defined width and max height */}
       <View
         width="100%"
         overflow="auto"
         className="hide-scrollbar"
-        attributes={{ 
-          style: { 
+        attributes={{
+          style: {
             scrollbarWidth: 'none',  /* Firefox */
             msOverflowStyle: 'none',  /* IE and Edge */
+            ...(maxHeight ? { maxHeight } : {})
           }
         }}
       >

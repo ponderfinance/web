@@ -12,6 +12,8 @@ import { tokenFragment } from '@/src/components/TokenPair'
 import { TokenPairFragment$key } from '@/src/__generated__/TokenPairFragment.graphql'
 
 // Main query - get token with all its pairs and their swaps
+// NOTE: Performance can be slow for tokens with many pairs.
+// TODO: Consider adding a Token.recentSwaps resolver for better performance
 export const tokenSwapsQuery = graphql`
   query TokenTransactionsTabQuery($tokenAddress: String!, $swapsPerPair: Int!) {
     tokenByAddress(address: $tokenAddress) {
@@ -117,8 +119,9 @@ const abbreviateAddress = (address: string): string => {
 
 // Helper to get token icon (with native KUB special handling)
 const getTokenIcon = (token: any): string => {
-  // Check if it's native KUB
-  const isNativeKub = token.address === '0x0000000000000000000000000000000000000000'
+  // Check if it's native KUB - check for both lowercase and checksummed zero address
+  const normalizedAddress = token.address?.toLowerCase() || ''
+  const isNativeKub = normalizedAddress === '0x0000000000000000000000000000000000000000'
 
   if (isNativeKub) {
     return '/tokens/bitkub.png'
@@ -319,12 +322,13 @@ function TransactionsLoading() {
 function TransactionsQueryRenderer({ tokenAddress }: { tokenAddress: string }) {
   const [displayCount, setDisplayCount] = useState(20)
   const [isLoadingMore, setIsLoadingMore] = useState(false)
+  const scrollContainerRef = React.useRef<HTMLDivElement>(null)
 
   const data = useLazyLoadQuery<TokenTransactionsTabQuery>(
     tokenSwapsQuery,
     {
       tokenAddress,
-      swapsPerPair: 100 // Get more swaps from each pair for progressive loading
+      swapsPerPair: 30 // Reduced from 100 to 30 for faster initial load
     },
     { fetchPolicy: 'store-or-network' }
   )
@@ -404,60 +408,68 @@ function TransactionsQueryRenderer({ tokenAddress }: { tokenAddress: string }) {
   const normalizedTargetAddress = tokenAddress.toLowerCase()
 
   return (
-    <>
-      <ScrollableTable minWidth="1000px">
-        {/* Table Header */}
-        <View
-          direction="row"
-          gap={0}
-          paddingInline={4}
-          paddingBlock={2}
-          className={'border-0 border-b border-neutral-faded'}
-          backgroundColor="elevation-base"
-          width="100%"
-        >
-          <View.Item columns={2}>
-            <Text color="neutral-faded" weight="medium">Time</Text>
-          </View.Item>
-          <View.Item columns={1}>
-            <Text color="neutral-faded" weight="medium">Type</Text>
-          </View.Item>
-          <View.Item columns={3}>
-            <Text color="neutral-faded" weight="medium">For</Text>
-          </View.Item>
-          <View.Item columns={2}>
-            <Text color="neutral-faded" weight="medium">Token Amount</Text>
-          </View.Item>
-          <View.Item columns={2}>
-            <Text color="neutral-faded" weight="medium">USD</Text>
-          </View.Item>
-          <View.Item columns={2}>
-            <Text color="neutral-faded" weight="medium">Wallet</Text>
-          </View.Item>
-        </View>
+    <ScrollableTable
+      minWidth="1000px"
+      maxHeight="600px"
+      attributes={{
+        ref: (el: any) => {
+          scrollContainerRef.current = el?.querySelector('.hide-scrollbar') || null
+        }
+      }}
+    >
+      {/* Table Header */}
+      <View
+        direction="row"
+        gap={0}
+        paddingInline={4}
+        paddingBlock={2}
+        className={'border-0 border-b border-neutral-faded'}
+        backgroundColor="elevation-base"
+        width="100%"
+      >
+        <View.Item columns={2}>
+          <Text color="neutral-faded" weight="medium">Time</Text>
+        </View.Item>
+        <View.Item columns={1}>
+          <Text color="neutral-faded" weight="medium">Type</Text>
+        </View.Item>
+        <View.Item columns={3}>
+          <Text color="neutral-faded" weight="medium">For</Text>
+        </View.Item>
+        <View.Item columns={2}>
+          <Text color="neutral-faded" weight="medium">Token Amount</Text>
+        </View.Item>
+        <View.Item columns={2}>
+          <Text color="neutral-faded" weight="medium">USD</Text>
+        </View.Item>
+        <View.Item columns={2}>
+          <Text color="neutral-faded" weight="medium">Wallet</Text>
+        </View.Item>
+      </View>
 
-        {/* Table Body */}
-        <View direction="column" gap={0} width="100%">
-          {displayedSwaps.map(({ swap, pair, targetIsToken0 }) => (
-            <TransactionRow
-              key={swap.id}
-              swap={swap}
-              pair={pair}
-              targetIsToken0={targetIsToken0}
-            />
-          ))}
-        </View>
-      </ScrollableTable>
+      {/* Table Body */}
+      <View direction="column" gap={0} width="100%">
+        {displayedSwaps.map(({ swap, pair, targetIsToken0 }) => (
+          <TransactionRow
+            key={swap.id}
+            swap={swap}
+            pair={pair}
+            targetIsToken0={targetIsToken0}
+          />
+        ))}
 
-      {/* Load More Component */}
-      {displayedSwaps.length > 0 && (
-        <LoadMore
-          hasMore={hasMore}
-          isLoading={isLoadingMore}
-          onLoadMore={handleLoadMore}
-        />
-      )}
-    </>
+        {/* Load More Component inside the scrollable area */}
+        {displayedSwaps.length > 0 && (
+          <LoadMore
+            hasMore={hasMore}
+            isLoading={isLoadingMore}
+            onLoadMore={handleLoadMore}
+            root={scrollContainerRef.current}
+            rootMargin="50px"
+          />
+        )}
+      </View>
+    </ScrollableTable>
   )
 }
 

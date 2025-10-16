@@ -100,7 +100,10 @@ const findTokenByAddress = (
 
 const TokenItem: React.FC<TokenItemProps> = ({ token, onSelect }) => {
   // Get token icon source - use default if not available
-  const tokenIcon = token.imageUri ? getIpfsGateway(token.imageUri) : '/tokens/coin.svg'
+  // Handle both IPFS URIs and local paths
+  const tokenIcon = token.imageUri
+    ? (token.imageUri.startsWith('ipfs://') ? getIpfsGateway(token.imageUri) : token.imageUri)
+    : '/tokens/coin.svg'
 
   return (
     <Button
@@ -283,7 +286,11 @@ const TokenSelectorWithData: React.FC<{
           <View insetStart={-2}>
             {selectedToken?.imageUri && (
               <Image
-                src={getIpfsGateway(selectedToken.imageUri) || '/tokens/coin.svg'}
+                src={
+                  selectedToken.imageUri.startsWith('ipfs://')
+                    ? getIpfsGateway(selectedToken.imageUri) || '/tokens/coin.svg'
+                    : selectedToken.imageUri
+                }
                 height={6}
                 width={6}
                 alt={selectedToken.symbol || 'Selected Token Icon'}

@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState } from 'react'
-import { View, Tabs } from 'reshaped'
+import { View, Tabs, Text } from 'reshaped'
 import { TokenPoolsTab } from './TokenPoolsTab'
 import { TokenTransactionsTab } from './TokenTransactionsTab'
 
@@ -21,8 +21,16 @@ export function TokenActivityTabs({ tokenAddress }: TokenActivityTabsProps) {
     setActiveTab(args.value)
   }
 
+  // Get the label for the current active tab
+  const activeTabLabel = tabs.find(tab => tab.value === activeTab)?.label || 'Transactions'
+
   return (
-    <View direction="column" gap={4} width="100%">
+    <View direction="column" gap={4} width="100%" paddingBottom={6}>
+      {/* Section Header that shows active tab */}
+      <Text variant="featured-2" weight="regular">
+        {activeTabLabel}
+      </Text>
+
       {/* Tab headers */}
       <Tabs
         value={activeTab}
