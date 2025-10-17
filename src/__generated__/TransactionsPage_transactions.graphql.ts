@@ -1,5 +1,5 @@
 /**
- * @generated SignedSource<<7ffac6abaf2d9da48d7c8e517d3b223a>>
+ * @generated SignedSource<<6c766ab30884916c90d91d4a17c26690>>
  * @lightSyntaxTransform
  * @nogrep
  */
@@ -24,13 +24,13 @@ export type TransactionsPage_transactions$data = {
           readonly address: string;
           readonly id: string;
           readonly symbol: string | null;
-          readonly " $fragmentSpreads": FragmentRefs<"TokenPairFragment">;
+          readonly " $fragmentSpreads": FragmentRefs<"InlineTokenSwapFragment" | "TokenAmountFragment" | "TokenPairFragment">;
         } | null;
         readonly token1: {
           readonly address: string;
           readonly id: string;
           readonly symbol: string | null;
-          readonly " $fragmentSpreads": FragmentRefs<"TokenPairFragment">;
+          readonly " $fragmentSpreads": FragmentRefs<"InlineTokenSwapFragment" | "TokenAmountFragment" | "TokenPairFragment">;
         } | null;
         readonly txHash: string;
         readonly userAddress: string;
@@ -81,6 +81,16 @@ v2 = [
     "args": null,
     "kind": "FragmentSpread",
     "name": "TokenPairFragment"
+  },
+  {
+    "args": null,
+    "kind": "FragmentSpread",
+    "name": "InlineTokenSwapFragment"
+  },
+  {
+    "args": null,
+    "kind": "FragmentSpread",
+    "name": "TokenAmountFragment"
   }
 ];
 return {
@@ -283,6 +293,6 @@ return {
 };
 })();
 
-(node as any).hash = "5d1d1e5e38bec1203d482ae32c49777b";
+(node as any).hash = "5711f0ed672aa47fd186d740b161a0ea";
 
 export default node;

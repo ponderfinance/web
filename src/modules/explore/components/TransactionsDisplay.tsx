@@ -3,6 +3,8 @@
 import React from 'react'
 import { View, Text, Loader } from 'reshaped'
 import { TokenPair } from '@/src/components/TokenPair'
+import { InlineTokenSwap } from '@/src/components/InlineTokenSwap'
+import { TokenAmount } from '@/src/components/TokenAmount'
 import { formatCryptoVal } from '@/src/utils/numbers'
 import Link from 'next/link'
 import ScrollableTable from '@/src/components/ScrollableTable'
@@ -22,14 +24,13 @@ const formatCurrency = (value: string | null | undefined): string => {
   return `$${numValue.toFixed(2)}`
 }
 
-// Helper to format token amount
-const formatTokenAmount = (amount: string, symbol: string | null | undefined): string => {
+// Helper to format token amount (without symbol - symbol will be added by TokenAmount component)
+const formatTokenAmount = (amount: string): string => {
   if (!amount || amount === '0') return '0'
 
   const numAmount = formatCryptoVal(BigInt(amount))
 
-  // For normal amounts, format with 3 significant digits max
-  return `${numAmount} ${symbol || ''}`
+  return `${numAmount}`
 }
 
 // Helper to format time ago
@@ -116,39 +117,39 @@ export const TransactionsDisplay: React.FC<TransactionsDisplayProps> = ({
         backgroundColor="elevation-base"
         width="100%"
       >
-        <View.Item columns={2}>
+        <View.Item columns={1}>
           <Text color="neutral-faded" weight="medium">
             Time
           </Text>
         </View.Item>
 
-        <View.Item columns={1}>
+        <View.Item columns={4}>
           <Text color="neutral-faded" weight="medium">
             Type
           </Text>
         </View.Item>
 
-        <View.Item columns={4}>
-          <Text color="neutral-faded" weight="medium">
-            Token Pair
-          </Text>
-        </View.Item>
-
-        <View.Item columns={2}>
-          <Text color="neutral-faded" weight="medium">
-            Token Amount
-          </Text>
-        </View.Item>
-
-        <View.Item columns={2}>
-          <Text color="neutral-faded" weight="medium">
-            Token Amount
-          </Text>
-        </View.Item>
-
         <View.Item columns={1}>
           <Text color="neutral-faded" weight="medium">
-            Value
+            USD
+          </Text>
+        </View.Item>
+
+        <View.Item columns={2}>
+          <Text color="neutral-faded" weight="medium">
+            Token Amount
+          </Text>
+        </View.Item>
+
+        <View.Item columns={2}>
+          <Text color="neutral-faded" weight="medium">
+            Token Amount
+          </Text>
+        </View.Item>
+
+        <View.Item columns={2}>
+          <Text color="neutral-faded" weight="medium">
+            Wallet
           </Text>
         </View.Item>
       </View>
@@ -162,20 +163,23 @@ export const TransactionsDisplay: React.FC<TransactionsDisplayProps> = ({
           const token0Symbol = node.token0?.symbol || '?'
           const token1Symbol = node.token1?.symbol || '?'
 
-          let swapDescription = ''
+          let fromToken = node.token0
+          let toToken = node.token1
           let fromTokenAmount = ''
           let toTokenAmount = ''
 
           if (isExactIn0) {
             // Swap from token0 to token1
-            swapDescription = `Swap ${token0Symbol} for ${token1Symbol}`
-            fromTokenAmount = formatTokenAmount(node.amountIn0, token0Symbol)
-            toTokenAmount = formatTokenAmount(node.amountOut1, token1Symbol)
+            fromToken = node.token0
+            toToken = node.token1
+            fromTokenAmount = formatTokenAmount(node.amountIn0)
+            toTokenAmount = formatTokenAmount(node.amountOut1)
           } else {
             // Swap from token1 to token0
-            swapDescription = `Swap ${token1Symbol} for ${token0Symbol}`
-            fromTokenAmount = formatTokenAmount(node.amountIn1, token1Symbol)
-            toTokenAmount = formatTokenAmount(node.amountOut0, token0Symbol)
+            fromToken = node.token1
+            toToken = node.token0
+            fromTokenAmount = formatTokenAmount(node.amountIn1)
+            toTokenAmount = formatTokenAmount(node.amountOut0)
           }
 
           return (
@@ -188,7 +192,7 @@ export const TransactionsDisplay: React.FC<TransactionsDisplayProps> = ({
               align="center"
               width="100%"
             >
-              <View.Item columns={2}>
+              <View.Item columns={1}>
                 <Text variant="body-3" color="primary">
                   <a href={`https://kubscan.com/tx/${node.txHash}`} target="_blank">
                     {formatTimeAgo(node.timestamp)}
@@ -196,29 +200,55 @@ export const TransactionsDisplay: React.FC<TransactionsDisplayProps> = ({
                 </Text>
               </View.Item>
 
-              <View.Item columns={1}>
-                <Text variant="body-3">Swap</Text>
-              </View.Item>
-
               <View.Item columns={4}>
+                {/* NEW: InlineTokenSwap component with token icons inline */}
+                {fromToken && toToken && (
+                  <InlineTokenSwap
+                    fromToken={fromToken}
+                    toToken={toToken}
+                    variant="body-3"
+                  />
+                )}
+                {/* OLD: Uncomment to revert to previous layout
                 <View direction="row" align="center" gap={2}>
                   {node.token0 && node.token1 && (
                     <TokenPair tokenA={node.token0} tokenB={node.token1} size="small" />
                   )}
                   <Text variant="body-3">{swapDescription}</Text>
                 </View>
-              </View.Item>
-
-              <View.Item columns={2}>
-                <Text variant="body-3">{fromTokenAmount}</Text>
-              </View.Item>
-
-              <View.Item columns={2}>
-                <Text variant="body-3">{toTokenAmount}</Text>
+                */}
               </View.Item>
 
               <View.Item columns={1}>
                 <Text variant="body-3">{formatCurrency(node.valueUSD)}</Text>
+              </View.Item>
+
+              <View.Item columns={2}>
+                {fromToken && (
+                  <TokenAmount
+                    token={fromToken}
+                    amount={fromTokenAmount}
+                    variant="body-3"
+                  />
+                )}
+              </View.Item>
+
+              <View.Item columns={2}>
+                {toToken && (
+                  <TokenAmount
+                    token={toToken}
+                    amount={toTokenAmount}
+                    variant="body-3"
+                  />
+                )}
+              </View.Item>
+
+              <View.Item columns={2}>
+                <Text variant="body-3" color="primary">
+                  <a href={`https://kubscan.com/address/${node.userAddress}`} target="_blank" rel="noopener noreferrer">
+                    {abbreviateAddress(node.userAddress)}
+                  </a>
+                </Text>
               </View.Item>
             </View>
           )

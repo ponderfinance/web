@@ -1,5 +1,5 @@
 /**
- * @generated SignedSource<<1fa485a411eb3549f884ee643bbaa03a>>
+ * @generated SignedSource<<f973c0f2d739e8c5a696fec4a6e3e97c>>
  * @lightSyntaxTransform
  * @nogrep
  */
@@ -282,16 +282,16 @@ return {
     ]
   },
   "params": {
-    "cacheID": "d596540e2a19af77b2ffe0532d440405",
+    "cacheID": "5f3e5924c6dd864e22cd85c3fbc96e2a",
     "id": null,
     "metadata": {},
     "name": "TransactionsPagePaginationQuery",
     "operationKind": "query",
-    "text": "query TransactionsPagePaginationQuery(\n  $after: String\n  $first: Int!\n) {\n  ...TransactionsPage_transactions_2HEEH6\n}\n\nfragment TokenPairFragment on Token {\n  id\n  address\n  name\n  symbol\n  decimals\n  imageUri\n}\n\nfragment TransactionsPage_transactions_2HEEH6 on Query {\n  recentTransactions(first: $first, after: $after) {\n    edges {\n      node {\n        id\n        txHash\n        timestamp\n        userAddress\n        token0 {\n          id\n          address\n          symbol\n          ...TokenPairFragment\n        }\n        token1 {\n          id\n          address\n          symbol\n          ...TokenPairFragment\n        }\n        amountIn0\n        amountIn1\n        amountOut0\n        amountOut1\n        valueUSD\n        __typename\n      }\n      cursor\n    }\n    pageInfo {\n      hasNextPage\n      endCursor\n    }\n    totalCount\n  }\n}\n"
+    "text": "query TransactionsPagePaginationQuery(\n  $after: String\n  $first: Int!\n) {\n  ...TransactionsPage_transactions_2HEEH6\n}\n\nfragment InlineTokenSwapFragment on Token {\n  id\n  address\n  symbol\n  imageUri\n}\n\nfragment TokenAmountFragment on Token {\n  id\n  address\n  symbol\n  imageUri\n}\n\nfragment TokenPairFragment on Token {\n  id\n  address\n  name\n  symbol\n  decimals\n  imageUri\n}\n\nfragment TransactionsPage_transactions_2HEEH6 on Query {\n  recentTransactions(first: $first, after: $after) {\n    edges {\n      node {\n        id\n        txHash\n        timestamp\n        userAddress\n        token0 {\n          id\n          address\n          symbol\n          ...TokenPairFragment\n          ...InlineTokenSwapFragment\n          ...TokenAmountFragment\n        }\n        token1 {\n          id\n          address\n          symbol\n          ...TokenPairFragment\n          ...InlineTokenSwapFragment\n          ...TokenAmountFragment\n        }\n        amountIn0\n        amountIn1\n        amountOut0\n        amountOut1\n        valueUSD\n        __typename\n      }\n      cursor\n    }\n    pageInfo {\n      hasNextPage\n      endCursor\n    }\n    totalCount\n  }\n}\n"
   }
 };
 })();
 
-(node as any).hash = "5d1d1e5e38bec1203d482ae32c49777b";
+(node as any).hash = "5711f0ed672aa47fd186d740b161a0ea";
 
 export default node;

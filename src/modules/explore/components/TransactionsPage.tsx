@@ -7,6 +7,8 @@ import { TransactionsPage_transactions$key } from '@/src/__generated__/Transacti
 import { TransactionsDisplay } from '@/src/modules/explore/components/TransactionsDisplay'
 import { View, Text, Skeleton, Button, Loader } from 'reshaped'
 import { tokenFragment } from '@/src/components/TokenPair'
+import { inlineTokenSwapFragment } from '@/src/components/InlineTokenSwap'
+import { tokenAmountFragment } from '@/src/components/TokenAmount'
 import { useRefreshOnUpdate } from '@/src/hooks/useRefreshOnUpdate'
 import { registerRedisConnection, unregisterRedisConnection } from '@/src/lib/redis'
 import { withRelayBoundary } from '@/src/lib/relay/withRelayBoundary'
@@ -40,12 +42,16 @@ export const transactionsPageFragment = graphql`
             address
             symbol
             ...TokenPairFragment
+            ...InlineTokenSwapFragment
+            ...TokenAmountFragment
           }
           token1 {
             id
             address
             symbol
             ...TokenPairFragment
+            ...InlineTokenSwapFragment
+            ...TokenAmountFragment
           }
           amountIn0
           amountIn1
@@ -77,39 +83,39 @@ function TransactionsLoading() {
         backgroundColor="elevation-base"
         width="100%"
       >
-        <View.Item columns={2}>
+        <View.Item columns={1}>
           <Text color="neutral-faded" weight="medium">
             Time
           </Text>
         </View.Item>
 
-        <View.Item columns={1}>
+        <View.Item columns={4}>
           <Text color="neutral-faded" weight="medium">
             Type
           </Text>
         </View.Item>
 
-        <View.Item columns={4}>
-          <Text color="neutral-faded" weight="medium">
-            Token Pair
-          </Text>
-        </View.Item>
-
-        <View.Item columns={2}>
-          <Text color="neutral-faded" weight="medium">
-            Token Amount
-          </Text>
-        </View.Item>
-
-        <View.Item columns={2}>
-          <Text color="neutral-faded" weight="medium">
-            Token Amount
-          </Text>
-        </View.Item>
-
         <View.Item columns={1}>
           <Text color="neutral-faded" weight="medium">
-            Value
+            USD
+          </Text>
+        </View.Item>
+
+        <View.Item columns={2}>
+          <Text color="neutral-faded" weight="medium">
+            Token Amount
+          </Text>
+        </View.Item>
+
+        <View.Item columns={2}>
+          <Text color="neutral-faded" weight="medium">
+            Token Amount
+          </Text>
+        </View.Item>
+
+        <View.Item columns={2}>
+          <Text color="neutral-faded" weight="medium">
+            Wallet
           </Text>
         </View.Item>
       </View>
@@ -125,32 +131,30 @@ function TransactionsLoading() {
             align="center"
             width="100%"
           >
-            <View.Item columns={2}>
-              <Skeleton width="80px" height="24px" />
-            </View.Item>
-
             <View.Item columns={1}>
               <Skeleton width="60px" height="24px" />
             </View.Item>
 
             <View.Item columns={4}>
               <View direction="row" gap={2} align="center">
-                <Skeleton width={8} height={8} borderRadius="circular" />
-                <Skeleton width={8} height={8} borderRadius="circular" />
-                <Skeleton width="80px" height="24px" />
+                <Skeleton width="150px" height="24px" />
               </View>
             </View.Item>
 
-            <View.Item columns={2}>
-              <Skeleton width="90px" height="24px" />
-            </View.Item>
-
-            <View.Item columns={2}>
-              <Skeleton width="90px" height="24px" />
-            </View.Item>
-
             <View.Item columns={1}>
-              <Skeleton width="60px" height="24px" />
+              <Skeleton width="70px" height="24px" />
+            </View.Item>
+
+            <View.Item columns={2}>
+              <Skeleton width="90px" height="24px" />
+            </View.Item>
+
+            <View.Item columns={2}>
+              <Skeleton width="90px" height="24px" />
+            </View.Item>
+
+            <View.Item columns={2}>
+              <Skeleton width="80px" height="24px" />
             </View.Item>
           </View>
         ))}

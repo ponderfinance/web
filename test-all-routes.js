@@ -107,7 +107,7 @@ async function testRoute(browser, route) {
 }
 
 async function main() {
-  console.log('=€ Starting Headless Browser Route Tester');
+  console.log('=ï¿½ Starting Headless Browser Route Tester');
   console.log('P'.repeat(60));
   console.log(`Target: ${BASE_URL}`);
   console.log(`Routes: ${routes.length}`);
@@ -132,7 +132,7 @@ async function main() {
 
   // Print summary
   console.log('\n' + 'P'.repeat(60));
-  console.log('=Ê TEST SUMMARY');
+  console.log('=ï¿½ TEST SUMMARY');
   console.log('P'.repeat(60));
 
   const passed = results.filter(r => r.success).length;
@@ -144,7 +144,7 @@ async function main() {
   console.log(`Success Rate: ${((passed / results.length) * 100).toFixed(1)}%`);
 
   if (failed > 0) {
-    console.log('\n   Failed Routes:');
+    console.log('\nï¿½  Failed Routes:');
     results.filter(r => !r.success).forEach(r => {
       console.log(`\n  " ${r.route.name} (${r.route.path})`);
       r.errors.forEach(err => {
